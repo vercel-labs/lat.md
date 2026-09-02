@@ -38,7 +38,7 @@ function treeTags(tree: ViewDocumentTree): string[] {
 }
 
 describe('source highlighting', () => {
-  // @lat: [[lat.md/view/specs#View Tests#Uses Geist syntax colors]]
+  // @lat: [[lat.md/knowledge/view/specs#View Tests#Uses Geist syntax colors]]
   it('shares Geist light and dark syntax roles across code and source views', () => {
     const styles = readFileSync(
       new URL('../view/src/styles.css', import.meta.url),
@@ -94,7 +94,7 @@ describe('source highlighting', () => {
     );
   });
 
-  // @lat: [[lat.md/view/specs#View Tests#Highlights source syntax safely]]
+  // @lat: [[lat.md/knowledge/view/specs#View Tests#Highlights source syntax safely]]
   it('emits safe structured lines and preserves multiline tokens', () => {
     const lines = highlightSource(
       'src/example.ts',
