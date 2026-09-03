@@ -529,14 +529,30 @@ function pairedNode(
     withChildren(oldNode) &&
     withChildren(newNode)
   ) {
+    const children = diffBlocks(
+      oldNode.children,
+      newNode.children,
+      oldMarkdown,
+      newMarkdown,
+    );
+    // Tight lists unwrap paragraphs, discarding their block diff markers.
+    // Keep such changes on separate list items, not inside one merged item.
+    if (
+      newNode.type === 'listItem' &&
+      children.some((child) => {
+        if (child.type !== 'paragraph') return false;
+        const classes = (child as DataNode).data?.hProperties?.className;
+        return (
+          Array.isArray(classes) &&
+          classes.some((name) => name === 'git-added' || name === 'git-removed')
+        );
+      })
+    ) {
+      return null;
+    }
     return {
       ...structuredClone(newNode),
-      children: diffBlocks(
-        oldNode.children,
-        newNode.children,
-        oldMarkdown,
-        newMarkdown,
-      ),
+      children,
     } as RootContent;
   }
   return null;

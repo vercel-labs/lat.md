@@ -359,6 +359,12 @@ The top Git toggle hides or reveals both sidebar markers and inline diffs withou
 
 The Git button retains an orange notification dot whenever changes exist, independent of the toggle state.
 
+## Keeps rendered list diffs distinct
+
+Replaced list paragraphs render as separate removed and added items, preserving their links, boundaries, and styling in tight and loose ordered or unordered lists.
+
+Small edits retain inline word diffs, including task-list items. Unchanged nested content cannot hide a parent paragraph replacement, and nested item replacements stay inside their unchanged parent.
+
 ## Places context within a collapsed source window
 
 Focused source views place reference context before the highlighted definition, keep five surrounding lines, and reveal collapsed code without moving the visible anchor.
