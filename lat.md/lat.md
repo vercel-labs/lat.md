@@ -16,7 +16,7 @@ cd your-project
 lat init
 ```
 
-Write ordinary Markdown in `lat.md/`, connect sections with `[[wiki links]]`, and tie implementation back to the graph with `// @lat: [[section-id]]` comments. See [[getting-started]] for the complete first loop.
+Write ordinary Markdown in `lat.md/`, connect sections with `[[wiki links]]`, and tie implementation back to the graph with `// @lat: [[section-id]]` comments. See [[quick-start]] for the complete first loop.
 
 ## Why Lat
 
@@ -32,6 +32,7 @@ Lat gives people and agents one reviewable source of truth for what a system doe
 
 The public guide, release history, and Lat's own engineering knowledge share this graph and link to one another.
 
-- [[docs]] — Concise documentation for installing, using, and integrating Lat
+- [[quick-start]] — Set up Lat and let your agent maintain the graph
 - [[changelog]] — User-visible changes by release
+- [[docs]] — Concise documentation for installing, using, and integrating Lat
 - [[knowledge]] — The internal knowledge graph that documents and drives Lat itself

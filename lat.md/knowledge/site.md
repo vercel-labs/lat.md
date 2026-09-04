@@ -6,7 +6,7 @@ The public `lat.md` website is a hybrid Lat UI export of this repository's own v
 
 The site and the maintained knowledge graph are the same files, so public documentation can link directly into the engineering knowledge that governs Lat.
 
-The root `lat.md/lat.md` is the landing page. `docs/` contains concise user documentation, `changelog.md` records releases, and `knowledge/` contains the internal architecture and test specifications that drive development.
+The root `lat.md/lat.md` is the landing page. [[quick-start]] provides onboarding, `docs/` contains concise user documentation, `changelog.md` records releases, and `knowledge/` contains the internal architecture and test specifications that drive development.
 
 The bundled Lat wordmark appears in the browser header. The landing page references its own vault-local logo beside live CI and GitHub-star badges, so the same Markdown stays portable across live and exported views.
 
