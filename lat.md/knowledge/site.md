@@ -8,6 +8,8 @@ The site and the maintained knowledge graph are the same files, so public docume
 
 The root `lat.md/lat.md` is the landing page. [[quick-start]] provides onboarding, `docs/` contains concise user documentation, `changelog.md` records releases, and `knowledge/` contains the internal architecture and test specifications that drive development.
 
+Documentation in `docs/` follows [[writing-style]] to help users understand and use Lat. Technical knowledge retains its separate, code-oriented authoring purpose and skill.
+
 The bundled Lat wordmark appears in the browser header. The landing page references its own vault-local logo beside live CI and GitHub-star badges, so the same Markdown stays portable across live and exported views.
 
 ## Build and deployment

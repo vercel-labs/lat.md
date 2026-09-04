@@ -15,3 +15,4 @@ Public [[docs]] explain how to use the product. This directory records what the 
 - [[site]] — Static `lat ui` deployment of this repository's vault
 - [[tests]] — High-level test specifications mapped to code
 - [[view]] — Browser architecture and functional specifications
+- [[writing-style]] — Editorial guidance for public documentation, distinct from technical knowledge authoring
