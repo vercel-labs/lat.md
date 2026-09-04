@@ -2,7 +2,8 @@
 
 Concise guides to Lat's knowledge model, commands, integrations, external sources, and browser.
 
-- [[getting-started]] — Install Lat and create a useful graph
+New to Lat? Start with [[quick-start]].
+
 - [[concepts]] — Understand sections, links, code references, validation, and search
 - [[commands]] — Use the complete command-line surface
 - [[agent-workflows]] — Connect Lat to coding agents and daily development
