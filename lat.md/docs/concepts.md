@@ -1,16 +1,20 @@
 # Concepts
 
-Lat is a Markdown knowledge graph whose structure is explicit enough to validate and simple enough for humans and agents to edit directly.
+Lat connects explanations of your project to each other and to code, so people and agents can find relevant context and check that its references still work.
 
 ## Vault and sections
 
-A project's `lat.md/` directory is its vault, and every heading is a section with a stable hierarchical id such as `auth#Tokens#Rotation`.
+A project's `lat.md/` directory is its vault. Each Markdown heading defines a section that can be linked, searched, and read on its own.
 
-Every directory has a same-named index document. Every section begins with a concise paragraph so search results and agent context always carry its essential meaning.
+For example, `auth#Tokens#Rotation` identifies the Rotation heading inside Tokens in `auth.md`. Each section starts with a short paragraph so search results carry useful context.
+
+Every directory has a same-named index document listing its pages and subdirectories. This keeps all knowledge reachable through the graph.
 
 ## Links
 
-Wiki links connect knowledge, repository files, and supported source-code symbols.
+Wiki links point to another section, a repository file or directory, or a named symbol in supported source code.
+
+For example, these links target a documented request pipeline, a schema file, and a server method:
 
 ```md
 [[architecture#Request pipeline]]
@@ -18,21 +22,35 @@ Wiki links connect knowledge, repository files, and supported source-code symbol
 [[src/server.ts#Server#listen]]
 ```
 
-Ordinary Markdown links remain available for prose navigation and are also checked for broken local destinations.
+Files in unsupported formats can still be linked, but Lat cannot navigate to sections or symbols inside them. [[upstream|External sources]] extend links to documentation and code in other repositories.
+
+Ordinary Markdown links also work; Lat checks their local destinations.
 
 ## Code references and test specs
 
-`@lat:` comments connect implementation back to a section, creating traceable references in both directions.
+An `@lat:` comment points from code to the section that explains its intent. Lat can then show which implementations or tests refer to that knowledge.
+
+For a project documenting refresh-token rotation:
 
 ```ts
 // @lat: [[auth#Refresh rotation]]
 export function rotateToken() {}
 ```
 
-Test-spec documents can require every leaf section to have a code reference, turning high-level coverage intent into an enforced invariant.
+Test-spec documents can require each leaf section, one with no subsections, to have a code reference. This checks that a backlink exists, not that the test proves the documented behavior. See [[markdown#Frontmatter#require-code-mention|required code mentions]] for the syntax.
 
-## Validation and discovery
+## What Lat checks
 
-`lat check` rejects broken links, missing symbols, malformed sections, stale indexes, and uncovered required specs.
+`lat check` reports broken links, missing source symbols, malformed sections, incomplete directory indexes, and missing required code references.
 
-`lat search` finds concepts semantically, while `lat locate`, `lat section`, `lat refs`, and [[browser|Lat UI]] provide exact navigation. Parsed Markdown and source facts are cached, so repeated checks remain fast on large repositories.
+It checks structure and references, not whether the prose accurately describes the application. Review intent and behavior with your agent; use validation to catch structural drift.
+
+## Find relevant knowledge
+
+Search in natural language when you know the topic but not the section name.
+
+```bash
+lat search "how do refresh tokens work?"
+```
+
+Use `lat locate` to find a section by name, `lat section` to read it, and `lat refs` to find what references it. [[browser|Lat UI]] provides visual navigation; [[commands]] lists the command syntax.
