@@ -1,36 +1,35 @@
 # Agent workflows
 
-Lat gives coding agents durable project context and a validation loop that keeps that context synchronized with implementation.
+Lat gives coding agents project context they can reuse across tasks and sessions, so decisions and constraints do not have to be rediscovered from code.
 
-## Setup
+Follow [[quick-start]] to connect your agent or create the initial graph for an existing project.
 
-`lat init` configures supported agents interactively and can generate shared instructions, skills, MCP registrations, plugins, and lifecycle hooks.
+## Give agents relevant context
 
-Follow any activation instructions from setup. Your configured agent should then follow this loop automatically:
+Ask your agent to search the graph before changing code, or point it to a specific section with a wiki link in your request.
 
-1. Use the installed `lat-md` skill, search the graph, and expand explicit `[[refs]]` before work.
-2. Read exact sections instead of guessing from snippets.
-3. Update `lat.md/` when architecture, behavior, tests, or plans materially change.
-4. Run `lat check` before finishing.
+For example, if your graph contains an `auth#Refresh rotation` section:
 
-## What to capture
+```markdown
+Read [[auth#Refresh rotation]] before changing token renewal.
+Keep the documented constraints intact, and update the graph
+if the intended behavior changes.
+```
 
-Keep the graph a concise description of intent: what the system does, why, and the constraints that matter when changing it.
+Agents can retrieve context through the CLI or Model Context Protocol (MCP) tools configured during setup. `lat expand` resolves wiki links in a prompt and includes their content. See [[commands]] for the available commands.
 
-Capture domain rules, non-obvious decisions, architectural boundaries, and important test intent. Link related concepts and implementation symbols rather than copying code or defaults. Distinguish established behavior from proposals and uncertain rationale.
+## Capture decisions, not transcripts
 
-Do not turn Lat into a file inventory, session journal, or dump of everything you discover. Revise or remove stale knowledge as the code evolves so humans and agents share a useful, current picture of the project.
+Keep knowledge that will help the next person or agent make a correct change: domain rules, architectural boundaries, non-obvious decisions, and important test intent.
 
-## Context tools
+For authentication, describe when a token becomes invalid and why that rule exists. Link to the implementation instead of copying its code or defaults. Distinguish current behavior from proposals, and remove stale explanations as the project evolves.
 
-Agents can use the CLI directly or the matching MCP tools for search, section inspection, reference lookup, expansion, and validation.
+Session logs and file inventories do not belong in the graph. Use the installed `lat-md` skill for authoring rules.
 
-`lat expand` is useful at prompt boundaries: it resolves authored wiki links and appends their full context. `lat external show` lets an agent inspect a pinned upstream source before deciding whether it needs an editable checkout.
+## Review intent and evidence
 
-## Review
+Review whether the knowledge diff describes the behavior you want, then follow its links to inspect the implementation and tests.
 
-Knowledge diffs summarize semantic change, so reviewers can understand intent before descending into implementation details.
+Check that new constraints are justified, changed behavior is explicit, and important test expectations have matching references. [[browser|Lat UI]] lets you explore these relationships without navigating files manually.
 
-Work on features with your agent and let it maintain the graph. Focus review on behavior, constraints, and test expectations; use `lat ui` to explore links and check that the graph reflects the project's vision.
-
-Required test specifications and `@lat:` comments make important coverage visible from either direction. Stop hooks can remind an agent when a large code change has no corresponding knowledge update without preventing projects from using Lat outside Git.
+Have the agent run `lat check` before finishing. Configured stop hooks can remind it about missing knowledge updates, but neither reminders nor validation replace your review of meaning.

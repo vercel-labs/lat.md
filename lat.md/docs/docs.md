@@ -1,11 +1,11 @@
 # Documentation
 
-Concise guides to Lat's knowledge model, commands, integrations, external sources, and browser.
+Learn how Lat connects project knowledge to code, gives agents useful context, and lets you browse or publish that knowledge.
 
 New to Lat? Start with [[quick-start]].
 
-- [[concepts]] — Understand sections, links, code references, validation, and search
-- [[commands]] — Use the complete command-line surface
-- [[agent-workflows]] — Connect Lat to coding agents and daily development
-- [[upstream]] — Link pinned documentation and source from other repositories
-- [[browser]] — Browse, edit, and publish a graph with Lat UI
+- [[concepts]] — Understand the graph and what Lat validates
+- [[commands]] — Look up commands and options
+- [[agent-workflows]] — Give agents context and review their changes
+- [[upstream]] — Reference documentation and code from other repositories
+- [[browser]] — Browse, edit, and publish your project knowledge
