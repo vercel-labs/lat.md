@@ -216,6 +216,64 @@ describe('MarkdownContent', () => {
     );
   });
 
+  it.each(['pre', 'code'])(
+    'preserves rich fence diff markers on %s nodes',
+    async (markerTag) => {
+      const tree: ViewDocumentTree = {
+        version: 1,
+        type: 'root',
+        children: ['removed', 'added', 'unchanged'].map((change) => ({
+          type: 'element',
+          tagName: 'pre',
+          properties: {
+            className: [
+              'markdown-diagram-source',
+              'markdown-mermaid-source',
+              ...(markerTag === 'pre' && change !== 'unchanged'
+                ? [`git-${change}`]
+                : []),
+            ],
+          },
+          children: [
+            {
+              type: 'element',
+              tagName: 'code',
+              properties: {
+                className:
+                  markerTag === 'code' && change !== 'unchanged'
+                    ? [`git-${change}`]
+                    : [],
+              },
+              children: [{ type: 'text', value: `graph LR\n A --> ${change}` }],
+            },
+          ],
+        })),
+      };
+      await act(async () => {
+        root.render(createElement(MarkdownContent, { tree, onClick: vi.fn() }));
+      });
+      expect(
+        container.querySelectorAll('.markdown-rich-fence-diff'),
+      ).toHaveLength(2);
+      for (const change of ['removed', 'added']) {
+        const wrapper = container.querySelector(
+          `.markdown-rich-fence-diff.git-${change}`,
+        )!;
+        expect(
+          wrapper.querySelector('.rendered-rich-fence')?.textContent,
+        ).toContain(`A --> ${change}`);
+      }
+      expect(container.querySelectorAll('.rendered-rich-fence')).toHaveLength(
+        3,
+      );
+      expect(
+        container
+          .querySelectorAll('.rendered-rich-fence')[2]
+          .closest('.markdown-rich-fence-diff'),
+      ).toBeNull();
+    },
+  );
+
   // @lat: [[lat.md/view/specs#View Tests#Renders canonical document trees]]
   it('renders safe document nodes and section interactions through React', async () => {
     const onCopySectionLink = vi.fn();

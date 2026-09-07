@@ -323,6 +323,8 @@ Compatible table edits retain one rendered table, place inline additions and rem
 
 Changed inline math keeps its surrounding prose and marks the rendered old and new formulas inline. Display-dollar and fenced math changes remain rendered inside removed and added block treatments.
 
+Rendered Mermaid and other rich fences preserve their Git diff state after replacing source blocks: removed versions have a red container; added versions have a green container. Unchanged diagrams have neither treatment.
+
 Blocks with less than 60% ordered word-token overlap render as whole removed and added blocks instead of noisy word-level replacements.
 
 Startup reads Git once, and a later vault change refreshes that state. Polling also detects commits without filesystem events, clearing stale diff markers while unchanged Git snapshots remain silent.

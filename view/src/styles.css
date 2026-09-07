@@ -1966,6 +1966,24 @@ a {
   box-shadow: inset 3px 0 0 var(--danger);
 }
 
+.markdown .markdown-rich-fence-diff {
+  margin: 1em 0;
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+
+.markdown .markdown-rich-fence-diff.git-added {
+  background: color-mix(in srgb, var(--success-soft) 55%, transparent);
+  box-shadow: inset 3px 0 0 var(--success);
+}
+
+.markdown .markdown-rich-fence-diff.git-removed {
+  color: inherit;
+  text-decoration: none;
+  background: color-mix(in srgb, var(--danger-soft) 55%, transparent);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
 .wiki-link-context {
   color: var(--muted);
 }
