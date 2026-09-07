@@ -295,6 +295,12 @@ Internal parser, search, and external-source cache writes do not publish project
 
 Each event stream identifies its server lifetime, so reconnecting after a restart accepts reset generations and invalidates document and graph data from the prior process.
 
+### Releases background event streams
+
+Hidden tabs and suspended pages close their live-update streams so they do not exhaust browser connections and stall navigation.
+
+Returning to a visible page reconnects once; the ready event catches up missed generations. Unmounting removes all lifecycle listeners.
+
 ### Times out stalled document requests
 
 A document request that never settles becomes a visible error with a retry action instead of leaving the route on an indefinite loading state.

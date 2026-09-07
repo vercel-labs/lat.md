@@ -23,7 +23,7 @@ import { MarkdownContent } from './MarkdownContent';
 import { DocumentModeSwitch, type DocumentMode } from './DocumentModeSwitch';
 import { DocumentToc } from './DocumentToc';
 import { fetchViewJson, prefetchViewDocument } from './data-source';
-import { mergeProjectChange } from './live-updates';
+import { mergeProjectChange, subscribeVisibleViewEvents } from './live-updates';
 import {
   documentPath,
   documentUrl,
@@ -526,7 +526,6 @@ export function App() {
 
   useEffect(() => {
     if (staticView) return;
-    const events = new EventSource('/api/events');
     const updateGeneration = (event: MessageEvent<string>) => {
       try {
         const change = JSON.parse(event.data) as ViewProjectChange;
@@ -546,9 +545,7 @@ export function App() {
       updateGeneration(event);
       setConnectionRevision((value) => value + 1);
     };
-    events.addEventListener('ready', serverReady);
-    events.addEventListener('change', updateGeneration);
-    return () => events.close();
+    return subscribeVisibleViewEvents(serverReady, updateGeneration);
   }, [staticView]);
 
   useEffect(() => {
