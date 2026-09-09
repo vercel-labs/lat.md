@@ -74,7 +74,7 @@ import {
   type ViewParsedMarkdownFile,
   type ViewReferenceIndex,
 } from './references.js';
-import { rewriteDocumentLink } from './document-route.js';
+import { rewriteLocalFileLink } from './source-target.js';
 
 const DEFAULT_DEBOUNCE_MS = 75;
 const DEFAULT_GIT_POLL_MS = 2_000;
@@ -485,7 +485,7 @@ export class ViewStore {
       resolver,
       {
         errors: [...(snapshot.diagnostics.get(requestedPath) ?? [])],
-        rewriteMarkdownLink: (url) => rewriteDocumentLink(url, requestedPath),
+        rewriteMarkdownLink: (url) => rewriteLocalFileLink(url, requestedPath),
       },
     );
     const errors = [...(snapshot.diagnostics.get(requestedPath) ?? [])];
@@ -501,7 +501,7 @@ export class ViewStore {
           {
             errors,
             rewriteMarkdownLink: (url) =>
-              rewriteDocumentLink(url, requestedPath),
+              rewriteLocalFileLink(url, requestedPath),
           },
           gitTree,
         )

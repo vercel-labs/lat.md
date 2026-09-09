@@ -21,11 +21,8 @@ import type {
   ViewSectionBackReferences,
   ViewSourceReference,
 } from './protocol.js';
-import { viewSourceTarget } from './source-target.js';
-import {
-  documentUrl as routeDocumentUrl,
-  rewriteDocumentLink,
-} from './document-route.js';
+import { viewSourceTarget, rewriteLocalFileLink } from './source-target.js';
+import { documentUrl as routeDocumentUrl } from './document-route.js';
 
 export type SourceReferenceOrigin = {
   sectionId: string;
@@ -72,7 +69,7 @@ export function parseViewMarkdownFile(
 }
 
 function contextMarkdownLink(requestedPath: string, url: string): string {
-  return rewriteDocumentLink(url, requestedPath);
+  return rewriteLocalFileLink(url, requestedPath);
 }
 
 function documentUrl(

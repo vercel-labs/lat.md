@@ -259,6 +259,8 @@ An interrupted editor PATCH becomes a visible error without automatic replay bec
 
 Resolved Markdown sections and validated source definitions become client-side links, while unresolved wiki targets remain authored text.
 
+Ordinary relative source links also open the code viewer regardless of Git tracking, including nested Markdown paths, encoded spaces, and reference-style links. The live route reads UTF-8 text from disk even without symbol-parser support, including Swift, shell scripts, entitlements, and extensionless files. Binary files and escaping paths remain rejected.
+
 Code links show a language badge bound to the label's first word so it cannot wrap alone, while unaliased links visually separate muted path context from the final target.
 
 Every resolved wiki link shows the total number of distinct reference locations for its canonical target. The current paragraph counts once, duplicate links in one paragraph do not inflate the total, and section totals include `@lat:` code references.

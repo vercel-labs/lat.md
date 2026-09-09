@@ -1,6 +1,37 @@
 import { extname } from 'node:path';
 import { normalizeRepositoryPath } from '../repository-path.js';
 import { isSourceFileExtension } from '../source-formats.js';
+import { rewriteDocumentLink } from './document-route.js';
+
+/** Resolve ordinary code links relative to their Markdown file, not the vault root. */
+export function rewriteLocalFileLink(
+  value: string,
+  sourcePath: string,
+): string {
+  if (value && !/^(?:[#/]|[a-z][a-z\d+.-]*:)/i.test(value)) {
+    try {
+      // Keep a project prefix so URL normalization cannot silently clamp an
+      // escaping relative path back into the project.
+      const base = sourcePath.split('/').map(encodeURIComponent).join('/');
+      const url = new URL(value, `http://lat.local/project/lat.md/${base}`);
+      if (
+        url.origin === 'http://lat.local' &&
+        url.pathname.startsWith('/project/')
+      ) {
+        const path = decodeURIComponent(url.pathname.slice('/project/'.length));
+        if (
+          normalizeRepositoryPath(path) &&
+          (!path.startsWith('lat.md/') || isSourceFileExtension(extname(path)))
+        ) {
+          return `/code/${path.split('/').map(encodeURIComponent).join('/')}${url.search}${url.hash}`;
+        }
+      }
+    } catch {
+      // Malformed URLs retain the ordinary document/resource fallback.
+    }
+  }
+  return rewriteDocumentLink(value, sourcePath);
+}
 
 export type ViewSourceTarget = {
   path: string;

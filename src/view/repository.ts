@@ -473,7 +473,7 @@ async function readViewSource(
     !requestedPath ||
     requestedPath.includes('\\') ||
     isAbsolute(requestedPath) ||
-    !isSourceFileExtension(extname(requestedPath))
+    (requestedSymbol && !isSourceFileExtension(extname(requestedPath)))
   ) {
     throw new ViewSourceNotFoundError('Source document not found');
   }
@@ -493,7 +493,15 @@ async function readViewSource(
     throw new ViewSourceNotFoundError('Source document not found');
   }
 
-  const content = await readFile(realFile, 'utf-8');
+  let content: string;
+  try {
+    content = new TextDecoder('utf-8', { fatal: true }).decode(
+      await readFile(realFile),
+    );
+    if (content.includes('\0')) throw new Error('Binary file');
+  } catch {
+    throw new ViewSourceNotFoundError('Source file is not readable UTF-8 text');
+  }
   if (!requestedSymbol) {
     if (!requestedLine) return { path: requestedPath, content, focus: null };
     const line = content.split('\n')[requestedLine - 1];

@@ -57,6 +57,7 @@ import {
   validateDocumentRoutes,
   rewriteDocumentLink,
 } from '../src/view/document-route.js';
+import { rewriteLocalFileLink } from '../src/view/source-target.js';
 import { buildViewGraph } from '../src/view/graph.js';
 import { buildViewReferenceIndex } from '../src/view/references.js';
 import { renderMarkdown as renderMarkdownTree } from '../src/view/markdown.js';
@@ -2335,6 +2336,114 @@ describe('lat ui', () => {
     expect(document.graphNodeIds).toEqual({ '': 'document:guide.md' });
     expect(viewDocumentHtml(document)).not.toContain('require-code-mention');
   });
+
+  it('preserves source-link targets and keeps resource routes separate', () => {
+    expect(
+      rewriteLocalFileLink(
+        '../../src/new%20file.ts?at=12#hello',
+        'nested/guide.md',
+      ),
+    ).toBe('/code/src/new%20file.ts?at=12#hello');
+    expect(rewriteLocalFileLink('../src/app.ts', 'guide.md')).toBe(
+      '/code/src/app.ts',
+    );
+    expect(rewriteLocalFileLink('media/image.svg', 'guide.md')).toBe(
+      '/resources/media/image.svg',
+    );
+    expect(rewriteLocalFileLink('../guide.md#details', 'nested/guide.md')).toBe(
+      '/guide#details',
+    );
+    for (const url of [
+      'https://example.com/app.ts',
+      '/code/src/app.ts',
+      '#heading',
+    ]) {
+      expect(rewriteLocalFileLink(url, 'guide.md')).toBe(url);
+    }
+    expect(rewriteLocalFileLink('../../outside.ts', 'guide.md')).not.toMatch(
+      /^\/code\//,
+    );
+  });
+
+  it.each([false, true])(
+    'opens ordinary source links with Git tracked=%s',
+    async (tracked) => {
+      const root = mkdtempSync(join(tmpdir(), 'lat-source-links-'));
+      const vault = join(root, 'lat.md');
+      mkdirSync(join(vault, 'nested'), { recursive: true });
+      mkdirSync(join(root, 'src'));
+      execFileSync('git', ['init', '--quiet'], { cwd: root });
+      writeFileSync(
+        join(root, 'src', 'new file.ts'),
+        'export const hello = 1;\n',
+      );
+      writeFileSync(
+        join(vault, 'lat.md'),
+        '# Home\n\nSee [guide](nested/guide.md).\n',
+      );
+      writeFileSync(
+        join(vault, 'nested', 'guide.md'),
+        '# Guide\n\n[inline](../../src/new%20file.ts) and [reference][code].\n\n[code]: ../../src/new%20file.ts\n\n[[src/new file.ts]]\n',
+      );
+      for (const name of [
+        'Clock.swift',
+        'test.sh',
+        'App.entitlements',
+        'LICENSE',
+      ]) {
+        writeFileSync(join(root, 'src', name), 'plain text\n');
+      }
+      writeFileSync(join(root, 'src', 'binary.bin'), Buffer.from([0, 255, 1]));
+      if (tracked) execFileSync('git', ['add', 'src'], { cwd: root });
+      const server = await startViewServer(
+        { ...testContext(), projectRoot: root, latDir: vault },
+        { port: 0, clientDir, watch: false, git: false },
+      );
+      try {
+        const response = await fetch(
+          new URL('/api/document?path=nested/guide.md', server.url),
+        );
+        const doc = (await response.json()) as ViewDocument;
+        const html = viewDocumentHtml(doc);
+        expect(html).toContain('href="/code/src/new%20file.ts">inline');
+        expect(html).toContain('href="/code/src/new%20file.ts">reference');
+        expect(html).not.toContain('/resources/src/');
+        const shell = await fetch(
+          new URL('/code/src/new%20file.ts', server.url),
+        );
+        expect(shell.status).toBe(200);
+        const source = await fetch(
+          new URL('/api/source?path=src%2Fnew%20file.ts', server.url),
+        );
+        expect(source.status).toBe(200);
+        expect((await source.json()).content).toBe('export const hello = 1;\n');
+        for (const name of [
+          'Clock.swift',
+          'test.sh',
+          'App.entitlements',
+          'LICENSE',
+        ]) {
+          expect(
+            rewriteLocalFileLink(`../../src/${name}`, 'nested/guide.md'),
+          ).toBe(`/code/src/${name}`);
+          const response = await fetch(
+            new URL(`/api/source?path=src/${name}`, server.url),
+          );
+          expect(response.status).toBe(200);
+          expect((await response.json()).content).toBe('plain text\n');
+        }
+        for (const path of ['src/binary.bin', '../outside.ts']) {
+          const response = await fetch(
+            new URL(`/api/source?path=${encodeURIComponent(path)}`, server.url),
+          );
+          expect(response.status).toBe(404);
+        }
+      } finally {
+        await server.close();
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
 
   // @lat: [[lat.md/view/specs#View Tests#Resolves Markdown and source wiki links]]
   it('resolves Markdown and source wiki links', async () => {
