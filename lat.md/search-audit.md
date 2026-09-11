@@ -4,6 +4,8 @@ Controlled local-model experiments separate candidate quality from fusion behavi
 
 Benchmark tooling is not shipped in this repository. These records retain historical methods, results, and rollback references; archived commands require the tooling from their recorded commits. Current behavior is defined in [[rag-architecture]].
 
+The `rag-benchmarks` branch preserves the audit and comparison work from PRs #153 and #155, together with the implementation they measured. It is kept separately from `main`; recorded results describe the pinned historical code and corpus.
+
 ## Method
 
 The repository audit uses a disposable copy of the index at commit `ec930be`, excluding the Images section and search-design document. Production retrieval settings remain unchanged.
