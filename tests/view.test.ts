@@ -372,6 +372,7 @@ describe('lat ui', () => {
     expect(app).toContain('<BrandText text={brandText} />');
     expect(app).toContain('src={staticViewAssetUrl(latLogoUrl)}');
     expect(styles).toContain('.brand-logo');
+    expect(styles).toMatch(/#root \{\s*zoom: 1\.2;\s*\}/);
   });
 
   // @lat: [[lat.md/view/specs#View Tests#Builds a static deployment]]

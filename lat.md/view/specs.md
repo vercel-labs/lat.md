@@ -19,6 +19,8 @@ Relative images and other non-Markdown files resolve through vault-contained res
 
 By default the header renders the compact, solid-cell Lat wordmark bundled in [[view/src/logo.svg]], without shaded cells. This asset is independent of logos embedded in Markdown content. `lat ui --logo-text <text>` replaces it with safely rendered plain text.
 
+The browser mount scales the complete UI to 120%, preserving the relative hierarchy of document, navigation, source, search, editor, and graph typography.
+
 The browser shell keeps a default-self Content Security Policy while allowing OpenFreeMap tiles, GitHub-hosted images, Shields badges, and data-backed renderer fonts.
 
 The server anchors Vite's relative entry assets at `/assets/`, so every live document, source, search, and graph route loads the same production shell.

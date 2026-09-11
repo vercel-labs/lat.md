@@ -124,6 +124,10 @@
   box-sizing: border-box;
 }
 
+#root {
+  zoom: 1.2;
+}
+
 body {
   margin: 0;
   min-width: 320px;
