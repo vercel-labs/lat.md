@@ -10,7 +10,7 @@
   text-rendering: optimizeLegibility;
   color-scheme: light dark;
   /* Geist neutral scale: surfaces, interaction states, borders, then text. */
-  --background-100: #fff;
+  --background-100: #efefef;
   --background-200: #fafafa;
   --gray-100: #f2f2f2;
   --gray-200: #ebebeb;
