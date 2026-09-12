@@ -9,6 +9,7 @@ export const SOURCE_FILE_EXTENSIONS = [
   '.java',
   '.js',
   '.jsx',
+  '.php',
   '.py',
   '.rs',
   '.ts',

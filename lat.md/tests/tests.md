@@ -34,4 +34,5 @@ Shared patterns for writing and organizing tests in this project.
 - [[init]] — Initialization defaults for local-first semantic search
 - [[config]] — User-level configuration and repository embedding preference persistence
 - [[ts-fallback]] — Pure-TypeScript code-ref scanner fallback without ripgrep
+- [[php-source-parser]] — PHP source parsing and code-reference scanning
 - [[external-tests|external sources]] — Pinned external configuration, retrieval strategies, cache reconciliation, commands, MCP, and browser export

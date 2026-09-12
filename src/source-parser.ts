@@ -102,6 +102,7 @@ const grammarMap = {
   '.java': 'tree-sitter-java.wasm',
   '.js': 'tree-sitter-javascript.wasm',
   '.jsx': 'tree-sitter-javascript.wasm',
+  '.php': 'tree-sitter-php.wasm',
   '.py': 'tree-sitter-python.wasm',
   '.rs': 'tree-sitter-rust.wasm',
   '.ts': 'tree-sitter-typescript.wasm',
@@ -755,6 +756,158 @@ function extractJavaSymbols(tree: Tree): SourceSymbol[] {
   return symbols;
 }
 
+function phpSignature(
+  sourceLines: readonly string[],
+  node: SyntaxNode,
+): string {
+  const declaration = node.namedChildren.find(
+    (child) => child.type !== 'attribute_list',
+  );
+  return sourceLines[(declaration ?? node).startPosition.row]?.trim() ?? '';
+}
+
+function phpName(node: SyntaxNode): string | null {
+  const nameNode = node.childForFieldName('name');
+  if (nameNode?.type === 'by_ref') {
+    return (
+      nameNode.namedChildren
+        .find((child) => child.type === 'variable_name')
+        ?.text.replace(/^\$/, '') ?? null
+    );
+  }
+  const name =
+    extractName(node) ??
+    node.namedChildren.find((child) => child.type === 'name')?.text ??
+    null;
+  return name?.replace(/^\$/, '') ?? null;
+}
+
+function pushPhpSymbol(
+  sourceLines: readonly string[],
+  symbols: SourceSymbol[],
+  node: SyntaxNode,
+  name: string,
+  kind: SourceSymbol['kind'],
+  parent?: string,
+): void {
+  symbols.push({
+    name,
+    kind,
+    ...(parent ? { parent } : {}),
+    startLine: node.startPosition.row + 1,
+    endLine: node.endPosition.row + 1,
+    signature: phpSignature(sourceLines, node),
+  });
+}
+
+function extractPhpVariables(
+  sourceLines: readonly string[],
+  symbols: SourceSymbol[],
+  node: SyntaxNode,
+  parent?: string,
+): void {
+  const kind = node.type === 'const_declaration' ? 'const' : 'variable';
+  for (const child of node.namedChildren) {
+    if (child.type !== 'const_element' && child.type !== 'property_element') {
+      continue;
+    }
+    const name = phpName(child);
+    if (name) pushPhpSymbol(sourceLines, symbols, node, name, kind, parent);
+  }
+}
+
+const phpTypeKinds: Record<string, SourceSymbol['kind']> = {
+  class_declaration: 'class',
+  interface_declaration: 'interface',
+  trait_declaration: 'interface',
+  enum_declaration: 'class',
+};
+
+// Recurse through declaration containers, not arbitrary expressions: anonymous
+// classes and closures must not leak their members into the enclosing scope.
+const phpScopeContainers = new Set([
+  'namespace_definition',
+  'compound_statement',
+  'declaration_list',
+  'enum_declaration_list',
+  'if_statement',
+  'else_if_clause',
+  'else_clause',
+  'switch_statement',
+  'switch_block',
+  'case_statement',
+  'default_statement',
+  'while_statement',
+  'do_statement',
+  'for_statement',
+  'foreach_statement',
+  'try_statement',
+  'catch_clause',
+  'finally_clause',
+  'declare_statement',
+]);
+
+function collectPhpScope(
+  sourceLines: readonly string[],
+  scope: SyntaxNode,
+  symbols: SourceSymbol[],
+  parent?: string,
+): void {
+  for (const node of scope.namedChildren) {
+    const typeKind = phpTypeKinds[node.type];
+    if (typeKind) {
+      const name = phpName(node);
+      if (!name) continue;
+      pushPhpSymbol(sourceLines, symbols, node, name, typeKind);
+      const body = node.childForFieldName('body');
+      if (body) collectPhpScope(sourceLines, body, symbols, name);
+      continue;
+    }
+
+    if (node.type === 'function_definition' && !parent) {
+      const name = phpName(node);
+      if (name) pushPhpSymbol(sourceLines, symbols, node, name, 'function');
+    } else if (node.type === 'method_declaration' && parent) {
+      const name = phpName(node);
+      if (name)
+        pushPhpSymbol(sourceLines, symbols, node, name, 'method', parent);
+      if (name?.toLowerCase() === '__construct') {
+        const parameters = node.childForFieldName('parameters');
+        for (const parameter of parameters?.namedChildren ?? []) {
+          if (parameter.type !== 'property_promotion_parameter') continue;
+          const propertyName = phpName(parameter);
+          if (!propertyName) continue;
+          pushPhpSymbol(
+            sourceLines,
+            symbols,
+            parameter,
+            propertyName,
+            'variable',
+            parent,
+          );
+        }
+      }
+    } else if (
+      node.type === 'const_declaration' ||
+      node.type === 'property_declaration'
+    ) {
+      extractPhpVariables(sourceLines, symbols, node, parent);
+    } else if (node.type === 'enum_case' && parent) {
+      const name = phpName(node);
+      if (name)
+        pushPhpSymbol(sourceLines, symbols, node, name, 'const', parent);
+    } else if (phpScopeContainers.has(node.type)) {
+      collectPhpScope(sourceLines, node, symbols, parent);
+    }
+  }
+}
+
+function extractPhpSymbols(tree: Tree): SourceSymbol[] {
+  const symbols: SourceSymbol[] = [];
+  collectPhpScope(tree.rootNode.text.split('\n'), tree.rootNode, symbols);
+  return symbols;
+}
+
 function extractRustSymbols(tree: Tree): SourceSymbol[] {
   const symbols: SourceSymbol[] = [];
   const root = tree.rootNode;
@@ -1300,6 +1453,7 @@ const symbolExtractors = {
   '.java': extractJavaSymbols,
   '.js': extractTsSymbols,
   '.jsx': extractTsSymbols,
+  '.php': extractPhpSymbols,
   '.py': extractPySymbols,
   '.rs': extractRustSymbols,
   '.ts': extractTsSymbols,

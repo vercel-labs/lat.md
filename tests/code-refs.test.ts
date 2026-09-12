@@ -233,6 +233,37 @@ describe('supported source code-reference scanning', () => {
     }
   });
 
+  it('scans PHP line comments without matching attributes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'lat-php-code-refs-'));
+    roots.push(root);
+    await mkdir(join(root, 'app'));
+    await writeFile(
+      join(root, 'app', 'Example.php'),
+      `<?php
+// @lat: [[tests/php-source-parser#PHP Source Parser#Scans PHP line comments without matching attributes]]
+# @lat: [[tests/php-source-parser#PHP Source Parser#Scans PHP line comments without matching attributes]]
+#[Attribute]
+`,
+    );
+
+    const expected = [
+      'app/Example.php:2:tests/php-source-parser#PHP Source Parser#Scans PHP line comments without matching attributes',
+      'app/Example.php:3:tests/php-source-parser#PHP Source Parser#Scans PHP line comments without matching attributes',
+    ];
+    const original = process.env._LAT_DISABLE_RG;
+    try {
+      // Exercise PHP through the TypeScript fallback; the registry test covers ripgrep.
+      process.env._LAT_DISABLE_RG = '1';
+      const { refs } = await scanCodeRefs(root);
+      expect(
+        refs.map((ref) => `${ref.file}:${ref.line}:${ref.target}`),
+      ).toEqual(expected);
+    } finally {
+      if (original === undefined) delete process.env._LAT_DISABLE_RG;
+      else process.env._LAT_DISABLE_RG = original;
+    }
+  });
+
   // @lat: [[tests/ts-fallback#Bounded pool preserves source order]]
   it('preserves source order across a saturated TypeScript scan pool', async () => {
     const root = await createSourceProject();
@@ -326,7 +357,12 @@ describe('supported source code-reference scanning', () => {
     }).trim();
     execFileSync(
       'git',
-      ['update-index', '--add', '--cacheinfo', `120000,${symlinkBlob},linked.ts`],
+      [
+        'update-index',
+        '--add',
+        '--cacheinfo',
+        `120000,${symlinkBlob},linked.ts`,
+      ],
       { cwd: root },
     );
     const original = process.env._LAT_DISABLE_RG;

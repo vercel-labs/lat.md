@@ -119,7 +119,7 @@ Existence does not imply navigation support: unsupported files and directories v
 
 ### Source Code Links
 
-Wiki links can reference symbols in TypeScript, JavaScript, Python, Dart, Java, Rust, Go, and C source files:
+Wiki links can reference symbols in TypeScript, JavaScript, Python, Dart, Java, Rust, Go, C, and PHP source files:
 
 - **`[[src/config.ts#getConfigDir]]`** — the `getConfigDir` function in `src/config.ts`
 - **`[[src/server.ts#App#listen]]`** — the `listen` method on class `App` in `src/server.ts`
@@ -127,6 +127,7 @@ Wiki links can reference symbols in TypeScript, JavaScript, Python, Dart, Java, 
 - **`[[src/Greeter.java#Greeter#greet]]`** — the `greet` method on class `Greeter` in Java
 - **`[[src/lib.rs#Greeter#greet]]`** — the `greet` method on struct `Greeter` in Rust
 - **`[[src/app.go#Greeter#Greet]]`** — the `Greet` method on type `Greeter` in Go
+- **`[[app/Services/Payments/StripeGateway.php#StripeGateway#verifyKey]]`** — the `verifyKey` method on class `StripeGateway` in PHP
 - **`[[src/app.h#Greeter]]`** — the `Greeter` struct in a C header
 - **`[[src/app.h#Greeter#prefix]]`** — the `prefix` field of struct `Greeter` in C
 - **`[[src/config.ts]]`** — link to the file itself (no symbol)
@@ -142,6 +143,10 @@ Java symbols: classes, interfaces, enums, records, annotation types, constructor
 Rust symbols: functions, structs, enums, traits, impl methods, consts, statics, type aliases. Methods are resolved via `impl` blocks — `[[file.rs#Type#method]]` matches any `impl Type { fn method() }` or `impl Trait for Type { fn method() }`.
 
 Go symbols: functions, types (structs, interfaces, type aliases), methods (with receiver), consts, vars. Methods are resolved via receiver type — `[[file.go#Type#Method]]` matches `func (t *Type) Method()`.
+
+PHP symbols: classes, interfaces, traits, enums, enum cases, methods, constants, properties, constructor-promoted properties, top-level functions, and top-level constants. Namespaces are omitted from symbol paths; `.blade.php` templates are tolerated as best-effort PHP input.
+
+Both namespace syntaxes and global namespace blocks are traversed, as are conditional declaration containers. Anonymous class and closure members are not exposed. Promoted properties are extracted from syntax nodes, including untyped and by-reference parameters. Definition ranges preserve attributes, modifiers, and property hooks; promoted properties use their individual parameter ranges. Tests: [[tests/php-source-parser#PHP Source Parser]].
 
 C symbols: functions (including pointer-returning like `char *func()`), structs, struct fields/members, enums, enum values (including anonymous enums and `typedef enum` members), typedefs, `#define` macros (both object-like and function-like), variables (including arrays). Struct fields are resolved via the parent struct — `[[file.h#Struct#field]]` matches any `field_declaration` inside `struct Struct { ... }`, including fields nested inside anonymous unions and structs. Enum values can be referenced standalone (`[[file.h#GREEN]]`) or qualified by their enum name (`[[file.h#Color#GREEN]]`); both forms work for named enums, `typedef enum`, and named `typedef enum`. Both `.c` and `.h` files are supported — include guards (`#ifndef`/`#endif`) are walked through transparently.
 
