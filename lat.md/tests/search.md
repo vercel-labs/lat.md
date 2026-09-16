@@ -146,7 +146,7 @@ A failed build preserves the exact bytes and searchable content of search.db, re
 
 ### Reuses a single database filename
 
-Repeated reindexing leaves one search.db and no manifest, UUID databases, staging files, or writer locks. A new writer discards abandoned staging files and sidecars. Unchanged incremental work preserves the published file.
+Repeated reindexing leaves search.db and an unlocked, persistent search-write.lock, without manifests or staging files. A writer discards abandoned staging files and sidecars. Unchanged incremental work preserves the published file.
 
 ### Preserves the database when replacement fails
 
@@ -197,3 +197,15 @@ An index with unstemmed FTS migrates to normalized lexical fields without regene
 ### Packages stemmer runtime assets
 
 Server dependency tracing includes both the stemmer JavaScript glue and WASM binary so deployed search can initialize outside the workspace.
+
+### Ignores lock file contents
+
+Empty, malformed, or obsolete PID data does not block acquisition. Independent descriptors still exclude each other, and releasing a lock leaves its persistent file in place.
+
+### Never steals a live writer lock
+
+A contender times out while another process holds the lock, and a subsequent writer acquires it after normal release. Timeouts do not evict the owner.
+
+### Recovers from a killed writer
+
+Killing a writer before publication preserves search.db. Waiting processes acquire the kernel lock one at a time, discard abandoned staging data, and successfully publish a replacement.

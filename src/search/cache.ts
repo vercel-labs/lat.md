@@ -1,5 +1,6 @@
-import { copyFile, mkdir, open, readFile, rename, rm } from 'node:fs/promises';
+import { copyFile, mkdir, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { acquireSearchLock } from './lock.js';
 import {
   SearchDb,
   hasIndex,
@@ -7,42 +8,6 @@ import {
   ensureMeta,
   getStoredModel,
 } from './db.js';
-
-/** Cross-process writer lock; a crashed owner's lock can be reclaimed. */
-async function lock(cacheDir: string): Promise<() => Promise<void>> {
-  const path = join(cacheDir, 'search-write.lock');
-  const deadline = Date.now() + 120000;
-  while (true) {
-    try {
-      const handle = await open(path, 'wx');
-      await handle.writeFile(JSON.stringify({ pid: process.pid }));
-      await handle.close();
-      return async () => {
-        await rm(path, { force: true });
-      };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      try {
-        const { pid } = JSON.parse(await readFile(path, 'utf8'));
-        if (Number.isInteger(pid) && pid > 0) {
-          try {
-            process.kill(pid, 0);
-          } catch (e) {
-            if ((e as NodeJS.ErrnoException).code === 'ESRCH') {
-              await rm(path, { force: true });
-              continue;
-            }
-          }
-        }
-      } catch {
-        /* Owner may still be writing the lock. */
-      }
-      if (Date.now() > deadline)
-        throw new Error('Search index writer is busy; retry shortly.');
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
-}
 
 /** Retry transient Windows handles without deleting the usable index first. */
 async function withFileRetry(work: () => Promise<void>): Promise<void> {
@@ -78,7 +43,7 @@ export async function writeIndex<T>(
 ): Promise<T> {
   const dir = cacheDir ?? join(latDir, '.cache');
   await mkdir(dir, { recursive: true });
-  const release = await lock(dir);
+  const release = await acquireSearchLock(dir);
   const path = join(dir, '_search.db');
   const activePath = join(dir, INDEX_FILE);
   let db: SearchDb | undefined;

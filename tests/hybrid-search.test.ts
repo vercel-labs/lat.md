@@ -482,7 +482,7 @@ describe('hybrid search', () => {
     ).rejects.toThrow('injected');
     expect(readFileSync(join(cache, INDEX_FILE))).toEqual(before);
     expect(existsSync(join(cache, '_search.db'))).toBe(false);
-    expect(existsSync(join(cache, 'search-write.lock'))).toBe(false);
+    expect(existsSync(join(cache, 'search-write.lock'))).toBe(true);
     const db = openDb(f.lat, undefined, true);
     try {
       expect((await searchSections(db, 'needle', simple)).length).toBe(1);
@@ -507,6 +507,7 @@ describe('hybrid search', () => {
     for (let i = 0; i < 3; i++) {
       await writeIndex(f.lat, undefined, true, build);
       expect(readdirSync(cache).filter((name) => name !== 'parsed')).toEqual([
+        'search-write.lock',
         INDEX_FILE,
       ]);
     }
@@ -538,7 +539,7 @@ describe('hybrid search', () => {
     ).rejects.toThrow('rename failed');
     expect(readFileSync(join(cache, INDEX_FILE))).toEqual(before);
     expect(existsSync(join(cache, '_search.db'))).toBe(false);
-    expect(existsSync(join(cache, 'search-write.lock'))).toBe(false);
+    expect(existsSync(join(cache, 'search-write.lock'))).toBe(true);
     await writeIndex(f.lat, undefined, true, build);
     const reader = openDb(f.lat, undefined, true);
     try {
@@ -839,7 +840,7 @@ describe('hybrid search', () => {
           readdirSync(join(f.lat, '.cache')).filter(
             (name) => name !== 'parsed',
           ),
-        ).toEqual([INDEX_FILE]);
+        ).toEqual(['search-write.lock', INDEX_FILE]);
       } finally {
         await replacement.close();
       }
