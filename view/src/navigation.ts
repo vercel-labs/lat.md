@@ -1,5 +1,5 @@
 import type { ViewGraph, ViewGraphNode } from '../../src/view/protocol';
-import { isDocumentPath } from '../../src/document-formats';
+import { isDocumentPath } from '@lat.md/core/document-formats';
 import { staticViewRoute, viewPathname, viewEntryPath } from './static-mode';
 import {
   documentPath as routeDocumentPath,

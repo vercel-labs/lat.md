@@ -1,4 +1,4 @@
-import type { Section } from '../lattice-model.js';
+import type { Section } from '@lat.md/core/lattice-model';
 import type { CreateSearchEngine } from '../search/embedder.js';
 import {
   openIndexedSearchSession,

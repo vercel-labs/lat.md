@@ -18,8 +18,12 @@ import {
   readOpenCodePluginTemplate,
   readSkillTemplate,
 } from './gen.js';
-import { getLlmKey, getRepoEmbedding, setRepoEmbedding } from '../config.js';
-import { makeStyler } from './context.js';
+import {
+  getLlmKey,
+  getRepoEmbedding,
+  setRepoEmbedding,
+} from '@lat.md/core/config';
+import { makeStyler } from '@lat.md/core/cli/context';
 import { closeDb, getStoredModel, openDb } from '../search/db.js';
 import { modelKey } from '../search/embedder.js';
 import { reindexCommand } from './reindex.js';
@@ -29,9 +33,9 @@ import {
   readInitVersion,
   readFileHash,
   contentHash,
-} from '../init-version.js';
+} from '@lat.md/core/init-version';
 import { getLocalVersion, fetchLatestVersion } from '../version.js';
-import { selectMenu, type SelectOption } from './select-menu.js';
+import { selectMenu, type SelectOption } from '@lat.md/core/cli/select-menu';
 import { checklistMenu } from './checklist-menu.js';
 import { readInitAgents, writeInitAgents } from './init-preferences.js';
 
@@ -1566,7 +1570,7 @@ export async function initCmd(targetDir?: string): Promise<void> {
     );
 
     // Suggest ripgrep if not available
-    const { hasRipgrep } = await import('../code-refs.js');
+    const { hasRipgrep } = await import('@lat.md/core/code-refs');
     if (!(await hasRipgrep())) {
       console.log('');
       console.log(

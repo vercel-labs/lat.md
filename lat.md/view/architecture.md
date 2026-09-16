@@ -134,7 +134,7 @@ The server serializes editor writes, verifies the target is a known real Markdow
 
 A server-lifetime [[src/view/store.ts#createViewStore|ViewStore]] keeps document navigation and reverse references current without rescanning the project for every request.
 
-At startup the store reads each Markdown file once through the shared [[architecture-analysis#File analysis|file analyzer]], scans code references once, and obtains the explicit supported-source inventory from [[src/code-refs.ts#createCodeReferenceDiscovery]] for its watch scope. It then resolves the cached AST-free facts into an immutable reverse-reference snapshot.
+At startup the store reads each Markdown file once through the shared [[architecture-analysis#File analysis|file analyzer]], scans code references once, and obtains the explicit supported-source inventory from [[packages/core/src/code-refs.ts#createCodeReferenceDiscovery]] for its watch scope. It then resolves the cached AST-free facts into an immutable reverse-reference snapshot.
 
 The store watches the project with a short debounce and serializes updates. Existing Markdown and code files are reread individually; file additions trigger a lightweight scope refresh, and deletions remove their cached contributions. Disposable `lat.md/.cache` writes are ignored at the watcher boundary.
 
@@ -198,7 +198,7 @@ The topmost section menu in a local Markdown document links to the raw `.md` rou
 
 Raw-file links preserve the deployment base in live, static, and server builds. A homepage at `/` links to its `/<file>.md` source rather than appending `.md` to the homepage URL.
 
-In live views, the menu can invoke [[src/cli/section.ts#sectionCommand|the shared `lat section` command path]] with plain styling. Its modal defaults to the React projection of the shared document tree and can switch to raw output; static exports omit only this execution action.
+In live views, the menu can invoke [[packages/core/src/cli/section.ts#sectionCommand|the shared `lat section` command path]] with plain styling. Its modal defaults to the React projection of the shared document tree and can switch to raw output; static exports omit only this execution action.
 
 ## Responsive layout
 

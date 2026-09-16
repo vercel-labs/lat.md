@@ -1,0 +1,15 @@
+name: Lat check
+description: Validate Lat documentation, links, source references, and structure.
+branding:
+  icon: check-circle
+  color: purple
+inputs:
+  working-directory:
+    description: Project directory, relative to the checked-out workspace.
+    default: '.'
+  profile:
+    description: Print detailed validation timings.
+    default: 'false'
+runs:
+  using: node24
+  main: action/index.js

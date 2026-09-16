@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import type { CmdContext, CmdResult } from '../context.js';
+import type { CmdContext, CmdResult } from '@lat.md/core/context';
 import {
   startViewServer,
   type ViewServer,

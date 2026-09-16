@@ -1,16 +1,21 @@
 import { execSync } from 'node:child_process';
 import { lstatSync, readFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
-import { findLatticeDir } from '../project-discovery.js';
-import { plainStyler, type CmdContext } from '../context.js';
-import { expandPrompt } from './expand.js';
+import { findLatticeDir } from '@lat.md/core/project-discovery';
+import { plainStyler, type CmdContext } from '@lat.md/core/context';
+import { expandPrompt } from '@lat.md/core/cli/expand';
 import { runSearch } from './search.js';
 import { DEFAULT_SEARCH_LIMIT } from '../search/search.js';
-import { getSection, formatSectionOutput } from './section.js';
-import { checkMd, checkCodeRefs, checkIndex, checkSections } from './check.js';
-import { CheckRunContext } from './check-context.js';
-import { isSourceFileExtension } from '../source-formats.js';
-import { commandProjectAnalysis } from '../project-analysis.js';
+import { getSection, formatSectionOutput } from '@lat.md/core/cli/section';
+import {
+  checkMd,
+  checkCodeRefs,
+  checkIndex,
+  checkSections,
+} from '@lat.md/core/cli/check';
+import { CheckRunContext } from '@lat.md/core/cli/check-context';
+import { isSourceFileExtension } from '@lat.md/core/source-formats';
+import { commandProjectAnalysis } from '@lat.md/core/project-analysis';
 
 function outputPromptSubmit(context: string): void {
   process.stdout.write(

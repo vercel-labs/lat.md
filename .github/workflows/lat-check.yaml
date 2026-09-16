@@ -1,19 +1,25 @@
 name: lat check
 on: [push, pull_request]
-
 permissions:
   contents: read
-
 jobs:
-  lat-check:
-    runs-on: ubuntu-latest
+  core:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm buildall
-      - run: node dist/src/cli/index.js check
+      - run: node scripts/prepare-core-install.mjs
+      - run: pnpm --dir packages/core install --ignore-workspace --frozen-lockfile --ignore-scripts
+      - run: pnpm build:core
+      - run: node packages/core/dist/cli/index.js check
+      - run: pnpm test:core
+      - run: pnpm build:action
+      - run: pnpm test:action

@@ -15,23 +15,23 @@ import {
   flattenSections,
   resolveRef,
   type Section,
-} from '../lattice-model.js';
+} from '@lat.md/core/lattice-model';
 import {
   createExternalResolver,
   type ExternalResolver,
-} from '../external-sources.js';
+} from '@lat.md/core/external-sources';
 import {
   addExternalDocumentAliasAnchors,
   externalDocumentSections,
-} from '../external-documents.js';
-import type { ExternalTarget } from '../external-sources.js';
+} from '@lat.md/core/external-documents';
+import type { ExternalTarget } from '@lat.md/core/external-sources';
 import {
   resolveSourceSymbol,
   SourceParserRuntime,
   type SourceSymbol,
-} from '../source-parser.js';
-import { isSourceFileExtension } from '../source-formats.js';
-import { toPosix } from '../path.js';
+} from '@lat.md/core/source-parser';
+import { isSourceFileExtension } from '@lat.md/core/source-formats';
+import { toPosix } from '@lat.md/core/path';
 import { renderExternalDocumentTree } from './external-document-tree.js';
 import { visitDocumentElements } from './document-tree.js';
 import type { ViewExternalDocument, ViewSourceDocument } from './protocol.js';

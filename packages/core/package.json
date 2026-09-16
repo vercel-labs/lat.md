@@ -1,0 +1,248 @@
+{
+  "name": "@lat.md/core",
+  "version": "0.1.0",
+  "description": "Lat knowledge graph validation and navigation without UI or search",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel-labs/lat.md.git",
+    "directory": "packages/core"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "lat-core": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/cli/core.d.ts",
+      "import": "./dist/cli/core.js"
+    },
+    "./cli": {
+      "types": "./dist/cli/core.d.ts",
+      "import": "./dist/cli/core.js"
+    },
+    "./package.json": "./package.json",
+    "./cli/check-context": {
+      "types": "./dist/cli/check-context.d.ts",
+      "import": "./dist/cli/check-context.js"
+    },
+    "./cli/check": {
+      "types": "./dist/cli/check.d.ts",
+      "import": "./dist/cli/check.js"
+    },
+    "./cli/context": {
+      "types": "./dist/cli/context.d.ts",
+      "import": "./dist/cli/context.js"
+    },
+    "./cli/expand": {
+      "types": "./dist/cli/expand.d.ts",
+      "import": "./dist/cli/expand.js"
+    },
+    "./cli/external": {
+      "types": "./dist/cli/external.d.ts",
+      "import": "./dist/cli/external.js"
+    },
+    "./cli/locate": {
+      "types": "./dist/cli/locate.d.ts",
+      "import": "./dist/cli/locate.js"
+    },
+    "./cli/refs": {
+      "types": "./dist/cli/refs.d.ts",
+      "import": "./dist/cli/refs.js"
+    },
+    "./cli/section": {
+      "types": "./dist/cli/section.d.ts",
+      "import": "./dist/cli/section.js"
+    },
+    "./cli/select-menu": {
+      "types": "./dist/cli/select-menu.d.ts",
+      "import": "./dist/cli/select-menu.js"
+    },
+    "./code-refs": {
+      "types": "./dist/code-refs.d.ts",
+      "import": "./dist/code-refs.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./context": {
+      "types": "./dist/context.d.ts",
+      "import": "./dist/context.js"
+    },
+    "./document-formats": {
+      "types": "./dist/document-formats.d.ts",
+      "import": "./dist/document-formats.js"
+    },
+    "./document-tree": {
+      "types": "./dist/document-tree.d.ts",
+      "import": "./dist/document-tree.js"
+    },
+    "./extensions/alert-marker": {
+      "types": "./dist/extensions/alert-marker.d.ts",
+      "import": "./dist/extensions/alert-marker.js"
+    },
+    "./extensions/wiki-link/from-markdown": {
+      "types": "./dist/extensions/wiki-link/from-markdown.d.ts",
+      "import": "./dist/extensions/wiki-link/from-markdown.js"
+    },
+    "./extensions/wiki-link/index": {
+      "types": "./dist/extensions/wiki-link/index.d.ts",
+      "import": "./dist/extensions/wiki-link/index.js"
+    },
+    "./extensions/wiki-link/syntax": {
+      "types": "./dist/extensions/wiki-link/syntax.d.ts",
+      "import": "./dist/extensions/wiki-link/syntax.js"
+    },
+    "./extensions/wiki-link/to-markdown": {
+      "types": "./dist/extensions/wiki-link/to-markdown.d.ts",
+      "import": "./dist/extensions/wiki-link/to-markdown.js"
+    },
+    "./extensions/wiki-link/types": {
+      "types": "./dist/extensions/wiki-link/types.d.ts",
+      "import": "./dist/extensions/wiki-link/types.js"
+    },
+    "./external-documents": {
+      "types": "./dist/external-documents.d.ts",
+      "import": "./dist/external-documents.js"
+    },
+    "./external-sources": {
+      "types": "./dist/external-sources.d.ts",
+      "import": "./dist/external-sources.js"
+    },
+    "./format": {
+      "types": "./dist/format.d.ts",
+      "import": "./dist/format.js"
+    },
+    "./init-version": {
+      "types": "./dist/init-version.d.ts",
+      "import": "./dist/init-version.js"
+    },
+    "./lattice-model": {
+      "types": "./dist/lattice-model.d.ts",
+      "import": "./dist/lattice-model.js"
+    },
+    "./lattice": {
+      "types": "./dist/lattice.d.ts",
+      "import": "./dist/lattice.js"
+    },
+    "./markdown-analysis-cache": {
+      "types": "./dist/markdown-analysis-cache.d.ts",
+      "import": "./dist/markdown-analysis-cache.js"
+    },
+    "./markdown-analysis-worker": {
+      "types": "./dist/markdown-analysis-worker.d.ts",
+      "import": "./dist/markdown-analysis-worker.js"
+    },
+    "./markdown-analysis": {
+      "types": "./dist/markdown-analysis.d.ts",
+      "import": "./dist/markdown-analysis.js"
+    },
+    "./markdown-analyzer-loader": {
+      "types": "./dist/markdown-analyzer-loader.d.ts",
+      "import": "./dist/markdown-analyzer-loader.js"
+    },
+    "./markdown-validation": {
+      "types": "./dist/markdown-validation.d.ts",
+      "import": "./dist/markdown-validation.js"
+    },
+    "./parser-cache": {
+      "types": "./dist/parser-cache.d.ts",
+      "import": "./dist/parser-cache.js"
+    },
+    "./parser-import": {
+      "types": "./dist/parser-import.d.ts",
+      "import": "./dist/parser-import.js"
+    },
+    "./parser": {
+      "types": "./dist/parser.d.ts",
+      "import": "./dist/parser.js"
+    },
+    "./path": {
+      "types": "./dist/path.d.ts",
+      "import": "./dist/path.js"
+    },
+    "./profiler": {
+      "types": "./dist/profiler.d.ts",
+      "import": "./dist/profiler.js"
+    },
+    "./project-analysis": {
+      "types": "./dist/project-analysis.d.ts",
+      "import": "./dist/project-analysis.js"
+    },
+    "./project-discovery": {
+      "types": "./dist/project-discovery.d.ts",
+      "import": "./dist/project-discovery.js"
+    },
+    "./repository-path": {
+      "types": "./dist/repository-path.d.ts",
+      "import": "./dist/repository-path.js"
+    },
+    "./search-metadata": {
+      "types": "./dist/search-metadata.d.ts",
+      "import": "./dist/search-metadata.js"
+    },
+    "./source-formats": {
+      "types": "./dist/source-formats.d.ts",
+      "import": "./dist/source-formats.js"
+    },
+    "./source-parser": {
+      "types": "./dist/source-parser.d.ts",
+      "import": "./dist/source-parser.js"
+    },
+    "./walk": {
+      "types": "./dist/walk.d.ts",
+      "import": "./dist/walk.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@asciidoctor/core": "4.0.6",
+    "@folder/xdg": "^4.0.1",
+    "@repomix/tree-sitter-wasms": "^0.1.17",
+    "commander": "^14.0.3",
+    "github-slugger": "^2.0.0",
+    "ignore-walk": "^8.0.0",
+    "mdast-util-gfm-autolink-literal": "^2.0.1",
+    "mdast-util-gfm-footnote": "^2.1.0",
+    "mdast-util-gfm-strikethrough": "^2.0.0",
+    "mdast-util-gfm-table": "^2.0.0",
+    "mdast-util-gfm-task-list-item": "^2.0.0",
+    "mdast-util-to-markdown": "^2.1.0",
+    "micromark-extension-gfm-autolink-literal": "^2.1.0",
+    "micromark-extension-gfm-footnote": "^2.1.0",
+    "micromark-extension-gfm-strikethrough": "^2.1.0",
+    "micromark-extension-gfm-table": "^2.1.1",
+    "micromark-extension-gfm-task-list-item": "^2.1.0",
+    "remark-frontmatter": "^5.0.0",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "rst-compiler": "0.5.9",
+    "unified": "^11.0.0",
+    "unist-util-visit": "^5.0.0",
+    "web-tree-sitter": "^0.26.6",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^25.3.0",
+    "mdast-util-from-markdown": "^2.0.3",
+    "micromark-util-types": "^2.0.2",
+    "typescript": "^5.7.0",
+    "tsx": "^4.21.0"
+  }
+}

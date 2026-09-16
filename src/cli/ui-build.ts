@@ -1,4 +1,4 @@
-import type { CmdContext, CmdResult } from '../context.js';
+import type { CmdContext, CmdResult } from '@lat.md/core/context';
 import {
   buildStaticView,
   type StaticViewBuildOptions,

@@ -7,6 +7,7 @@ This directory defines the high-level concepts, business logic, and architecture
 - [[dev-process]] — Development tooling, testing, formatting, and publishing conventions
 - [[external-sources]] — External repository references, retrieval providers, caching, and design boundaries
 - [[markdown]] — Markdown extensions (wiki links, frontmatter) used in lat.md files
+- [[package-distribution]] — Core/full CLI distributions, isolated validation installs, and the GitHub check action
 - [[parser]] — Markdown parsing architecture, section tree construction, and ref extraction
 - [[rag-architecture]] — Implemented passage indexing, hybrid section ranking, embedding reuse, and deployment
 - [[tests]] — High-level test specifications mapped to code via require-code-mention

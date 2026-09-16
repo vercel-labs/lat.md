@@ -1,6 +1,6 @@
 import { extname } from 'node:path';
-import { normalizeRepositoryPath } from '../repository-path.js';
-import { isSourceFileExtension } from '../source-formats.js';
+import { normalizeRepositoryPath } from '@lat.md/core/repository-path';
+import { isSourceFileExtension } from '@lat.md/core/source-formats';
 import { rewriteDocumentLink } from './document-route.js';
 
 /** Resolve ordinary code links relative to their Markdown file, not the vault root. */

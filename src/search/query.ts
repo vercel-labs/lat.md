@@ -3,7 +3,7 @@ import { ReindexRequiredError } from './embedder.js';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { hasIndex } from './db.js';
-import type { Section, SectionMatch } from '../lattice-model.js';
+import type { Section, SectionMatch } from '@lat.md/core/lattice-model';
 import { closeDb, getStoredModel, openDb } from './db.js';
 import { embedderForIndex, type CreateSearchEngine } from './embedder.js';
 import { searchSections, type SearchResult } from './search.js';

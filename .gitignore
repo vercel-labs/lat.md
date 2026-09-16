@@ -14,3 +14,5 @@ lat.md/.cache
 .cursor/hooks.json
 .cursor
 .vercel
+
+/packages/core/pnpm-lock.yaml

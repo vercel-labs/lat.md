@@ -12,18 +12,18 @@ import {
   extractRefs,
   buildFileIndex,
   resolveRef,
-} from '../src/lattice.js';
-import { formatSectionPreview } from '../src/format.js';
-import { plainStyler, type CmdContext } from '../src/context.js';
+} from '@lat.md/core/lattice';
+import { formatSectionPreview } from '@lat.md/core/format';
+import { plainStyler, type CmdContext } from '@lat.md/core/context';
 import {
   checkMd,
   checkCodeRefs,
   checkIndex,
   checkSections,
-} from '../src/cli/check.js';
-import { discoverSourceFiles, scanCodeRefs } from '../src/code-refs.js';
-import { findRefs } from '../src/cli/refs.js';
-import { getSection, formatSectionOutput } from '../src/cli/section.js';
+} from '@lat.md/core/cli/check';
+import { discoverSourceFiles, scanCodeRefs } from '@lat.md/core/code-refs';
+import { findRefs } from '@lat.md/core/cli/refs';
+import { getSection, formatSectionOutput } from '@lat.md/core/cli/section';
 
 // eslint-disable-next-line no-control-regex
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');

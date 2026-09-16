@@ -149,7 +149,7 @@ async function analyzeWithWorkers(
     return new Worker(
       new URL(
         sourceRuntime
-          ? './markdown-analysis-worker.ts'
+          ? './markdown-analysis-worker.js'
           : './markdown-analysis-worker.js',
         import.meta.url,
       ),

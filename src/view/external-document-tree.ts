@@ -1,6 +1,6 @@
 import type { AbstractBlock, Inline } from '@asciidoctor/core';
 import type { RstNode } from 'rst-compiler';
-import { asciidocCompatibleContent } from '../external-documents.js';
+import { asciidocCompatibleContent } from '@lat.md/core/external-documents';
 import {
   decorateExternalSiteLinks,
   toViewDocumentTree,

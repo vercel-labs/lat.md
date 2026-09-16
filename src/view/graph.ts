@@ -5,7 +5,7 @@ import {
   flattenSections,
   resolveRef,
   type Section,
-} from '../lattice-model.js';
+} from '@lat.md/core/lattice-model';
 import type {
   ViewDocumentError,
   ViewGraph,
@@ -21,8 +21,14 @@ import type {
 } from './references.js';
 import { viewSourceTarget } from './source-target.js';
 import type { ViewGitSnapshot } from './git.js';
-import type { ExternalResolver, ExternalTarget } from '../external-sources.js';
-import { isDocumentPath, stripDocumentExtension } from '../document-formats.js';
+import type {
+  ExternalResolver,
+  ExternalTarget,
+} from '@lat.md/core/external-sources';
+import {
+  isDocumentPath,
+  stripDocumentExtension,
+} from '@lat.md/core/document-formats';
 import { documentUrl } from './document-route.js';
 
 function encodedPath(path: string): string {

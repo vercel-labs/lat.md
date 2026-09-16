@@ -4,14 +4,14 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getLatServerVersion } from '@lat.md/server';
-import type { CmdContext } from '../context.js';
+import type { CmdContext } from '@lat.md/core/context';
 import {
   analyzeMarkdownProject,
   type MarkdownProjectAnalysis,
-} from '../project-analysis.js';
+} from '@lat.md/core/project-analysis';
 import type { ServerIndexRequest } from './server-index-worker.js';
 import { getLocalVersion } from '../version.js';
-import { toPosix } from '../path.js';
+import { toPosix } from '@lat.md/core/path';
 import {
   buildStaticView,
   moveViewBuildOutput,

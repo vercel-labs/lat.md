@@ -31,7 +31,7 @@ async function loadAnalyzer(): Promise<{
   const started = performance.now();
   const sourceRuntime = import.meta.url.endsWith('.ts');
   const moduleUrl = new URL(
-    sourceRuntime ? './markdown-analysis.ts' : './markdown-analysis.js',
+    sourceRuntime ? './markdown-analysis.js' : './markdown-analysis.js',
     import.meta.url,
   ).href;
   const module = sourceRuntime

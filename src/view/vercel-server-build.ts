@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import type { CmdContext } from '../context.js';
+import type { CmdContext } from '@lat.md/core/context';
 import {
   buildServerView,
   type ServerViewBuildOptions,

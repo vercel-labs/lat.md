@@ -1,3 +1,4 @@
+import type {} from 'remark-math';
 import type {
   PhrasingContent,
   Root,
@@ -5,8 +6,8 @@ import type {
   Table,
   TableRow,
 } from 'mdast';
-import { parse } from '../parser.js';
-import type { WikiLink } from '../extensions/wiki-link/types.js';
+import { parse } from '@lat.md/core/parser';
+import type { WikiLink } from '@lat.md/core/extensions/wiki-link/types';
 
 type DiffKind = 'added' | 'removed';
 type SequenceChange<T> =

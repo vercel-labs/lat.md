@@ -9,8 +9,8 @@ import {
   flattenSections,
   extractRefs,
   findSections,
-} from '../src/lattice.js';
-import { toPosix } from '../src/path.js';
+} from '@lat.md/core/lattice';
+import { toPosix } from '@lat.md/core/path';
 
 const basicDir = join(import.meta.dirname, 'cases', 'basic-project');
 const basicLat = join(basicDir, 'lat.md');

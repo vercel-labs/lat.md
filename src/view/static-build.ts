@@ -11,9 +11,9 @@ import {
 } from 'node:fs/promises';
 import { dirname, join, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { CmdContext } from '../context.js';
-import { isDocumentPath } from '../document-formats.js';
-import type { ExternalResolver } from '../external-sources.js';
+import type { CmdContext } from '@lat.md/core/context';
+import { isDocumentPath } from '@lat.md/core/document-formats';
+import type { ExternalResolver } from '@lat.md/core/external-sources';
 import type {
   ViewDocument,
   ViewExternalDocument,

@@ -1,11 +1,11 @@
-import { PARSER_CACHE_VERSION } from '../parser-cache.js';
+import { PARSER_CACHE_VERSION } from '@lat.md/core/parser-cache';
 import { synchronizeLexical } from './lexical.js';
 import { dirname } from 'node:path';
 import { CREATE_PASSAGE_FTS, type SearchDb } from './db.js';
 import {
   analyzeMarkdownProject,
   type MarkdownProjectAnalysis,
-} from '../project-analysis.js';
+} from '@lat.md/core/project-analysis';
 import type { Embedder } from './embedder.js';
 import { chunkFile, digest, embeddingFingerprint } from './chunks.js';
 

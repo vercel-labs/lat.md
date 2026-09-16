@@ -41,6 +41,37 @@ npm install -g lat.md
 
 Then run `lat init` in the repo you want to use lat in.
 
+For validation and navigation without UI, search, or embedding downloads:
+
+```bash
+npm install -g @lat.md/core
+lat-core check
+```
+
+`lat-core` also provides `locate`, `section`, `refs`, `expand`, `external`, and `config`. Both packages can be installed together; they expose different executable names.
+
+### GitHub Actions
+
+After the first Action release, the prebuilt checker is available from this same repository:
+
+```yaml
+permissions:
+  contents: read
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vercel-labs/lat.md@action-v1
+        with:
+          working-directory: .
+          profile: 'false'
+```
+
+The Action includes its checker and parser assets. No Node setup, npm install, project build, or embedding credentials are needed. Validation errors fail the job. Use an immutable `action-vX.Y.Z` tag or commit SHA to pin a release.
+
+Maintainers build and test the artifact with `pnpm build:action` and `pnpm test:action`. The **Publish check action** workflow tests the artifact across Linux, Windows, and macOS before publishing dedicated Action tags. Source branches lack the generated runtime; invoke a released Action tag.
+
 ## How it works
 
 Run `lat init` to scaffold a `lat.md/` directory, then write markdown files describing your architecture, business logic, test specs — whatever matters. Link between sections using `[[file#Section#Subsection]]` syntax. Link to source code symbols with `[[src/auth.ts#validateToken]]`. Annotate source code with `// @lat: [[section-id]]` (or `# @lat: [[section-id]]` in Python and PHP) comments to tie implementation back to concepts.

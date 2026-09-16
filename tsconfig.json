@@ -10,5 +10,9 @@
     "declaration": true,
     "skipLibCheck": true
   },
-  "include": ["src", "tests"]
+  "include": [
+    "src",
+    "tests",
+    "packages/core/src/types"
+  ]
 }

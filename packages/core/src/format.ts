@@ -1,4 +1,4 @@
-import type { SourceSpan } from './search/types.js';
+import type { SourceSpan } from './search-metadata.js';
 import { join, relative } from 'node:path';
 import type { Section, SectionMatch } from './lattice-model.js';
 import type { CmdContext, Styler } from './context.js';
@@ -108,10 +108,17 @@ export function formatResultList(
 
 export function formatNavHints(ctx: CmdContext): string {
   const s = ctx.styler;
+  const name = ctx.cliName ?? 'lat';
+  const lookup = ctx.searchAvailable === false ? 'locate' : 'search';
+  const query = ctx.searchAvailable === false ? 'section#id' : 'new query';
+  const description =
+    ctx.searchAvailable === false
+      ? 'find sections by id'
+      : 'search for something else';
   const hints =
     ctx.mode === 'cli'
-      ? `${s.dim('*')} \`lat section "section#id"\` \u2014 show full content with outgoing/incoming refs\n` +
-        `${s.dim('*')} \`lat search "new query"\` \u2014 search for something else`
+      ? `${s.dim('*')} \`${name} section "section#id"\` \u2014 show full content with outgoing/incoming refs\n` +
+        `${s.dim('*')} \`${name} ${lookup} "${query}"\` \u2014 ${description}`
       : `${s.dim('*')} \`lat_section\` \u2014 show full content with outgoing/incoming refs\n` +
         `${s.dim('*')} \`lat_search\` \u2014 search for something else`;
   return `\n## To navigate further:\n\n${hints}`;

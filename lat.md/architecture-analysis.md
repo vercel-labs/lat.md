@@ -26,7 +26,7 @@ A source analysis is the serializable symbol table extracted from one supported 
 
 It records symbol names, kinds, parents, source ranges, and signatures. Tree-sitter syntax trees and grammar instances remain private parser state and are never serialized.
 
-[[src/source-formats.ts#SOURCE_FILE_EXTENSIONS]] is the authoritative source-format registry. Its derived union requires every registered extension to have a grammar, symbol extractor, and parser test fixture, and it also scopes code-mention discovery and external source-file validation.
+[[packages/core/src/source-formats.ts#SOURCE_FILE_EXTENSIONS]] is the authoritative source-format registry. Its derived union requires every registered extension to have a grammar, symbol extractor, and parser test fixture, and it also scopes code-mention discovery and external source-file validation.
 
 Source analysis stays lazy: only a file named by a source-code wiki link is read. Concurrent references to the same file share one promise-backed runtime result.
 
@@ -40,7 +40,7 @@ Each local cache identity is the normalized project-relative full path. External
 lat.md/.cache/parsed/se/abcdef0123456789abcdef0123456789abcdef01_lat_md_guide_setup_md
 ```
 
-The first line is `v<N>:<sha1>`, where `N` is [[src/parser-cache.ts#PARSER_CACHE_VERSION]] and the hash covers the complete input content. The remaining bytes are the compact JSON serialization of a local Markdown analysis, external document index, or source symbol table.
+The first line is `v<N>:<sha1>`, where `N` is [[packages/core/src/parser-cache.ts#PARSER_CACHE_VERSION]] and the hash covers the complete input content. The remaining bytes are the compact JSON serialization of a local Markdown analysis, external document index, or source symbol table.
 
 A hit requires both the current parser-cache version and content hash, plus matching path identity and a structurally valid payload for that parser. Changed content, parser semantics, truncated writes, malformed JSON, or unexpected shapes become ordinary misses.
 
@@ -52,9 +52,9 @@ Cached local Markdown analyses retain source content; external document and sour
 
 A project snapshot reduces file analyses into immutable lookup structures shared by every operation in one command or request.
 
-The parser-free [[src/lattice-model.ts]] module owns serializable graph types plus section flattening, indexing, lookup, and reference resolution. The snapshot uses those helpers to own files by normalized path, ordered sections, canonical section ids, file-suffix and heading-slug indexes, and outgoing and incoming reference indexes.
+The parser-free [[packages/core/src/lattice-model.ts]] module owns serializable graph types plus section flattening, indexing, lookup, and reference resolution. The snapshot uses those helpers to own files by normalized path, ordered sections, canonical section ids, file-suffix and heading-slug indexes, and outgoing and incoming reference indexes.
 
-Consumers use snapshot indexes without importing Markdown syntax machinery. [[src/lattice.ts]] retains parsing and extraction functions and re-exports the graph API for compatibility, but internal graph consumers import the lightweight model directly.
+Consumers use snapshot indexes without importing Markdown syntax machinery. [[packages/core/src/lattice.ts]] retains parsing and extraction functions and re-exports the graph API for compatibility, but internal graph consumers import the lightweight model directly.
 
 Source code scanning and external-source reconciliation are separate project inputs because they are not facts that a Markdown worker can derive from one file.
 

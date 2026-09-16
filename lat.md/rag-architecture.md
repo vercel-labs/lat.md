@@ -39,7 +39,7 @@ flowchart TB
 
 The syntax examples are embedded as passages owned by Syntax. Their embedding inputs include bounded heading context such as “Wiki guide / Images / Syntax”, but their body text is not also embedded under Images or Wiki guide. A match on those examples returns Syntax; the parent relationship alone does not create a result for Images or Wiki guide.
 
-[[src/markdown-analysis.ts]] records block structure and source offsets. [[src/search/chunks.ts#chunkFile]] skips headings and YAML during body assignment, walks section ranges, and associates blocks with their owners. A section with no body gets a heading passage so it remains searchable.
+[[packages/core/src/markdown-analysis.ts]] records block structure and source offsets. [[src/search/chunks.ts#chunkFile]] skips headings and YAML during body assignment, walks section ranges, and associates blocks with their owners. A section with no body gets a heading passage so it remains searchable.
 
 Passages retain their owner, ordinal, block type, original text, offsets, and line ranges. Embedding context is separate from source text. Stored section rows contain identity, file, heading, introduction, content hash, parent, and line range; [[src/search/index.ts#indexSections]] writes these records.
 
@@ -191,7 +191,7 @@ Search returns sections with fused rank scores, available channel scores and ran
 
 [[src/search/types.ts]] defines `SearchResult`, `SearchEvidence`, and diagnostics. Each result contains up to one best passage per channel; a passage selected by both channels appears once. [[src/search/query.ts#resolveSearchMatches]] resolves indexed IDs against the analyzed section map and omits IDs absent from that snapshot.
 
-[[src/format.ts]] renders CLI/MCP passage previews, introductions, or both. [[src/view/protocol.ts]] carries the browser response. Preview selection does not change ranking; [[tests/search#Hybrid Retrieval#Switches preview without changing relevance]] verifies this contract. [[tests/search#RAG Tests#Reuses an indexed search session]] covers database and embedder reuse.
+[[packages/core/src/format.ts]] renders CLI/MCP passage previews, introductions, or both. [[src/view/protocol.ts]] carries the browser response. Preview selection does not change ranking; [[tests/search#Hybrid Retrieval#Switches preview without changing relevance]] verifies this contract. [[tests/search#RAG Tests#Reuses an indexed search session]] covers database and embedder reuse.
 
 ## Exported site search
 

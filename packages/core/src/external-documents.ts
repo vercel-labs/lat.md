@@ -11,7 +11,7 @@ import type {
   ViewDocumentElement,
   ViewDocumentNode,
   ViewDocumentTree,
-} from './view/protocol.js';
+} from './document-tree.js';
 import {
   PARSER_CACHE_VERSION,
   hashParserContent,

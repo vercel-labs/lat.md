@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createEmbedder } from '@lat.md/embed';
 import minilm from '@lat.md/embed-minilm-fp16';
-import { analyzeMarkdownProject } from '../src/project-analysis.js';
+import { analyzeMarkdownProject } from '@lat.md/core/project-analysis';
 import { chunkFile } from '../src/search/chunks.js';
 import {
   SearchDb,
@@ -32,9 +32,9 @@ import { stem, stemWords } from '@lat.md/stemmer';
 import { indexSections, projectFingerprint } from '../src/search/index.js';
 import { searchSections, collapse } from '../src/search/search.js';
 import { writeIndex } from '../src/search/cache.js';
-import { formatResultList } from '../src/format.js';
-import { getSection } from '../src/cli/section.js';
-import { plainStyler } from '../src/context.js';
+import { formatResultList } from '@lat.md/core/format';
+import { getSection } from '@lat.md/core/cli/section';
+import { plainStyler } from '@lat.md/core/context';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();

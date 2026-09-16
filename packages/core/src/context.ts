@@ -29,6 +29,9 @@ export type CmdContext = {
   projectRoot: string;
   styler: Styler;
   mode: 'cli' | 'mcp';
+  /** CLI navigation hints reflect the invoking distribution. */
+  cliName?: string;
+  searchAvailable?: boolean;
   /** The check target was supplied explicitly instead of discovered as lat.md. */
   headless?: boolean;
   /** Lazy Markdown analysis shared by nested operations in this request. */

@@ -4,8 +4,8 @@ import type { Embedder } from './embedder.js';
 import type {
   MarkdownBlock,
   MarkdownFileAnalysis,
-} from '../markdown-analysis.js';
-import type { Section } from '../lattice-model.js';
+} from '@lat.md/core/markdown-analysis';
+import type { Section } from '@lat.md/core/lattice-model';
 
 export const CHUNK_POLICY = 'owned-blocks-v1';
 export type Passage = {

@@ -11,9 +11,9 @@ importers:
       '@asciidoctor/core':
         specifier: 4.0.6
         version: 4.0.6
-      '@folder/xdg':
-        specifier: ^4.0.1
-        version: 4.0.1
+      '@lat.md/core':
+        specifier: workspace:*
+        version: link:packages/core
       '@lat.md/embed':
         specifier: workspace:*
         version: link:packages/embed
@@ -29,9 +29,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.27.1
         version: 1.27.1(zod@4.3.6)
-      '@repomix/tree-sitter-wasms':
-        specifier: ^0.1.17
-        version: 0.1.17
       '@tursodatabase/database':
         specifier: 0.7.2
         version: 0.7.2
@@ -50,45 +47,6 @@ importers:
       fs-native-extensions:
         specifier: 1.5.1
         version: 1.5.1
-      github-slugger:
-        specifier: ^2.0.0
-        version: 2.0.0
-      ignore-walk:
-        specifier: ^8.0.0
-        version: 8.0.0
-      mdast-util-gfm-autolink-literal:
-        specifier: ^2.0.1
-        version: 2.0.1
-      mdast-util-gfm-footnote:
-        specifier: ^2.1.0
-        version: 2.1.0
-      mdast-util-gfm-strikethrough:
-        specifier: ^2.0.0
-        version: 2.0.0
-      mdast-util-gfm-table:
-        specifier: ^2.0.0
-        version: 2.0.0
-      mdast-util-gfm-task-list-item:
-        specifier: ^2.0.0
-        version: 2.0.0
-      mdast-util-to-markdown:
-        specifier: ^2.1.0
-        version: 2.1.2
-      micromark-extension-gfm-autolink-literal:
-        specifier: ^2.1.0
-        version: 2.1.0
-      micromark-extension-gfm-footnote:
-        specifier: ^2.1.0
-        version: 2.1.0
-      micromark-extension-gfm-strikethrough:
-        specifier: ^2.1.0
-        version: 2.1.0
-      micromark-extension-gfm-table:
-        specifier: ^2.1.1
-        version: 2.1.1
-      micromark-extension-gfm-task-list-item:
-        specifier: ^2.1.0
-        version: 2.1.0
       rehype-katex:
         specifier: ^7.0.1
         version: 7.0.1
@@ -104,21 +62,9 @@ importers:
       remark-emoji:
         specifier: ^5.0.2
         version: 5.0.2
-      remark-frontmatter:
-        specifier: ^5.0.0
-        version: 5.0.0
-      remark-math:
-        specifier: ^6.0.0
-        version: 6.0.0
-      remark-parse:
-        specifier: ^11.0.0
-        version: 11.0.0
       remark-rehype:
         specifier: ^11.1.2
         version: 11.1.2
-      remark-stringify:
-        specifier: ^11.0.0
-        version: 11.0.0
       rst-compiler:
         specifier: 0.5.9
         version: 0.5.9
@@ -128,9 +74,6 @@ importers:
       unist-util-visit:
         specifier: ^5.0.0
         version: 5.1.0
-      web-tree-sitter:
-        specifier: ^0.26.6
-        version: 0.26.6
       yaml:
         specifier: ^2.8.2
         version: 2.8.2
@@ -156,6 +99,9 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.9
         version: 6.43.9
+      '@folder/xdg':
+        specifier: ^4.0.1
+        version: 4.0.1
       '@fontsource-variable/geist':
         specifier: ^5.3.0
         version: 5.3.0
@@ -216,9 +162,15 @@ importers:
       mdast-util-from-markdown:
         specifier: ^2.0.3
         version: 2.0.3
+      mdast-util-gfm-table:
+        specifier: ^2.0.0
+        version: 2.0.0
       mermaid:
         specifier: ^11.17.2
         version: 11.17.2
+      micromark-extension-gfm-table:
+        specifier: ^2.1.1
+        version: 2.1.1
       micromark-util-types:
         specifier: ^2.0.2
         version: 2.0.2
@@ -234,6 +186,9 @@ importers:
       rehype-stringify:
         specifier: ^10.0.1
         version: 10.0.1
+      remark-math:
+        specifier: ^6.0.0
+        version: 6.0.0
       sigma:
         specifier: ^3.0.3
         version: 3.0.3(graphology-types@0.24.8)
@@ -255,6 +210,112 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/debug@4.1.12)(@types/node@25.3.0)(jsdom@30.0.1)(tsx@4.21.0)(yaml@2.8.2)
+      web-tree-sitter:
+        specifier: ^0.26.6
+        version: 0.26.6
+
+  packages/core:
+    dependencies:
+      '@asciidoctor/core':
+        specifier: 4.0.6
+        version: 4.0.6
+      '@folder/xdg':
+        specifier: ^4.0.1
+        version: 4.0.1
+      '@repomix/tree-sitter-wasms':
+        specifier: ^0.1.17
+        version: 0.1.17
+      commander:
+        specifier: ^14.0.3
+        version: 14.0.3
+      github-slugger:
+        specifier: ^2.0.0
+        version: 2.0.0
+      ignore-walk:
+        specifier: ^8.0.0
+        version: 8.0.0
+      mdast-util-gfm-autolink-literal:
+        specifier: ^2.0.1
+        version: 2.0.1
+      mdast-util-gfm-footnote:
+        specifier: ^2.1.0
+        version: 2.1.0
+      mdast-util-gfm-strikethrough:
+        specifier: ^2.0.0
+        version: 2.0.0
+      mdast-util-gfm-table:
+        specifier: ^2.0.0
+        version: 2.0.0
+      mdast-util-gfm-task-list-item:
+        specifier: ^2.0.0
+        version: 2.0.0
+      mdast-util-to-markdown:
+        specifier: ^2.1.0
+        version: 2.1.2
+      micromark-extension-gfm-autolink-literal:
+        specifier: ^2.1.0
+        version: 2.1.0
+      micromark-extension-gfm-footnote:
+        specifier: ^2.1.0
+        version: 2.1.0
+      micromark-extension-gfm-strikethrough:
+        specifier: ^2.1.0
+        version: 2.1.0
+      micromark-extension-gfm-table:
+        specifier: ^2.1.1
+        version: 2.1.1
+      micromark-extension-gfm-task-list-item:
+        specifier: ^2.1.0
+        version: 2.1.0
+      remark-frontmatter:
+        specifier: ^5.0.0
+        version: 5.0.0
+      remark-math:
+        specifier: ^6.0.0
+        version: 6.0.0
+      remark-parse:
+        specifier: ^11.0.0
+        version: 11.0.0
+      remark-stringify:
+        specifier: ^11.0.0
+        version: 11.0.0
+      rst-compiler:
+        specifier: 0.5.9
+        version: 0.5.9
+      unified:
+        specifier: ^11.0.0
+        version: 11.0.5
+      unist-util-visit:
+        specifier: ^5.0.0
+        version: 5.1.0
+      web-tree-sitter:
+        specifier: ^0.26.6
+        version: 0.26.6
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
+      '@types/node':
+        specifier: ^25.3.0
+        version: 25.3.0
+      mdast-util-from-markdown:
+        specifier: ^2.0.3
+        version: 2.0.3
+      micromark-util-types:
+        specifier: ^2.0.2
+        version: 2.0.2
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
 
   packages/embed:
     dependencies:

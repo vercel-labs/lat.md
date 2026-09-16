@@ -8,7 +8,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { getLlmKey } from '../src/config.js';
+import { getLlmKey } from '@lat.md/core/config';
 
 try {
   // Resolve once up front so capture mode has a direct key value.

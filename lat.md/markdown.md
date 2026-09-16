@@ -98,9 +98,9 @@ For example, `[[setup#Install]]` resolves to `lat.md/guides/setup#Install` if `s
 
 When multiple files share the same stem (e.g. `alpha/notes.md` and `beta/notes.md`), the short form is ambiguous — [[cli#check#md]] reports an error listing all candidates. If the referenced section exists in only one file, the error suggests the specific fix.
 
-Source code references (e.g. `[[src/config.ts#getConfigDir]]`) always require the full path — no short refs for source files.
+Source code references (e.g. `[[packages/core/src/config.ts#getConfigDir]]`) always require the full path — no short refs for source files.
 
-Resolution is handled by [[src/lattice-model.ts#resolveRef]]. See [[parser#Short Ref Resolution]] for implementation details.
+Resolution is handled by [[packages/core/src/lattice-model.ts#resolveRef]]. See [[parser#Short Ref Resolution]] for implementation details.
 
 ### Repository Path Links
 
@@ -109,11 +109,11 @@ Wiki links without a fragment may target any existing file or directory beneath 
 - **`[[schema.sql]]`** — a file with an otherwise unsupported extension
 - **`[[CHANGELOG]]`** — an extensionless file
 - **`[[src/components]]`** — a directory
-- **`[[src/config.ts]]`** — a supported source file without selecting a symbol
+- **`[[packages/core/src/config.ts]]`** — a supported source file without selecting a symbol
 
 Repository paths are project-root-relative. Lat normalizes wiki-link path separators, rejects absolute paths and `..` escapes, and follows symlinks only when their resolved target remains within the project root.
 
-[[src/repository-path.ts#normalizeRepositoryPath]] owns lexical normalization, while [[src/repository-path.ts#inspectRepositoryPath]] resolves the filesystem target and enforces the real-path boundary.
+[[packages/core/src/repository-path.ts#normalizeRepositoryPath]] owns lexical normalization, while [[packages/core/src/repository-path.ts#inspectRepositoryPath]] resolves the filesystem target and enforces the real-path boundary.
 
 Existence does not imply navigation support: unsupported files and directories validate as references but Lat cannot open them in its UI. A `#fragment` requires either a `lat.md/` section target or a supported source file; directories, extensionless files, and unsupported file formats cannot have fragments.
 
@@ -121,7 +121,7 @@ Existence does not imply navigation support: unsupported files and directories v
 
 Wiki links can reference symbols in TypeScript, JavaScript, Python, Dart, Java, Rust, Go, C, and PHP source files:
 
-- **`[[src/config.ts#getConfigDir]]`** — the `getConfigDir` function in `src/config.ts`
+- **`[[packages/core/src/config.ts#getConfigDir]]`** — the `getConfigDir` function in `src/config.ts`
 - **`[[src/server.ts#App#listen]]`** — the `listen` method on class `App` in `src/server.ts`
 - **`[[lib/service.dart#Greeter#greet]]`** — the `greet` method on class `Greeter` in Dart
 - **`[[src/Greeter.java#Greeter#greet]]`** — the `greet` method on class `Greeter` in Java
@@ -130,9 +130,9 @@ Wiki links can reference symbols in TypeScript, JavaScript, Python, Dart, Java, 
 - **`[[app/Services/Payments/StripeGateway.php#StripeGateway#verifyKey]]`** — the `verifyKey` method on class `StripeGateway` in PHP
 - **`[[src/app.h#Greeter]]`** — the `Greeter` struct in a C header
 - **`[[src/app.h#Greeter#prefix]]`** — the `prefix` field of struct `Greeter` in C
-- **`[[src/config.ts]]`** — link to the file itself (no symbol)
+- **`[[packages/core/src/config.ts]]`** — link to the file itself (no symbol)
 
-Supported extensions: `.c`, `.dart`, `.go`, `.h`, `.java`, `.js`, `.jsx`, `.py`, `.rs`, `.ts`, `.tsx`. The typed [[src/source-formats.ts#SOURCE_FILE_EXTENSIONS]] registry governs source-link parsing, external source validation, and `@lat:` code-mention scanning.
+Supported extensions: `.c`, `.dart`, `.go`, `.h`, `.java`, `.js`, `.jsx`, `.py`, `.rs`, `.ts`, `.tsx`. The typed [[packages/core/src/source-formats.ts#SOURCE_FILE_EXTENSIONS]] registry governs source-link parsing, external source validation, and `@lat:` code-mention scanning.
 
 Python symbols: functions, classes, methods, module-level variables. Decorated definitions (`@decorator`) are unwrapped transparently — `[[file.py#my_func]]` resolves whether or not `my_func` has decorators, and `# @lat:` comments placed between decorators and the `def`/`class` line are scanned normally.
 

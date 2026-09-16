@@ -19,7 +19,7 @@ import {
   normalizeExternalRepoUrl,
   parseExternalTarget,
   readExternalCacheMetadata,
-} from '../../src/external-sources.js';
+} from '@lat.md/core/external-sources';
 import {
   createExternalGitFixture,
   createExternalProject,

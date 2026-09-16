@@ -13,8 +13,8 @@ import {
   type LatServerApp,
   type LatServerRequestHandler,
 } from '@lat.md/server';
-import { plainStyler, type CmdContext } from '../context.js';
-import { sectionCommand } from '../cli/section.js';
+import { plainStyler, type CmdContext } from '@lat.md/core/context';
+import { sectionCommand } from '@lat.md/core/cli/section';
 import {
   DEFAULT_VIEW_LOGO_TEXT,
   type ViewDocumentEditRequest,

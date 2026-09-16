@@ -36,3 +36,5 @@ Shared patterns for writing and organizing tests in this project.
 - [[ts-fallback]] — Pure-TypeScript code-ref scanner fallback without ripgrep
 - [[php-source-parser]] — PHP source parsing and code-reference scanning
 - [[external-tests|external sources]] — Pinned external configuration, retrieval strategies, cache reconciliation, commands, MCP, and browser export
+
+- [[distribution-tests]] — Packed core/full installations and portable check action behavior

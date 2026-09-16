@@ -109,7 +109,7 @@ CI (`.github/workflows/ci.yml`) runs the full `pnpm buildall` + `vitest` suite o
 
 The separate graph-validation workflow installs and builds the workspace, then runs `lat check` through the checkout's built CLI. This lets unreleased parser and validation behavior verify the repository without third-party actions or the last npm release.
 
-Cross-platform correctness relies on two conventions: stored paths are always POSIX ([[src/path.ts#toPosix]]), and a repo-root `.gitattributes` (`eol=lf`) keeps Windows checkouts from rewriting line endings and breaking the markdown roundtrip. Functional init tests run the built CLI and database seeding in child processes so native database handles close before temp cleanup. Lower-level tests that retain handles or spawn a fake `git` use [[tests/util.ts#rmDirBestEffort]].
+Cross-platform correctness relies on two conventions: stored paths are always POSIX ([[packages/core/src/path.ts#toPosix]]), and a repo-root `.gitattributes` (`eol=lf`) keeps Windows checkouts from rewriting line endings and breaking the markdown roundtrip. Functional init tests run the built CLI and database seeding in child processes so native database handles close before temp cleanup. Lower-level tests that retain handles or spawn a fake `git` use [[tests/util.ts#rmDirBestEffort]].
 
 ## Site Development
 
@@ -130,25 +130,25 @@ The legacy production project and domain remain outside this deployment path unt
 
 ## File Walking
 
-All directory walking goes through [[src/walk.ts#walkEntries]], the single entry point with nested `.gitignore` support that excludes `.git/`, dotfiles, dot-directories, and symlinks before recursive traversal.
+All directory walking goes through [[packages/core/src/walk.ts#walkEntries]], the single entry point with nested `.gitignore` support that excludes `.git/`, dotfiles, dot-directories, and symlinks before recursive traversal.
 
 `walkEntries()` retains `ignore-walk`'s nested ignore-rule contexts but owns traversal itself. A bounded queue runs one asynchronous directory job per available CPU; each job uses `readdir` directory entries instead of per-entry `lstat` calls, filters files with file semantics only, and submits visible child directories back to the queue. Results are sorted after reduction, not cached, so long-lived processes such as the MCP server always observe the current filesystem.
 
-Nearest-project discovery and Markdown file listing live in parser-free [[src/project-discovery.ts]]. Finding `lat.md/` walks ancestor paths without loading the directory walker; listing Markdown files dynamically loads `walkEntries()` only when enumeration is requested.
+Nearest-project discovery and Markdown file listing live in parser-free [[packages/core/src/project-discovery.ts]]. Finding `lat.md/` walks ancestor paths without loading the directory walker; listing Markdown files dynamically loads `walkEntries()` only when enumeration is requested.
 
 Pre-traversal filtering prevents transient files under dot-directories and dependency trees under `node_modules/` from racing or polluting non-Git project scans.
 
-[[src/code-refs.ts#walkFiles]] calls `walkEntries()` then additionally skips `.md` files, `lat.md/`, `.claude/`, and sub-projects (directories containing their own `lat.md/`).
+[[packages/core/src/code-refs.ts#walkFiles]] calls `walkEntries()` then additionally skips `.md` files, `lat.md/`, `.claude/`, and sub-projects (directories containing their own `lat.md/`).
 
-[[src/code-refs.ts#createCodeReferenceDiscovery]] exposes separate lazy operations for scanning `@lat:` comments and listing the supported source-file scope. The project-scoped object coalesces repeated calls and shares ripgrep exclusion discovery; [[src/code-refs.ts#scanCodeRefs]] and [[src/code-refs.ts#discoverSourceFiles]] are focused one-shot APIs for callers that need only one result.
+[[packages/core/src/code-refs.ts#createCodeReferenceDiscovery]] exposes separate lazy operations for scanning `@lat:` comments and listing the supported source-file scope. The project-scoped object coalesces repeated calls and shares ripgrep exclusion discovery; [[packages/core/src/code-refs.ts#scanCodeRefs]] and [[packages/core/src/code-refs.ts#discoverSourceFiles]] are focused one-shot APIs for callers that need only one result.
 
 Git projects enumerate their tracked regular source files once, excluding symlinks, sources beneath dot-directories, the root vault, and nested Lat projects, then give that identical ordered list to ripgrep or the TypeScript scanner. Untracked build output and ignored files therefore never enter project validation.
 
-Outside Git, both operations first try `rg` (ripgrep), falling back to pure TypeScript discovery and scanning. Ripgrep honors nested `.gitignore` files, uses the fallback's case-insensitive ignore semantics, and excludes dot paths, Markdown, Lat documentation, dependency trees, and nested Lat projects. The [[src/source-formats.ts#SOURCE_FILE_EXTENSIONS|supported-source registry]] becomes a custom rg file type rather than positive globs, because positive globs can re-include ignored files. The UI requests the explicit source inventory for its live-update scope; `lat check` requests only references.
+Outside Git, both operations first try `rg` (ripgrep), falling back to pure TypeScript discovery and scanning. Ripgrep honors nested `.gitignore` files, uses the fallback's case-insensitive ignore semantics, and excludes dot paths, Markdown, Lat documentation, dependency trees, and nested Lat projects. The [[packages/core/src/source-formats.ts#SOURCE_FILE_EXTENSIONS|supported-source registry]] becomes a custom rg file type rather than positive globs, because positive globs can re-include ignored files. The UI requests the explicit source inventory for its live-update scope; `lat check` requests only references.
 
 The TS fallback uses `walkFiles` for discovery and exclusion filtering, then reads and scans supported files through a bounded async pool with one slot per CPU available to the process. Both paths sort file and reference results by source position, so scheduling cannot reorder references or read diagnostics. `CodeRef.file` is always stored as a projectRoot-relative path; consumers convert to cwd-relative only at display time. Setting `_LAT_DISABLE_RG=1` forces the TS fallback; used in tests to cover both paths.
 
-[[src/cli/check.ts#checkIndex]] calls `walkEntries()` on the `lat.md/` directory itself to discover visible entries for index validation.
+[[packages/core/src/cli/check.ts#checkIndex]] calls `walkEntries()` on the `lat.md/` directory itself to discover visible entries for index validation.
 
 ## Formatting
 
@@ -156,11 +156,11 @@ Prettier with no semicolons, single quotes, trailing commas. Run `pnpm format` b
 
 ## Publishing
 
-A pnpm workspace publishing **four** npm packages: the root `lat.md` CLI and three supporting packages it depends on — `@lat.md/server` (shared Express runtime), `@lat.md/embed` (embedding engine), and `@lat.md/embed-minilm-fp16` (bundled local weights).
+The workspace publishes the full CLI plus core, server, stemmer, embedding engine, and model packages. [[lat.md/package-distribution]] defines the lightweight core CLI and GitHub Action distribution.
 
-The root `bin` entry exposes the `lat` command. Only `dist/src` and `templates` are included in the root package — tests and the [[website]] are excluded; each supporting package ships its own `dist` and the model package also ships its weights.
+The root `bin` entry exposes `lat`; `@lat.md/core` exposes `lat-core`. Only `dist/src` and `templates` are included in the root package — tests and the [[website]] are excluded; each supporting package ships its own `dist` and the model package also ships its weights.
 
-The three `@lat.md/*` packages are runtime `dependencies` of the root, declared as `workspace:*`. `pnpm publish` rewrites `workspace:*` to the exact local version at publish time, so a released `lat.md` pins every supporting package by its real published version.
+The supporting `@lat.md/*` packages are runtime `dependencies` of the root, declared as `workspace:*`. `pnpm publish` rewrites `workspace:*` to the exact local version at publish time, so a released `lat.md` pins every supporting package by its real published version.
 
 ### Release Process
 
@@ -182,7 +182,7 @@ GitHub Actions workflow at `.github/workflows/publish.yml`. Runs on every push t
 
 1. **Set up the toolchain** — Node 22 + pnpm and a Rust toolchain with the `wasm32-unknown-unknown` target. `pnpm buildall` installs the Cargo-locked `wasm-bindgen-cli` into the project. The workflow also installs ripgrep so both scan paths are exercised
 2. **Build and test** — `pnpm install --frozen-lockfile`, then `pnpm buildall` (builds the shared server, WASM engine, fp16 weights, and top-level `lat`), then `pnpm vitest run`
-3. **Publish changed packages** — a `publish_if_new` shell helper publishes each package **in dependency order** (`packages/embed-minilm-fp16` → `packages/embed` → `packages/server` → root `.`), skipping any whose `version` is already on npm (checked via `npm view <name>@<version>`). Each publishes with `pnpm publish --provenance --access public --no-git-checks`. Because `workspace:*` is rewritten at publish time, publishing the leaf packages first guarantees the root's rewritten pins already resolve on npm
+3. **Publish changed packages** — a `publish_if_new` shell helper publishes each package **in dependency order** (`packages/core` → `packages/embed-minilm-fp16` → `packages/embed` → `packages/stemmer` → `packages/server` → root `.`), skipping any whose `version` is already on npm (checked via `npm view <name>@<version>`). Each publishes with `pnpm publish --provenance --access public --no-git-checks`. Because `workspace:*` is rewritten at publish time, publishing the leaf packages first guarantees the root's rewritten pins already resolve on npm
 4. **Create GitHub release** — if a `vX.Y.Z` tag/release for the root version does not yet exist, creates one with auto-generated notes
 
 Uses npm trusted publishing (OIDC) — no `NPM_TOKEN` secret needed. The `--provenance` flag signs each package using the GitHub Actions identity. Each package is linked to the `1st1/lat.md` repo on npmjs.com under Settings → Publishing Access.

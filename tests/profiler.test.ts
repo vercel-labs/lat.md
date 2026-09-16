@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TimingProfiler } from '../src/profiler.js';
+import { TimingProfiler } from '@lat.md/core/profiler';
 
 describe('TimingProfiler', () => {
   // @lat: [[tests/check-headless#Keeps concurrent profile scopes separate]]

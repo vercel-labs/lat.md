@@ -1,0 +1,82 @@
+name: Publish check action
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Immutable action version, e.g. 1.0.0 (publishes action-v1.0.0 and action-v1)'
+        required: true
+        type: string
+concurrency:
+  group: publish-check-action
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: node scripts/prepare-core-install.mjs
+      - run: pnpm --dir packages/core install --ignore-workspace --frozen-lockfile --ignore-scripts
+      - run: pnpm build:action
+      - run: pnpm test:core
+      - run: pnpm test:action
+      - uses: actions/upload-artifact@v4
+        with:
+          name: check-action
+          path: .lat-build/check-action
+          include-hidden-files: true
+  verify:
+    needs: build
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: check-action
+          path: .lat-build/check-action
+      - run: node --test scripts/test-check-action.js
+  publish:
+    needs: [build, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: check-action
+          path: ${{ runner.temp }}/check-action
+      - name: Publish minimal action snapshot and tags
+        env:
+          ACTION_VERSION: ${{ inputs.version }}
+          ACTION_ARTIFACT: ${{ runner.temp }}/check-action
+        run: |
+          [[ "$ACTION_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected version X.Y.Z'; exit 1; }
+          immutable="action-v$ACTION_VERSION"
+          major="action-v${ACTION_VERSION%%.*}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$immutable"; then
+            echo "Tag $immutable already exists"; exit 1
+          fi
+          source_commit="$(git rev-parse HEAD)"
+          git checkout --orphan action-release
+          git rm -rf .
+          cp -a "$ACTION_ARTIFACT/." .
+          git add --force action.yml action runtime package.json LICENSE .lat-check-action.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Check action $ACTION_VERSION from $source_commit"
+          git tag "$immutable"
+          git tag -f "$major"
+          git push --atomic origin "refs/tags/$immutable" "+refs/tags/$major"

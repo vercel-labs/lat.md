@@ -3,8 +3,8 @@ import { fromMarkdown } from 'mdast-util-from-markdown';
 import { gfmTable } from 'micromark-extension-gfm-table';
 import { gfmTableFromMarkdown } from 'mdast-util-gfm-table';
 import type { Nodes } from 'mdast';
-import { wikiLinkSyntax } from '../../src/extensions/wiki-link/syntax';
-import { wikiLinkFromMarkdown } from '../../src/extensions/wiki-link/from-markdown';
+import { wikiLinkSyntax } from '@lat.md/core/extensions/wiki-link/syntax';
+import { wikiLinkFromMarkdown } from '@lat.md/core/extensions/wiki-link/from-markdown';
 import type { ViewSearchResult } from '../../src/view/protocol';
 import { searchResultUrl } from './search-highlights';
 

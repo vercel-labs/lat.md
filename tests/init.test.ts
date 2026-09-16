@@ -18,8 +18,8 @@ import {
   INIT_VERSION,
   readInitVersion,
   writeInitMeta,
-} from '../src/init-version.js';
-import { analyzeMarkdownFile } from '../src/markdown-analysis.js';
+} from '@lat.md/core/init-version';
+import { analyzeMarkdownFile } from '@lat.md/core/markdown-analysis';
 import {
   readAgentsTemplate,
   readCursorRulesTemplate,
@@ -61,7 +61,7 @@ const {
   setRepoEmbedding: vi.fn(),
 }));
 
-vi.mock('../src/config.js', () => ({
+vi.mock('@lat.md/core/config', () => ({
   getLlmKey,
   getRepoEmbedding,
   setRepoEmbedding,
@@ -73,7 +73,7 @@ vi.mock('../src/version.js', () => ({
 vi.mock('../src/cli/checklist-menu.js', () => ({
   checklistMenu: vi.fn(async () => []),
 }));
-vi.mock('../src/cli/select-menu.js', () => ({ selectMenu }));
+vi.mock('@lat.md/core/cli/select-menu', () => ({ selectMenu }));
 vi.mock('node:readline/promises', () => ({
   createInterface: vi.fn(() => ({
     question: vi.fn(async () => 'n'),

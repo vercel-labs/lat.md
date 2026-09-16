@@ -8,7 +8,7 @@ import {
   readFileHash,
   contentHash,
   writeInitMeta,
-} from '../src/init-version.js';
+} from '@lat.md/core/init-version';
 
 describe('init-version', () => {
   let latDir: string;

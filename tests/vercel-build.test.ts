@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { uiBuildServerCommand } from '../src/cli/ui-build-server.js';
-import { plainStyler, type CmdContext } from '../src/context.js';
+import { plainStyler, type CmdContext } from '@lat.md/core/context';
 import { buildVercelOutput } from '../src/view/vercel-build.js';
 import { buildVercelServerView } from '../src/view/vercel-server-build.js';
 

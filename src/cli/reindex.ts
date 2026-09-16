@@ -1,6 +1,6 @@
 import { writeIndex } from '../search/cache.js';
 import readline from 'node:readline/promises';
-import type { CmdContext, CmdResult } from '../context.js';
+import type { CmdContext, CmdResult } from '@lat.md/core/context';
 import {
   openDb,
   ensureMeta,
@@ -16,9 +16,13 @@ import {
   EmbeddingAuthError,
   type Embedder,
 } from '../search/embedder.js';
-import { getLlmKey, getRepoEmbedding, setRepoEmbedding } from '../config.js';
+import {
+  getLlmKey,
+  getRepoEmbedding,
+  setRepoEmbedding,
+} from '@lat.md/core/config';
 import { indexSections } from '../search/index.js';
-import { commandProjectAnalysis } from '../project-analysis.js';
+import { commandProjectAnalysis } from '@lat.md/core/project-analysis';
 
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 

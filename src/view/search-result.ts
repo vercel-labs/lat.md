@@ -1,6 +1,6 @@
 import { dirname, relative, resolve } from 'node:path';
-import type { SectionMatch } from '../lattice-model.js';
-import { toPosix } from '../path.js';
+import type { SectionMatch } from '@lat.md/core/lattice-model';
+import { toPosix } from '@lat.md/core/path';
 import type { ViewSearchResult } from './protocol.js';
 import { documentUrl } from './document-route.js';
 

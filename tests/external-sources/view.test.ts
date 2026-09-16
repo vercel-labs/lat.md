@@ -8,8 +8,8 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { plainStyler, type CmdContext } from '../../src/context.js';
-import { parsedCachePath } from '../../src/parser-cache.js';
+import { plainStyler, type CmdContext } from '@lat.md/core/context';
+import { parsedCachePath } from '@lat.md/core/parser-cache';
 import type {
   ViewDocument,
   ViewExternalDocument,

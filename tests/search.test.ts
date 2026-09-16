@@ -18,9 +18,9 @@ import {
   searchSections,
 } from '../src/search/search.js';
 import { runSearch } from '../src/cli/search.js';
-import { formatResultList } from '../src/format.js';
-import { plainStyler, type CmdContext } from '../src/context.js';
-import type { Section } from '../src/lattice-model.js';
+import { formatResultList } from '@lat.md/core/format';
+import { plainStyler, type CmdContext } from '@lat.md/core/context';
+import type { Section } from '@lat.md/core/lattice-model';
 import { startReplayServer, hasReplayData } from './rag-replay-server.js';
 import type { SearchDb as Client } from '../src/search/db.js';
 import type { Server } from 'node:http';

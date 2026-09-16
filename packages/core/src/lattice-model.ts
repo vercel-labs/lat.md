@@ -1,4 +1,4 @@
-import type { SearchEvidence, SearchDiagnostics } from './search/types.js';
+import type { SearchEvidence, SearchDiagnostics } from './search-metadata.js';
 import GithubSlugger from 'github-slugger';
 import { toPosix } from './path.js';
 

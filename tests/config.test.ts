@@ -7,7 +7,7 @@ import {
   readConfig,
   setRepoEmbedding,
   writeConfig,
-} from '../src/config.js';
+} from '@lat.md/core/config';
 
 describe('configuration persistence', () => {
   let configRoot: string;

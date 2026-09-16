@@ -46,3 +46,6 @@ jobs:
       # buildall = packages (WASM engine + fp16 weights + tsc) then top-level lat.
       - run: pnpm buildall
       - run: pnpm vitest run --reporter=verbose
+      - run: pnpm test:core
+        env:
+          LAT_TEST_FULL_PACKAGE: '1'

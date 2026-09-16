@@ -1,17 +1,20 @@
 import { existsSync } from 'node:fs';
 import { extname, relative, resolve, dirname } from 'node:path';
-import { ambiguousRefMessage, repositoryRefError } from '../cli/check.js';
+import {
+  ambiguousRefMessage,
+  repositoryRefError,
+} from '@lat.md/core/cli/check';
 import {
   buildFileIndex,
   buildSectionSlugIndex,
   flattenSections,
   resolveRef,
   type Section,
-} from '../lattice-model.js';
-import { SourceParserRuntime } from '../source-parser.js';
-import type { ExternalResolver } from '../external-sources.js';
-import { toPosix } from '../path.js';
-import { parseLocalMarkdownTarget } from '../markdown-validation.js';
+} from '@lat.md/core/lattice-model';
+import { SourceParserRuntime } from '@lat.md/core/source-parser';
+import type { ExternalResolver } from '@lat.md/core/external-sources';
+import { toPosix } from '@lat.md/core/path';
+import { parseLocalMarkdownTarget } from '@lat.md/core/markdown-validation';
 import type { ViewDocumentError } from './protocol.js';
 import type {
   ViewCodeReferenceFile,

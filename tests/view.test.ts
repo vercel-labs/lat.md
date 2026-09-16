@@ -20,12 +20,12 @@ import express from 'express';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { plainStyler, type CmdContext } from '../src/context.js';
-import { setRepoEmbedding } from '../src/config.js';
+import { plainStyler, type CmdContext } from '@lat.md/core/context';
+import { setRepoEmbedding } from '@lat.md/core/config';
 import { uiCommand } from '../src/cli/ui.js';
 import { uiBuildCommand } from '../src/cli/ui-build.js';
 import { uiBuildServerCommand } from '../src/cli/ui-build-server.js';
-import { analyzeMarkdownFile } from '../src/markdown-analysis.js';
+import { analyzeMarkdownFile } from '@lat.md/core/markdown-analysis';
 import {
   DEFAULT_VIEW_PORT,
   startViewServer,
@@ -45,7 +45,7 @@ import {
   createServerViewApp,
   type ServerViewManifest,
 } from '../src/view/server-deployment.js';
-import { analyzeMarkdownProject } from '../src/project-analysis.js';
+import { analyzeMarkdownProject } from '@lat.md/core/project-analysis';
 import type {
   ViewStaticBootstrap,
   ViewStaticManifest,

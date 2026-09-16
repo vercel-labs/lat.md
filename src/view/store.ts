@@ -20,16 +20,16 @@ import {
   createCodeReferenceDiscovery,
   LAT_REF_RE,
   type CodeRef,
-} from '../code-refs.js';
+} from '@lat.md/core/code-refs';
 import {
   createExternalResolver,
   type ExternalResolver,
-} from '../external-sources.js';
-import type { Section } from '../lattice-model.js';
-import { listLatticeFiles } from '../project-discovery.js';
-import { analyzeMarkdownPath } from '../markdown-analysis-cache.js';
-import { isSourceFileExtension } from '../source-formats.js';
-import { toPosix } from '../path.js';
+} from '@lat.md/core/external-sources';
+import type { Section } from '@lat.md/core/lattice-model';
+import { listLatticeFiles } from '@lat.md/core/project-discovery';
+import { analyzeMarkdownPath } from '@lat.md/core/markdown-analysis-cache';
+import { isSourceFileExtension } from '@lat.md/core/source-formats';
+import { toPosix } from '@lat.md/core/path';
 import { renderMarkdown } from './markdown.js';
 import { buildViewDiagnostics } from './diagnostics.js';
 import {

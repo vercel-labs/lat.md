@@ -17,9 +17,9 @@ import remarkRehype from 'remark-rehype';
 import type { Options as RemarkRehypeOptions } from 'remark-rehype';
 import { unified } from 'unified';
 import { visit } from 'unist-util-visit';
-import type { AlertMarker } from '../extensions/alert-marker.js';
-import type { WikiLink } from '../extensions/wiki-link/types.js';
-import { parse } from '../parser.js';
+import type { AlertMarker } from '@lat.md/core/extensions/alert-marker';
+import type { WikiLink } from '@lat.md/core/extensions/wiki-link/types';
+import { parse } from '@lat.md/core/parser';
 import {
   decorateExternalSiteLinks,
   toViewDocumentTree,

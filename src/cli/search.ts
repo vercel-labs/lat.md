@@ -3,7 +3,7 @@ import { hasIndex } from '../search/db.js';
 import { embeddingFingerprint } from '../search/chunks.js';
 import { writeIndex } from '../search/cache.js';
 import { dirname, join } from 'node:path';
-import type { CmdContext, CmdResult, Styler } from '../context.js';
+import type { CmdContext, CmdResult, Styler } from '@lat.md/core/context';
 import {
   openDb,
   ensureMeta,
@@ -13,7 +13,7 @@ import {
   dropSections,
   closeDb,
 } from '../search/db.js';
-import { getLlmKey } from '../config.js';
+import { getLlmKey } from '@lat.md/core/config';
 import {
   embedderForIndex,
   modelKey,
@@ -27,8 +27,8 @@ import {
   type IndexStats,
 } from '../search/index.js';
 import { searchSections } from '../search/search.js';
-import type { SectionMatch } from '../lattice-model.js';
-import type { Section } from '../lattice-model.js';
+import type { SectionMatch } from '@lat.md/core/lattice-model';
+import type { Section } from '@lat.md/core/lattice-model';
 import {
   resolveSearchMatches,
   searchIndexedSections,
@@ -37,8 +37,8 @@ import {
   analyzeMarkdownProject,
   commandProjectAnalysis,
   type MarkdownProjectAnalysis,
-} from '../project-analysis.js';
-import { formatResultList, formatNavHints } from '../format.js';
+} from '@lat.md/core/project-analysis';
+import { formatResultList, formatNavHints } from '@lat.md/core/format';
 
 export type SearchResult = {
   query: string;

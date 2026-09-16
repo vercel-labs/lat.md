@@ -1,4 +1,4 @@
-import type { Section, SectionMatch } from '../lattice-model.js';
+import type { Section, SectionMatch } from '@lat.md/core/lattice-model';
 import type { ViewSearchResponse } from './protocol.js';
 import { viewSearchResult } from './search-result.js';
 

@@ -50,6 +50,7 @@ jobs:
               (cd "$dir" && pnpm publish --provenance --access public --no-git-checks)
             fi
           }
+          publish_if_new packages/core
           publish_if_new packages/embed-minilm-fp16
           publish_if_new packages/embed
           publish_if_new packages/stemmer

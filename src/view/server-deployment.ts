@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLatServerApp, type LatServerApp } from '@lat.md/server';
 import type { Express } from 'express';
-import type { Section } from '../lattice-model.js';
+import type { Section } from '@lat.md/core/lattice-model';
 import type { CreateSearchEngine } from '../search/embedder.js';
 import {
   createPreindexedViewSearch,

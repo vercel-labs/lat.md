@@ -6,7 +6,9 @@ import { Language, Parser } from 'web-tree-sitter';
 describe('Dart source grammar', () => {
   // @lat: [[tests/check-md#Passes with valid links#Accepts Dart dot shorthand]]
   it('parses Dart 3.7 dot shorthand without syntax errors', async () => {
-    const require = createRequire(import.meta.url);
+    const require = createRequire(
+      createRequire(import.meta.url).resolve('@lat.md/core/package.json'),
+    );
     const packagePath =
       require.resolve('@repomix/tree-sitter-wasms/package.json');
     await Parser.init();
