@@ -6,6 +6,9 @@ import {
   parseSections,
   buildFileIndex,
   resolveRef,
+  flattenSections,
+  extractRefs,
+  findSections,
 } from '../src/lattice.js';
 import { toPosix } from '../src/path.js';
 
@@ -38,6 +41,52 @@ describe('parseSections', () => {
     expect(sections).toHaveLength(2);
     expect(sections[0].id).toBe('multi#First');
     expect(sections[1].id).toBe('multi#Second');
+  });
+
+  // @lat: [[section-parsing#Preserves rendered heading text]]
+  it('preserves code, emphasis, links, images, and wiki aliases in heading identities', () => {
+    const content =
+      '# Guide\n\n## `foo`\n\nFirst.\n\n## **bar** and *baz* [link](https://example.com) ![image](a.png) [[target|alias]]\n\nSecond.\n';
+    const sections = flattenSections(parseSections('guide.md', content));
+    expect(sections.map((s) => s.id)).toEqual([
+      'guide#Guide',
+      'guide#Guide#foo',
+      'guide#Guide#bar and baz link image alias',
+    ]);
+    expect(extractRefs('guide.md', content)[0].fromSection).toBe(
+      sections[2].id,
+    );
+  });
+
+  // @lat: [[section-parsing#Disambiguates duplicate section identities]]
+  it('suffixes collisions case-insensitively and keeps descendants and references aligned', () => {
+    const content =
+      '# Guide\n\nIntro.\n\n## Setup\n\nFirst.\n\n## Setup-1\n\nExplicit suffix.\n\n## setup\n\nSecond [[guide#Guide#setup-2]].\n\n### **Child**\n\nChild [[guide#Guide#Setup]].\n\n## Setup\n\nThird.\n';
+    const roots = parseSections('guide.md', content);
+    const sections = flattenSections(roots);
+    expect(sections.map((s) => s.id)).toEqual([
+      'guide#Guide',
+      'guide#Guide#Setup',
+      'guide#Guide#Setup-1',
+      'guide#Guide#setup-2',
+      'guide#Guide#setup-2#Child',
+      'guide#Guide#Setup-3',
+    ]);
+    expect(sections[3].heading).toBe('setup');
+    expect(extractRefs('guide.md', content).map((r) => r.fromSection)).toEqual([
+      'guide#Guide#setup-2',
+      'guide#Guide#setup-2#Child',
+    ]);
+    for (const section of sections)
+      expect(findSections(roots, section.id)[0].section.startLine).toBe(
+        section.startLine,
+      );
+    expect(findSections(roots, 'guide#Guide#setup-2#child')[0].section.id).toBe(
+      'guide#Guide#setup-2#Child',
+    );
+    expect(
+      flattenSections(parseSections('guide.md', content)).map((s) => s.id),
+    ).toEqual(sections.map((s) => s.id));
   });
 
   it('uses file stem without .md extension', () => {

@@ -51,6 +51,10 @@ Each section has:
 - `firstParagraph` — first paragraph text (used by [[cli#Section Preview]])
 - `githubSlug` — GitHub-compatible heading id, including duplicate suffixes within the document
 
+Heading text uses rendered inline content, including code, emphasis, link labels, image alt text, and wiki aliases. Section IDs are allocated in document order; case-insensitive collisions append `-1`, `-2`, and so on, skipping IDs already allocated. Display headings remain unchanged. Children inherit their parent's disambiguated ID, and reference extraction reuses the same section tree. GitHub anchors retain their separate document-wide slugging rules.
+
+Parser cache version 3 invalidates identities produced before formatted heading text and duplicate disambiguation were supported.
+
 [[markdown#Frontmatter]] is handled by `remark-frontmatter`, which parses it as a `yaml` AST node so heading positions reflect the original file.
 
 ## Short Ref Resolution

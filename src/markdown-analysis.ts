@@ -211,7 +211,7 @@ export function analyzeMarkdownFile(
     parseSections(absolutePath, content, projectRoot, tree),
   );
   const [wikiRefs, refsMs] = elapsed(() =>
-    extractRefs(absolutePath, content, projectRoot, tree),
+    extractRefs(absolutePath, content, projectRoot, tree, sections),
   );
   const [validationLinks, linksMs] = elapsed(() => extractLinks(content, tree));
   const [[paragraphs, markdownLinks, headingTitles], paragraphsMs] = elapsed(

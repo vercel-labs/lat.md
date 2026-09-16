@@ -1,3 +1,4 @@
+import { PARSER_CACHE_VERSION } from '../parser-cache.js';
 import { synchronizeLexical } from './lexical.js';
 import { dirname } from 'node:path';
 import { CREATE_PASSAGE_FTS, type SearchDb } from './db.js';
@@ -10,10 +11,11 @@ import { chunkFile, digest, embeddingFingerprint } from './chunks.js';
 
 export function projectFingerprint(project: MarkdownProjectAnalysis): string {
   return digest(
-    [...project.files.values()]
-      .map((f) => `${f.projectPath}\0${digest(f.content)}`)
-      .sort()
-      .join('\n'),
+    `parser:${PARSER_CACHE_VERSION}\n` +
+      [...project.files.values()]
+        .map((f) => `${f.projectPath}\0${digest(f.content)}`)
+        .sort()
+        .join('\n'),
   );
 }
 
@@ -46,6 +48,7 @@ export async function indexSections(
       executor: 'auto',
     }));
   const fingerprint = embeddingFingerprint(embedder);
+  const projectHash = projectFingerprint(project);
   const oldFingerprint = (
     await db.execute("SELECT value FROM meta WHERE key='fingerprint'")
   ).rows[0]?.value;
@@ -108,6 +111,10 @@ export async function indexSections(
     await db.execute('BEGIN');
     try {
       await synchronizeLexical(db);
+      await db.execute({
+        sql: "UPDATE meta SET value=? WHERE key='project_hash' AND value<>?",
+        args: [projectHash, projectHash],
+      });
       await db.execute('COMMIT');
     } catch (error) {
       await db.execute('ROLLBACK');
@@ -220,7 +227,7 @@ export async function indexSections(
     });
     await db.execute({
       sql: 'INSERT OR REPLACE INTO meta VALUES (?,?)',
-      args: ['project_hash', projectFingerprint(project)],
+      args: ['project_hash', projectHash],
     });
     await synchronizeLexical(db);
     if (rebuildFts) await db.execute(CREATE_PASSAGE_FTS);

@@ -24,10 +24,11 @@ import {
 } from '../src/search/db.js';
 import { lexicalTokens, LEXICAL_VERSION } from '../src/search/lexical.js';
 import { stem, stemWords } from '@lat.md/stemmer';
-import { indexSections } from '../src/search/index.js';
+import { indexSections, projectFingerprint } from '../src/search/index.js';
 import { searchSections, collapse } from '../src/search/search.js';
 import { writeIndex } from '../src/search/cache.js';
 import { formatResultList } from '../src/format.js';
+import { getSection } from '../src/cli/section.js';
 import { plainStyler } from '../src/context.js';
 
 const dirs: string[] = [];
@@ -64,6 +65,90 @@ async function indexed(markdown: string) {
 }
 
 describe('hybrid search', () => {
+  // @lat: [[tests/search#Hybrid Retrieval#Keeps duplicate and formatted headings distinct]]
+  it('indexes repeated and formatted headings without mixing their passages', async () => {
+    const markdown =
+      '# Guide\n\nOverview.\n\n## Setup\n\nquartzfirst\n\n## Setup\n\nzephyrsecond\n\n## `foo`\n\ncedarthird\n\n## **bar**\n\nwillowfourth\n';
+    const f = await indexed(markdown);
+    try {
+      const rows = (await f.db.execute('SELECT section_id,body FROM chunks'))
+        .rows;
+      for (const [id, body] of [
+        ['Setup', 'quartzfirst'],
+        ['Setup-1', 'zephyrsecond'],
+        ['foo', 'cedarthird'],
+        ['bar', 'willowfourth'],
+      ]) {
+        const owned = rows.filter(
+          (r) => r.section_id === `lat.md/guide#Guide#${id}`,
+        );
+        expect(owned).toHaveLength(1);
+        expect(owned[0].body).toBe(body);
+        const results = await searchSections(f.db, body, simple);
+        expect(results.find((r) => r.lexicalRank === 1)?.id).toBe(
+          `lat.md/guide#Guide#${id}`,
+        );
+        const ctx = {
+          latDir: f.lat,
+          projectRoot: f.root,
+          mode: 'cli' as const,
+          styler: plainStyler,
+        };
+        for (const query of [
+          results.find((r) => r.lexicalRank === 1)!.id,
+          `guide#${id}`,
+        ]) {
+          const section = await getSection(ctx, query);
+          expect(section.kind).toBe('found');
+          if (section.kind !== 'found') throw new Error('Section not found');
+          expect(section.section.id).toBe(`lat.md/guide#Guide#${id}`);
+          expect(section.content.trim()).toBe(
+            markdown
+              .split('\n')
+              .slice(section.section.startLine - 1, section.section.endLine)
+              .join('\n')
+              .trim(),
+          );
+          expect(section.content).toContain(body);
+          for (const other of [
+            'quartzfirst',
+            'zephyrsecond',
+            'cedarthird',
+            'willowfourth',
+          ])
+            if (other !== body) expect(section.content).not.toContain(other);
+        }
+      }
+      expect(await indexSections(f.lat, f.db, simple)).toEqual({
+        added: 0,
+        updated: 0,
+        removed: 0,
+        unchanged: 5,
+      });
+      writeFileSync(
+        join(f.lat, 'guide.md'),
+        markdown.replace('zephyrsecond', 'zephyrchange'),
+      );
+      expect((await indexSections(f.lat, f.db, simple)).updated).toBe(1);
+      const first = (
+        await f.db.execute(
+          "SELECT body FROM chunks WHERE section_id='lat.md/guide#Guide#Setup'",
+        )
+      ).rows;
+      expect(first[0].body).toBe('quartzfirst');
+      await f.db.execute(
+        "UPDATE meta SET value='old-parser-fingerprint' WHERE key='project_hash'",
+      );
+      expect((await indexSections(f.lat, f.db, simple)).unchanged).toBe(5);
+      const project = await analyzeMarkdownProject(f.lat, f.root);
+      expect(
+        (await f.db.execute("SELECT value FROM meta WHERE key='project_hash'"))
+          .rows[0].value,
+      ).toBe(projectFingerprint(project));
+    } finally {
+      await f.db.close();
+    }
+  });
   // @lat: [[tests/search#Hybrid Retrieval#Stems English lexical fields and queries]]
   it('matches English word forms while preserving original evidence and exact identifiers', async () => {
     expect(stemWords(['LINKS', 'files', 'running'])).toEqual([

@@ -106,6 +106,12 @@ The package build fails clearly when generated wasm-bindgen output no longer con
 
 Tests in [[tests/hybrid-search.test.ts]] verify passage ownership, token safety, hybrid evidence, and transactional cache publication.
 
+### Keeps duplicate and formatted headings distinct
+
+Indexing preserves separate passages and search results for repeated or formatted headings. Incremental edits keep sibling content intact, and unchanged indexes refresh obsolete parser freshness metadata without re-embedding.
+
+Passing each search result ID or its short form to the section command core returns only the matching section body, excluding its siblings.
+
 ### Preserves complete passage coverage
 
 Oversized prose, nested lists, code lines, table cells, and Unicode retain source coverage and fit the embedding model input budget without duplicating descendant content.

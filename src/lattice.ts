@@ -5,7 +5,13 @@ import { parse } from './parser.js';
 import { toPosix } from './path.js';
 import { visit } from 'unist-util-visit';
 import { listLatticeFiles } from './project-discovery.js';
-import type { LatFrontmatter, MdLink, Ref, Section } from './lattice-model.js';
+import {
+  flattenSections,
+  type LatFrontmatter,
+  type MdLink,
+  type Ref,
+  type Section,
+} from './lattice-model.js';
 import type {
   Definition,
   Heading,
@@ -14,7 +20,6 @@ import type {
   ListItem,
   Root,
   RootContent,
-  Text,
 } from 'mdast';
 import type { WikiLink } from './extensions/wiki-link/types.js';
 import type { Profiler } from './profiler.js';
@@ -52,15 +57,8 @@ export function parseFrontmatter(content: string): LatFrontmatter {
   return result;
 }
 
-function headingText(node: Heading): string {
-  return node.children
-    .filter((c): c is Text => c.type === 'text')
-    .map((c) => c.value)
-    .join('');
-}
-
 /** Extract the rendered text GitHub uses as input to its heading slugger. */
-function githubHeadingText(node: unknown): string {
+function headingText(node: unknown): string {
   if (!node || typeof node !== 'object') return '';
 
   const value = node as {
@@ -81,7 +79,7 @@ function githubHeadingText(node: unknown): string {
     return value.data?.alias ?? value.value ?? '';
   }
   if (value.children) {
-    return value.children.map(githubHeadingText).join('');
+    return value.children.map(headingText).join('');
   }
   return '';
 }
@@ -120,6 +118,8 @@ export function parseSections(
   const stack: Section[] = [];
   const flat: Section[] = [];
   const slugger = new GithubSlugger();
+  const usedIds = new Set<string>();
+  const nextSuffix = new Map<string, number>();
 
   visit(tree, 'heading', (node: Heading) => {
     const heading = headingText(node);
@@ -132,7 +132,13 @@ export function parseSections(
     }
 
     const parent = stack.length > 0 ? stack[stack.length - 1] : null;
-    const id = parent ? `${parent.id}#${heading}` : `${file}#${heading}`;
+    const baseId = parent ? `${parent.id}#${heading}` : `${file}#${heading}`;
+    let id = baseId;
+    const key = baseId.toLowerCase();
+    let suffix = nextSuffix.get(key) ?? 1;
+    while (usedIds.has(id.toLowerCase())) id = `${baseId}-${suffix++}`;
+    nextSuffix.set(key, suffix);
+    usedIds.add(id.toLowerCase());
 
     const section: Section = {
       id,
@@ -144,7 +150,7 @@ export function parseSections(
       startLine,
       endLine: 0,
       firstParagraph: '',
-      githubSlug: slugger.slug(githubHeadingText(node)),
+      githubSlug: slugger.slug(headingText(node)),
     };
 
     if (parent) {
@@ -227,36 +233,15 @@ export function extractRefs(
   content: string,
   projectRoot?: string,
   tree: Root = parse(content),
+  sections: Section[] = parseSections(filePath, content, projectRoot, tree),
 ): Ref[] {
   const file = projectRoot
     ? toPosix(relative(projectRoot, filePath)).replace(/\.md$/, '')
     : basename(filePath, '.md');
   const refs: Ref[] = [];
 
-  // Build a flat list of sections to determine enclosing section for each wiki link
-  const flat: { id: string; startLine: number }[] = [];
-  visit(tree, 'heading', (node: Heading) => {
-    flat.push({
-      id: '', // filled below
-      startLine: node.position!.start.line,
-    });
-  });
-
-  // Re-derive ids using the same logic as parseSections
-  const stack: { id: string; depth: number }[] = [];
-  let idx = 0;
-  visit(tree, 'heading', (node: Heading) => {
-    const heading = headingText(node);
-    const depth = node.depth;
-    while (stack.length > 0 && stack[stack.length - 1].depth >= depth) {
-      stack.pop();
-    }
-    const parent = stack.length > 0 ? stack[stack.length - 1] : null;
-    const id = parent ? `${parent.id}#${heading}` : `${file}#${heading}`;
-    flat[idx].id = id;
-    stack.push({ id, depth });
-    idx++;
-  });
+  // Reuse canonical identities, including duplicate suffixes and formatted text.
+  const flat = flattenSections(sections);
 
   visit(tree, 'wikiLink', (node: WikiLink) => {
     const line = node.position!.start.line;
