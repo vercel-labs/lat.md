@@ -47,7 +47,7 @@ pnpm exec lat search "topic or behavior"
 pnpm exec lat expand "the task, including any [[refs]]"
 ```
 
-Use `pnpm exec lat locate "Section Name"` for direct lookup. Update `lat.md/` for meaningful functionality, architecture, behavior, tests, or planned work; keep it a current snapshot rather than a changelog. Follow `AGENTS.md` for section and code-reference conventions.
+Use `pnpm exec lat locate "Section Name"` for direct lookup. Update `lat.md/` for meaningful changes to implemented functionality, architecture, behavior, or tests. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Follow `AGENTS.md` for section and code-reference conventions.
 
 Add or update tests with behavior changes. Important tests have a specification under `lat.md/tests/` and exactly one nearby `@lat:` comment in the corresponding test.
 

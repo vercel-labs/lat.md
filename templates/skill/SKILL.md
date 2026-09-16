@@ -16,7 +16,7 @@ Project-specific lat documentation belongs in `lat.md/`. Do not modify this gene
 
 `lat.md/` files describe **what** the project does and **why** — domain concepts, key design decisions, business logic, and test specifications. They do NOT duplicate source code. Think of each section as an anchor that source code references back to.
 
-Treat `lat.md/` as a focused snapshot of the current state of affairs or planned features. Do not use it as a journal or changelog, and do not grow it just to record insignificant implementation details.
+Treat `lat.md/` as a focused snapshot of the current implemented state. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. A planning-only task does not require a knowledge-graph update. Do not use it as a journal or changelog, and do not grow it just to record insignificant implementation details.
 
 Good candidates for sections:
 - Architecture decisions and their rationale
@@ -29,6 +29,7 @@ Bad candidates:
 - Step-by-step code walkthroughs (the code itself is the walkthrough)
 - Auto-generated API docs (use tools for that)
 - Journal/changelog entries for each change
+- Proposals, planned features, hypothetical designs, or promises of future behavior, unless explicitly requested by the user or drafted alongside implementation to describe implemented behavior by commit time
 - Temporary notes or TODOs
 - Insignificant implementation details that do not change the current-state model
 

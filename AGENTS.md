@@ -8,7 +8,7 @@
 
 After EVERY task, before responding to the user:
 
-- [ ] Update `lat.md/` if you added or changed meaningful functionality, architecture, tests, behavior, or planned work. Keep it a focused snapshot of current/planned state, not a journal/changelog.
+- [ ] Update `lat.md/` if you added or changed meaningful implemented functionality, architecture, tests, or behavior. Keep it a focused snapshot of the current implemented state, not a journal/changelog. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there.
 - [ ] Run `lat check` — all validations must pass
 - [ ] Do not skip these steps. Do not consider your task done until both are complete.
 
@@ -16,7 +16,7 @@ After EVERY task, before responding to the user:
 
 # What is lat.md?
 
-This project uses [lat.md](https://www.npmjs.com/package/lat.md) to maintain a structured knowledge graph of its architecture, design decisions, and test specs in the `lat.md/` directory. It is a set of cross-linked markdown files that describe **what** this project does and **why** — the domain concepts, key design decisions, business logic, and test specifications. Use it to ground your work in the actual architecture rather than guessing. Do not treat `lat.md/` as a journal or changelog; it should be a focused snapshot of current or planned state, and should not grow just to note insignificant details.
+This project uses [lat.md](https://www.npmjs.com/package/lat.md) to maintain a structured knowledge graph of its architecture, design decisions, and test specs in the `lat.md/` directory. It is a set of cross-linked markdown files that describe **what** this project does and **why** — the domain concepts, key design decisions, business logic, and test specifications. Use it to ground your work in the actual architecture rather than guessing. Do not treat `lat.md/` as a journal or changelog; it should be a focused snapshot of the current implemented state, and should not grow just to note insignificant details.
 
 # Commands
 

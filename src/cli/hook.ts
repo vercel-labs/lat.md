@@ -126,7 +126,7 @@ async function handleUserPromptSubmit(): Promise<void> {
     'Use `lat section` to read the full content of relevant matches.',
     'Do not read files, write code, or run commands until you have searched.',
     '',
-    'Remember: `lat.md/` must stay in sync with meaningful codebase state. If you change behavior, architecture, tests, or planned work, update the relevant current-state sections and run `lat check` before finishing. Do not use `lat.md/` as a journal/changelog or add notes for insignificant details.',
+    'Remember: `lat.md/` must stay in sync with meaningful codebase state. If you change implemented behavior, architecture, or tests, update the relevant current-state sections and run `lat check` before finishing. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Do not use `lat.md/` as a journal/changelog or add notes for insignificant details.',
   );
 
   const latDir = findLatticeDir();

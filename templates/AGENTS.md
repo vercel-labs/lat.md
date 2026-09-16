@@ -9,7 +9,7 @@ Use Lat's knowledge graph to ground each task before changing code.
 
 After EVERY task, before responding to the user:
 
-- [ ] Update `lat.md/` if you added or changed meaningful functionality, architecture, tests, behavior, or planned work. Keep it a focused snapshot of current/planned state, not a journal/changelog.
+- [ ] Update `lat.md/` if you added or changed meaningful implemented functionality, architecture, tests, or behavior. Keep it a focused snapshot of the current implemented state, not a journal/changelog. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there.
 - [ ] Run `lat check` — all validations must pass
 - [ ] Do not skip these steps. Do not consider your task done until both are complete.
 
@@ -19,7 +19,7 @@ After EVERY task, before responding to the user:
 
 Lat.md is the project's structured knowledge graph for architecture, design decisions, behavior, and tests.
 
-The graph lives in `lat.md/` as cross-linked Markdown describing **what** the project does and **why**. Use it to ground work in actual architecture, and keep it a focused current/planned snapshot rather than a journal or changelog.
+The graph lives in `lat.md/` as cross-linked Markdown describing **what** the project does and **why**. Use it to ground work in actual architecture, and keep it a focused snapshot of the current implemented state rather than a journal or changelog.
 
 Project-specific lat documentation belongs in `lat.md/`. Do not modify this generated instruction file or a generated `lat-md` `SKILL.md` to record project guidance: both are owned by lat tooling and may be replaced by a later `lat init`.
 
