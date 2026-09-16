@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Section } from '../src/lattice-model.js';
 
 const mocks = vi.hoisted(() => ({
-  readManifest: vi.fn(),
+  hasIndex: vi.fn(),
   closeDb: vi.fn(),
   embedderForIndex: vi.fn(),
   ensureMeta: vi.fn(),
@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/search/db.js', () => ({
-  readManifest: mocks.readManifest,
+  hasIndex: mocks.hasIndex,
   closeDb: mocks.closeDb,
   ensureMeta: mocks.ensureMeta,
   ensureSectionsSchema: mocks.ensureSectionsSchema,
@@ -52,7 +52,7 @@ const section: Section = {
 describe('indexed search sessions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.readManifest.mockReturnValue({ version: 1, file: 'search-test.db' });
+    mocks.hasIndex.mockReturnValue(true);
     mocks.openDb.mockReturnValue({
       database: 'test',
       execute: vi

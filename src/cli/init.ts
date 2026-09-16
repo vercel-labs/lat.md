@@ -1089,7 +1089,7 @@ type EmbeddingBackend = 'local' | 'remote';
 async function readStoredEmbeddingModel(
   latDir: string,
 ): Promise<string | null> {
-  if (!existsSync(join(latDir, '.cache', 'search-index.json'))) return null;
+  if (!existsSync(join(latDir, '.cache', 'search.db'))) return null;
 
   const db = openDb(latDir, undefined, true);
   try {

@@ -6,8 +6,11 @@ import {
   mkdirSync,
   writeFileSync,
   readFileSync,
+  readdirSync,
+  statSync,
   existsSync,
 } from 'node:fs';
+import * as fsPromises from 'node:fs/promises';
 import { cp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,7 +23,9 @@ import {
   ensureMeta,
   ensureSectionsSchema,
   setStoredModel,
-  readManifest,
+  hasIndex,
+  openDb,
+  INDEX_FILE,
 } from '../src/search/db.js';
 import { lexicalTokens, LEXICAL_VERSION } from '../src/search/lexical.js';
 import { stem, stemWords } from '@lat.md/stemmer';
@@ -30,6 +35,11 @@ import { writeIndex } from '../src/search/cache.js';
 import { formatResultList } from '../src/format.js';
 import { getSection } from '../src/cli/section.js';
 import { plainStyler } from '../src/context.js';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, rename: vi.fn(actual.rename) };
+});
 
 const dirs: string[] = [];
 function fixture(markdown: string) {
@@ -455,8 +465,8 @@ describe('hybrid search', () => {
       await f.db.close();
     }
   });
-  // @lat: [[tests/search#Hybrid Retrieval#Publishes only successful generations]]
-  it('preserves the active generation when replacement fails', async () => {
+  // @lat: [[tests/search#Hybrid Retrieval#Publishes only successful indexes]]
+  it('preserves the active database when building a replacement fails', async () => {
     const f = fixture('# Guide\n\nneedle text');
     const cache = join(f.lat, '.cache');
     await writeIndex(f.lat, undefined, false, async (db) => {
@@ -464,20 +474,82 @@ describe('hybrid search', () => {
       await indexSections(f.lat, db, simple);
       await setStoredModel(db, 'local:test:2');
     });
-    const before = readManifest(cache);
+    const before = readFileSync(join(cache, INDEX_FILE));
     await expect(
       writeIndex(f.lat, undefined, true, async () => {
         throw new Error('injected failure');
       }),
     ).rejects.toThrow('injected');
-    expect(readManifest(cache)).toEqual(before);
-    const db = new SearchDb(join(cache, before!.file));
+    expect(readFileSync(join(cache, INDEX_FILE))).toEqual(before);
+    expect(existsSync(join(cache, '_search.db'))).toBe(false);
+    expect(existsSync(join(cache, 'search-write.lock'))).toBe(false);
+    const db = openDb(f.lat, undefined, true);
     try {
       expect((await searchSections(db, 'needle', simple)).length).toBe(1);
     } finally {
       await db.close();
     }
   });
+  // @lat: [[tests/search#Hybrid Retrieval#Reuses a single database filename]]
+  it('cleans stale staging files and retains only search.db across rebuilds', async () => {
+    const f = fixture('# Guide\n\nneedle original');
+    const cache = join(f.lat, '.cache');
+    mkdirSync(cache);
+    for (const suffix of ['', '-wal', '-shm', '-journal'])
+      writeFileSync(
+        join(cache, '_search.db' + suffix),
+        'abandoned partial data',
+      );
+    const build = async (db: SearchDb) => {
+      await ensureSectionsSchema(db, 2);
+      return indexSections(f.lat, db, simple);
+    };
+    for (let i = 0; i < 3; i++) {
+      await writeIndex(f.lat, undefined, true, build);
+      expect(readdirSync(cache).filter((name) => name !== 'parsed')).toEqual([
+        INDEX_FILE,
+      ]);
+    }
+    const before = statSync(join(cache, INDEX_FILE));
+    await writeIndex(f.lat, undefined, false, build);
+    expect(statSync(join(cache, INDEX_FILE)).mtimeMs).toBe(before.mtimeMs);
+    expect(statSync(join(cache, INDEX_FILE)).ino).toBe(before.ino);
+    expect(existsSync(join(cache, '_search.db'))).toBe(false);
+  });
+
+  // @lat: [[tests/search#Hybrid Retrieval#Preserves the database when replacement fails]]
+  it('keeps search.db intact and releases the lock when rename fails', async () => {
+    const f = fixture('# Guide\n\nneedle original');
+    const build = async (db: SearchDb) => {
+      await ensureSectionsSchema(db, 2);
+      await indexSections(f.lat, db, simple);
+    };
+    await writeIndex(f.lat, undefined, true, build);
+    const cache = join(f.lat, '.cache');
+    const before = readFileSync(join(cache, INDEX_FILE));
+    writeFileSync(join(f.lat, 'guide.md'), '# Guide\n\nneedle replacement');
+    await expect(
+      writeIndex(f.lat, undefined, true, async (db) => {
+        await build(db);
+        vi.mocked(fsPromises.rename).mockRejectedValueOnce(
+          Object.assign(new Error('rename failed'), { code: 'EIO' }),
+        );
+      }),
+    ).rejects.toThrow('rename failed');
+    expect(readFileSync(join(cache, INDEX_FILE))).toEqual(before);
+    expect(existsSync(join(cache, '_search.db'))).toBe(false);
+    expect(existsSync(join(cache, 'search-write.lock'))).toBe(false);
+    await writeIndex(f.lat, undefined, true, build);
+    const reader = openDb(f.lat, undefined, true);
+    try {
+      expect(
+        (await searchSections(reader, 'needle', simple))[0].evidence[0].text,
+      ).toBe('needle replacement');
+    } finally {
+      await reader.close();
+    }
+  });
+
   // @lat: [[tests/search#Hybrid Retrieval#Preserves FTS rollback and portable copies]]
   it('keeps FTS transactional and searchable after checkpoint and copy', async () => {
     const f = await indexed('# Guide\n\nneedle text');
@@ -552,7 +624,13 @@ describe('hybrid search', () => {
     const f = fixture('# Guide\n\nneedle');
     const cache = join(f.lat, '.cache');
     mkdirSync(cache);
-    const legacy = ['vectors.db', 'vectors.db-wal', 'search-migration.json'];
+    const legacy = [
+      'vectors.db',
+      'vectors.db-wal',
+      'search-migration.json',
+      'search-index.json',
+      'search-obsolete.db',
+    ];
     for (const name of legacy)
       writeFileSync(join(cache, name), 'invalid legacy data');
     await writeIndex(f.lat, undefined, false, async (db, model) => {
@@ -561,7 +639,7 @@ describe('hybrid search', () => {
       await indexSections(f.lat, db, simple);
       await setStoredModel(db, 'local:test:2');
     });
-    expect(readManifest(cache)).not.toBeNull();
+    expect(hasIndex(cache)).toBe(true);
     for (const name of legacy)
       expect(readFileSync(join(cache, name), 'utf8')).toBe(
         'invalid legacy data',
@@ -587,8 +665,7 @@ describe('hybrid search', () => {
       writeIndex(f.lat, undefined, false, work),
     ]);
     expect(maximum).toBe(1);
-    const manifest = readManifest(join(f.lat, '.cache'))!;
-    const reader = new SearchDb(join(f.lat, '.cache', manifest.file));
+    const reader = openDb(f.lat, undefined, true);
     try {
       await searchSections(reader, 'needle', simple);
       await writeIndex(f.lat, undefined, true, work);
@@ -719,51 +796,56 @@ describe('hybrid search', () => {
     }
   });
   // @lat: [[tests/search#Hybrid Retrieval#Keeps readers alive across process boundaries]]
-  it.each(process.platform === 'win32' ? [true] : [false, true])(
-    'publishes a replacement while another process reads the old FTS generation (private copy: %s)',
-    async (snapshot) => {
-      const f = fixture('# Guide\n\nneedle original');
-      const build = (db: SearchDb) =>
-        ensureSectionsSchema(db, 2).then(() =>
-          indexSections(f.lat, db, simple),
-        );
-      await writeIndex(f.lat, undefined, false, build);
-      const manifest = readManifest(join(f.lat, '.cache'))!;
-      const child = fork(
-        join(import.meta.dirname, 'support', 'search-reader.mjs'),
-        [
-          join(f.lat, '.cache', manifest.file),
-          snapshot ? 'snapshot' : 'shared',
-        ],
-        { execArgv: [], silent: true },
-      );
-      let stderr = '';
-      child.stderr!.on('data', (data) => {
-        stderr += data;
+  it('replaces search.db while another process reads its original snapshot', async () => {
+    const f = fixture('# Guide\n\nneedle original');
+    const build = (db: SearchDb) =>
+      ensureSectionsSchema(db, 2).then(() => indexSections(f.lat, db, simple));
+    await writeIndex(f.lat, undefined, false, build);
+    const child = fork(
+      join(import.meta.dirname, 'support', 'search-reader.mjs'),
+      [join(f.lat, '.cache', INDEX_FILE)],
+      { execArgv: [], silent: true },
+    );
+    let stderr = '';
+    child.stderr!.on('data', (data) => {
+      stderr += data;
+    });
+    try {
+      const failed = once(child, 'exit').then(([code]) => {
+        if (code !== 0) throw new Error(stderr || `reader exited ${code}`);
+        return [];
       });
+      expect((await Promise.race([once(child, 'message'), failed]))[0]).toBe(
+        'ready',
+      );
+      writeFileSync(join(f.lat, 'guide.md'), '# Guide\n\nneedle replacement');
+      await writeIndex(f.lat, undefined, false, build);
+      const response = once(child, 'message');
+      child.send('read');
+      const [rows] = await Promise.race([response, failed]);
+      expect(rows).toEqual([
+        expect.objectContaining({
+          body: 'needl origin',
+          score: expect.any(Number),
+        }),
+      ]);
+      const replacement = openDb(f.lat, undefined, true);
       try {
-        const failed = once(child, 'exit').then(([code]) => {
-          if (code !== 0) throw new Error(stderr || `reader exited ${code}`);
-          return [];
-        });
-        expect((await Promise.race([once(child, 'message'), failed]))[0]).toBe(
-          'ready',
-        );
-        writeFileSync(join(f.lat, 'guide.md'), '# Guide\n\nneedle replacement');
-        await writeIndex(f.lat, undefined, false, build);
-        const response = once(child, 'message');
-        child.send('read');
-        const [rows] = await Promise.race([response, failed]);
-        expect(rows).toEqual([
-          expect.objectContaining({
-            body: 'needl origin',
-            score: expect.any(Number),
-          }),
-        ]);
-        if (child.exitCode === null) await once(child, 'exit');
+        expect(
+          (await searchSections(replacement, 'needle', simple))[0].evidence[0]
+            .text,
+        ).toBe('needle replacement');
+        expect(
+          readdirSync(join(f.lat, '.cache')).filter(
+            (name) => name !== 'parsed',
+          ),
+        ).toEqual([INDEX_FILE]);
       } finally {
-        child.kill();
+        await replacement.close();
       }
-    },
-  );
+      if (child.exitCode === null) await once(child, 'exit');
+    } finally {
+      child.kill();
+    }
+  });
 });

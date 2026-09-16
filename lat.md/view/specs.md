@@ -93,7 +93,7 @@ The public Vercel target and repository preview convert an installed portable se
 
 `web/public/` becomes the CDN `static/` tree. Vercel's Node File Trace selects the entrypoint, server manifest, vector index, runtime packages, WASM engine, and model weights for one base-path-specific search function without copying public content into it.
 
-The Vercel packager explicitly includes the search manifest and the database it names, since static tracing cannot resolve filenames stored in JSON. Missing database files fail the build before replacing an existing output. Other runtime assets are reachable through a static import or `new URL(relativePath, import.meta.url)`. The embedding loader owns WASM initialization rather than relying on generated CommonJS glue to perform an opaque filesystem read.
+The Vercel packager explicitly includes `server-data/search.db` so the completed index is shipped with the function. Missing database files fail the build before replacing an existing output. Other runtime assets are reachable through a static import or `new URL(relativePath, import.meta.url)`. The embedding loader owns WASM initialization rather than relying on generated CommonJS glue to perform an opaque filesystem read.
 
 The generated configuration applies the shared security policy, gives content-addressed JSON and Vite assets immutable caching, resolves functions and exact static files first, and maps extensionless routes to their physical `index.html` files.
 

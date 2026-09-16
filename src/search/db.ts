@@ -1,30 +1,14 @@
 import { connect } from '@tursodatabase/database';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  mkdtempSync,
-  copyFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, copyFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export const INDEX_VERSION = 1;
+export const INDEX_FILE = 'search.db';
 export const CREATE_PASSAGE_FTS =
   "CREATE INDEX IF NOT EXISTS chunks_fts ON lexical_chunks USING fts(body,heading,path) WITH (tokenizer='whitespace',weights='body=1.0,heading=2.0,path=0.5')";
-export const MANIFEST_FILE = 'search-index.json';
-export type IndexManifest = { version: number; file: string };
-export function readManifest(cacheDir: string): IndexManifest | null {
-  const path = join(cacheDir, MANIFEST_FILE);
-  if (!existsSync(path)) return null;
-  const manifest = JSON.parse(readFileSync(path, 'utf8')) as IndexManifest;
-  if (
-    manifest.version !== INDEX_VERSION ||
-    !/^search-[\w-]+\.db$/.test(manifest.file)
-  )
-    throw new Error('Search index is incompatible; run lat reindex.');
-  return manifest;
+export function hasIndex(cacheDir: string): boolean {
+  return existsSync(join(cacheDir, INDEX_FILE));
 }
 
 /** Small SQL adapter; callers never depend on a libSQL connection. */
@@ -32,7 +16,6 @@ export class SearchDb {
   private connection: ReturnType<typeof connect> | undefined;
   constructor(
     readonly path: string,
-    private readonly multiprocess = true,
     private readonly snapshot = false,
   ) {}
   private snapshotDir: string | undefined;
@@ -45,10 +28,7 @@ export class SearchDb {
       copyFileSync(this.path, path);
     }
     return (this.connection = connect(path, {
-      experimental:
-        this.multiprocess && process.platform !== 'win32'
-          ? ['index_method', 'multiprocess_wal']
-          : ['index_method'],
+      experimental: ['index_method'],
       timeout: 10000,
     }));
   }
@@ -106,12 +86,7 @@ export function openDb(
 ): SearchDb {
   const cacheDir = requestedCacheDir ?? join(latDir, '.cache');
   mkdirSync(cacheDir, { recursive: true });
-  const manifest = readManifest(cacheDir);
-  return new SearchDb(
-    join(cacheDir, manifest?.file ?? 'search-unpublished.db'),
-    true,
-    readOnly && process.platform === 'win32',
-  );
+  return new SearchDb(join(cacheDir, INDEX_FILE), readOnly);
 }
 export async function ensureMeta(db: SearchDb): Promise<void> {
   await db.execute(

@@ -181,10 +181,7 @@ describe('lat init embedding setup', () => {
 
   function mockStoredModel(model: string): void {
     mkdirSync(join(latDir(), '.cache'), { recursive: true });
-    writeFileSync(
-      join(latDir(), '.cache', 'search-index.json'),
-      JSON.stringify({ version: 1, file: 'search-test.db' }),
-    );
+    writeFileSync(join(latDir(), '.cache', 'search.db'), 'mock index');
     getStoredModel.mockResolvedValue(model);
   }
 
