@@ -167,7 +167,7 @@ Final ties use section ID. Maximum-passage aggregation avoids dilution from unre
 
 Tests: [[tests/search#Hybrid Retrieval#Collapses before rank fusion]] and [[tests/search#Hybrid Retrieval#Overfetches toward unique sections]].
 
-## Storage and migration
+## Storage and cache generations
 
 The index uses embedded `@tursodatabase/database` 0.7.2. Checkpointed database generations are published through a manifest, so unsuccessful updates do not replace an existing usable index.
 
@@ -177,11 +177,11 @@ The index uses embedded `@tursodatabase/database` 0.7.2. Checkpointed database g
 
 Unchanged work discards its staging copy. Failed work removes staging files and preserves the manifest. Prior published generations remain available for existing readers; automatic generation cleanup is not implemented.
 
-Legacy `vectors.db` is inspected and checkpointed in a short-lived libSQL process so native handles are released before Windows renames the file and archived as `vectors.db.old-12`, with numbered suffixes on collision. Migration metadata retains its model across interrupted attempts. Indexing-capable search rebuilds the new format; hooks do not perform migration. Embedding-policy changes require explicit reindexing, while lexical-policy upgrades reuse stored vectors.
+Legacy `vectors.db`, sidecars, and migration metadata are ignored and left untouched. No legacy database client ships with the CLI. Without a current manifest, indexing builds a fresh cache using the selected backend; hooks do not rebuild it. Embedding-policy changes require explicit reindexing, while lexical-policy upgrades reuse stored vectors.
 
 Initial indexing, batches with more than 512 changed passages, and every replacement or deletion rebuild FTS transactionally after row changes. This removes historical document statistics from BM25; small addition-only batches maintain the index incrementally. The live-statistics lexical version repairs older indexes without regenerating embeddings. [[src/search/lexical.ts#synchronizeLexical]] rebuilds normalized rows and FTS when the lexical version changes.
 
-Tests: [[tests/search#Hybrid Retrieval#Publishes only successful generations]], [[tests/search#Hybrid Retrieval#Preserves FTS rollback and portable copies]], [[tests/search#Hybrid Retrieval#Archives legacy caches without overwriting backups]], and [[tests/search#Hybrid Retrieval#Keeps readers alive across process boundaries]].
+Tests: [[tests/search#Hybrid Retrieval#Publishes only successful generations]], [[tests/search#Hybrid Retrieval#Preserves FTS rollback and portable copies]], [[tests/search#Hybrid Retrieval#Ignores legacy caches]], and [[tests/search#Hybrid Retrieval#Keeps readers alive across process boundaries]].
 
 ## Result contract
 

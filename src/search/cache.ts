@@ -1,7 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { existsSync } from 'node:fs';
 import {
   copyFile,
   mkdir,
@@ -57,56 +54,6 @@ async function lock(cacheDir: string): Promise<() => Promise<void>> {
   }
 }
 
-async function archiveLegacy(cacheDir: string): Promise<string | null> {
-  const migration = join(cacheDir, 'search-migration.json');
-  if (existsSync(migration)) {
-    const { model, archive } = JSON.parse(await readFile(migration, 'utf8'));
-    const old = join(cacheDir, 'vectors.db');
-    if (existsSync(old) && !existsSync(archive)) await rename(old, archive);
-    for (const suffix of ['-wal', '-shm', '-journal'])
-      if (existsSync(old + suffix) && !existsSync(archive + suffix))
-        await rename(old + suffix, archive + suffix);
-    return model;
-  }
-  const old = join(cacheDir, 'vectors.db');
-  if (!existsSync(old)) return null;
-  // Process exit releases libSQL's native handles before Windows renames the file.
-  const { stdout } = await promisify(execFile)(
-    process.execPath,
-    [
-      '--input-type=module',
-      '--eval',
-      `
-      import { createRequire } from 'node:module';
-      const { createClient } = createRequire(process.argv[2])('@libsql/client');
-      const db = createClient({ url: process.argv[1] });
-      let model = null;
-      try {
-        const tables = await db.execute("SELECT name FROM sqlite_master WHERE name='meta'");
-        if (tables.rows.length) {
-          model = (await db.execute("SELECT value FROM meta WHERE key='embedding_model'")).rows[0]?.value ?? null;
-        }
-        await db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
-      } finally { db.close(); }
-      process.stdout.write(JSON.stringify(model));
-    `,
-      `file:${old}`,
-      import.meta.url,
-    ],
-    { windowsHide: true, timeout: 30000 },
-  );
-  const model = JSON.parse(stdout) as string | null;
-  let archive = old + '.old-12',
-    suffix = 0;
-  while (existsSync(archive)) archive = old + `.old-12.${++suffix}`;
-  await writeFile(migration, JSON.stringify({ model, archive }));
-  await rename(old, archive);
-  for (const sidecar of ['-wal', '-shm', '-journal'])
-    if (existsSync(old + sidecar))
-      await rename(old + sidecar, archive + sidecar);
-  return model;
-}
-
 /** Stage a complete generation; failed work cannot replace a usable index. */
 export async function writeIndex<T>(
   latDir: string,
@@ -141,7 +88,7 @@ export async function writeIndex<T>(
         await active.close();
       }
       if (!rebuild) await copyFile(join(dir, manifest.file), path);
-    } else model = await archiveLegacy(dir);
+    }
     // Staging has one writer and no readers. Multiprocess WAL can stall large
     // FTS builds; enable it only when opening published generations.
     db = new SearchDb(path, false);

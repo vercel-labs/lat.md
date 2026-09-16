@@ -397,7 +397,7 @@ Implementation: [[src/search/embedder.ts]], [[src/config.ts]]
 
 ### Storage
 
-[[rag-architecture#Storage and migration]] defines the embedded database, published generations, writer locking, and legacy migration used by search.
+[[rag-architecture#Storage and cache generations]] defines the embedded database, published generations, writer locking, and fresh rebuilds used by search.
 
 ### Indexing
 
