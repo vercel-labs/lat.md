@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { mkdtempSync, rmSync, cpSync } from 'node:fs';
+import { mkdtempSync, rmSync, cpSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { rmDirBestEffort } from './util.js';
 import { tmpdir } from 'node:os';
@@ -22,7 +22,6 @@ import { formatResultList } from '../src/format.js';
 import { plainStyler, type CmdContext } from '../src/context.js';
 import type { Section } from '../src/lattice-model.js';
 import { startReplayServer, hasReplayData } from './rag-replay-server.js';
-import { execFileSync } from 'node:child_process';
 import type { SearchDb as Client } from '../src/search/db.js';
 import type { Server } from 'node:http';
 
@@ -243,28 +242,18 @@ describe('search threshold policy', () => {
   });
 });
 
-// --- Legacy cache upgrade: rebuild a pre-versioning index ---
-//
-// A `.cache` built by a version that never recorded `meta.embedding_model` has
-// rows but no model. Resolving to a different backend (here local 384-dim vs a
-// stale remote 1536-dim table) must drop + rebuild, not query the mismatch.
-
-describe('search (rag, legacy cache upgrade)', () => {
-  // @lat: [[search#RAG Tests#Rebuilds a legacy cache with no recorded model]]
-  it('rebuilds a legacy cache that has rows but no recorded model', async () => {
+// Legacy cache bytes must not affect the fresh index or backend selection.
+describe('search (rag, legacy cache ignored)', () => {
+  // @lat: [[search#RAG Tests#Builds a fresh index beside a legacy cache]]
+  it('builds a fresh local index without opening a legacy database', async () => {
     const latDir = copyFixture();
-
-    // Seed a populated 1536-dim table (as an old remote build would leave) with
-    // no meta.embedding_model recorded.
     const { mkdirSync } = await import('node:fs');
     mkdirSync(join(latDir, '.cache'), { recursive: true });
-    execFileSync(process.execPath, [
-      join(import.meta.dirname, 'support', 'seed-legacy.mjs'),
+    writeFileSync(
       join(latDir, '.cache', 'vectors.db'),
-    ]);
+      'invalid legacy database',
+    );
 
-    // Clear the env so the rebuild resolves to the local 384-dim model — the
-    // dimension mismatch that previously threw a raw libsql error at query time.
     const savedKeys = [
       'LAT_LLM_KEY',
       'LAT_LLM_KEY_FILE',

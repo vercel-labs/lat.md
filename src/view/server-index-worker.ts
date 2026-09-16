@@ -12,7 +12,7 @@ process.once('message', async (request: ServerIndexRequest) => {
     await runIndex(request.latDir, undefined, request.project, {
       cacheDir: request.cacheDir,
     });
-    // Process exit releases native libsql handles before staging is renamed.
+    // Process exit releases native database handles before staging is renamed.
     process.exit(0);
   } catch (error) {
     console.error(error);
