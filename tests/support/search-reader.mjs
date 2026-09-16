@@ -1,5 +1,5 @@
 import { SearchDb } from '../../dist/src/search/db.js';
-const db = new SearchDb(process.argv[2], true, process.argv[3] === 'snapshot');
+const db = new SearchDb(process.argv[2], true);
 const query =
   "SELECT body,fts_score(body,heading,path,'needl') AS score FROM lexical_chunks ORDER BY score DESC LIMIT 5";
 try {

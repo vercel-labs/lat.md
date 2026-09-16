@@ -140,9 +140,17 @@ An unchanged project repairs old lexical statistics without embedding calls. Fai
 
 A failed FTS rebuild restores the prior sections and searchable scores, and a subsequent successful indexing attempt applies the edit.
 
-### Publishes only successful generations
+### Publishes only successful indexes
 
-A failed replacement leaves the existing manifest and complete searchable generation intact.
+A failed build preserves the exact bytes and searchable content of search.db, removes staging files, and releases the writer lock.
+
+### Reuses a single database filename
+
+Repeated reindexing leaves one search.db and no manifest, UUID databases, staging files, or writer locks. A new writer discards abandoned staging files and sidecars. Unchanged incremental work preserves the published file.
+
+### Preserves the database when replacement fails
+
+A failed rename leaves search.db byte-for-byte intact, removes staging files, and releases the writer lock so a subsequent indexing attempt can succeed.
 
 ### Preserves FTS rollback and portable copies
 
@@ -158,7 +166,7 @@ Index publication ignores old databases, sidecars, and migration metadata. It st
 
 ### Serializes concurrent index writers
 
-Concurrent writers cannot interleave publication, and an existing reader remains usable after another generation is published.
+Concurrent writers cannot interleave staging or replacement, and an existing snapshot reader remains usable after search.db is replaced.
 
 ### Rejects invalid vectors before changing the index
 
@@ -174,9 +182,9 @@ Repeated passages from one owner trigger deeper candidate retrieval, while the h
 
 ### Keeps readers alive across process boundaries
 
-A child process can open a published FTS generation while the parent publishes its replacement, and the child retains its original evidence until it closes.
+A child process can search its snapshot while the parent replaces search.db, and the child retains its original evidence until it closes.
 
-Windows published-generation readers use private copies so FTS can write without locking the published file. Publication never acquires a write lock on the active generation.
+Readers on every platform use private copies so FTS can write without locking the published file. New sessions open the replacement database.
 
 ### Stems English lexical fields and queries
 

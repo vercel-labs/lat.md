@@ -2,7 +2,7 @@ import { LEXICAL_VERSION } from './lexical.js';
 import { ReindexRequiredError } from './embedder.js';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { readManifest } from './db.js';
+import { hasIndex } from './db.js';
 import type { Section, SectionMatch } from '../lattice-model.js';
 import { closeDb, getStoredModel, openDb } from './db.js';
 import { embedderForIndex, type CreateSearchEngine } from './embedder.js';
@@ -56,7 +56,7 @@ export async function openIndexedSearchSession(
   } = {},
 ): Promise<IndexedSearchSession> {
   const cacheDir = options.cacheDir ?? join(latDir, '.cache');
-  if (!existsSync(cacheDir) || !readManifest(cacheDir))
+  if (!existsSync(cacheDir) || !hasIndex(cacheDir))
     return { search: async () => [], close: async () => {} };
   const db = openDb(latDir, options.cacheDir, true);
   let closed = false;

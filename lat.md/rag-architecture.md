@@ -167,21 +167,21 @@ Final ties use section ID. Maximum-passage aggregation avoids dilution from unre
 
 Tests: [[tests/search#Hybrid Retrieval#Collapses before rank fusion]] and [[tests/search#Hybrid Retrieval#Overfetches toward unique sections]].
 
-## Storage and cache generations
+## Search database storage
 
-The index uses embedded `@tursodatabase/database` 0.7.2. Checkpointed database generations are published through a manifest, so unsuccessful updates do not replace an existing usable index.
+The index uses embedded `@tursodatabase/database` 0.7.2 and one published file, `.cache/search.db`. Writers finish `.cache/_search.db` before replacing it, so unsuccessful indexing leaves the usable database intact.
 
 [[src/search/db.ts#SearchDb]] adapts SQL access. The schema separates `sections`, `chunks`, `embeddings`, `lexical_chunks`, `identifiers`, and `meta`. Vectors are stored as `vector32`; retrieval uses an exact scan rather than an approximate vector index. FTS uses the exact indexed columns in a score-only query with ORDER BY and LIMIT; fusion and result hydration happen in application code.
 
-[[src/search/cache.ts#writeIndex]] serializes writers with a process-owned lock, copies the active generation for incremental work, checkpoints the result, and atomically replaces `search-index.json`. Staging uses single-process access; published database opens enable experimental multiprocess WAL on Unix. Windows uses the supported default WAL mode. Windows search and publication metadata readers open private temporary copies of checkpointed generations. FTS requires writable handles, so copying avoids exclusive locks on the published file. Writers mutate staging files rather than checkpointing the active generation; readers keep their original snapshot until closed.
+[[src/search/cache.ts#writeIndex]] serializes writers with a process-owned lock. Incremental work copies `search.db` to `_search.db`; reindexing starts an empty staging database. After checkpointing and closing it, the writer renames `_search.db` over `search.db` without deleting the published file first. Windows transient sharing errors receive bounded retries. Failed work and abandoned staging databases and sidecars are cleaned up; unchanged work keeps the existing file.
 
-Unchanged work discards its staging copy. Failed work removes staging files and preserves the manifest. Prior published generations remain available for existing readers; automatic generation cleanup is not implemented.
+Search sessions on every platform open private OS-temporary snapshots and remove them on close. FTS can write to those copies without holding native handles or WAL files against `search.db`, and active sessions retain their original evidence across replacement. Connections use single-process database access; experimental multiprocess WAL is unnecessary. Database generations and a search manifest are no longer published.
 
-Legacy `vectors.db`, sidecars, and migration metadata are ignored and left untouched. No legacy database client ships with the CLI. Without a current manifest, indexing builds a fresh cache using the selected backend; hooks do not rebuild it. Embedding-policy changes require explicit reindexing, while lexical-policy upgrades reuse stored vectors.
+Legacy `vectors.db`, UUID databases, sidecars, and search manifests are ignored. No legacy database client ships with the CLI. Without `search.db`, indexing builds a fresh cache using the selected backend; hooks do not rebuild it. Embedding-policy changes require explicit reindexing, while lexical-policy upgrades reuse stored vectors.
 
 Initial indexing, batches with more than 512 changed passages, and every replacement or deletion rebuild FTS transactionally after row changes. This removes historical document statistics from BM25; small addition-only batches maintain the index incrementally. The live-statistics lexical version repairs older indexes without regenerating embeddings. [[src/search/lexical.ts#synchronizeLexical]] rebuilds normalized rows and FTS when the lexical version changes.
 
-Tests: [[tests/search#Hybrid Retrieval#Publishes only successful generations]], [[tests/search#Hybrid Retrieval#Preserves FTS rollback and portable copies]], [[tests/search#Hybrid Retrieval#Ignores legacy caches]], and [[tests/search#Hybrid Retrieval#Keeps readers alive across process boundaries]].
+Tests: [[tests/search#Hybrid Retrieval#Publishes only successful indexes]], [[tests/search#Hybrid Retrieval#Preserves FTS rollback and portable copies]], [[tests/search#Hybrid Retrieval#Ignores legacy caches]], and [[tests/search#Hybrid Retrieval#Keeps readers alive across process boundaries]].
 
 ## Result contract
 

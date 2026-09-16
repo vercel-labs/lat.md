@@ -904,7 +904,7 @@ describe('lat ui', () => {
         "manifestFile: new URL('./server-data/server.json'",
       );
       expect(appModule).toContain(
-        "indexFile: new URL('./server-data/search-index.json'",
+        "indexFile: new URL('./server-data/search.db'",
       );
       expect(appModule).toContain(
         'createSearchEngine: () => createEmbedder({ model: minilm })',

@@ -1,5 +1,3 @@
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   closeDb,
   ensureMeta,
@@ -17,7 +15,6 @@ try {
   await ensureMeta(db);
   await setStoredModel(db, model);
   await db.checkpoint();
-  writeFileSync(join(latDir,'.cache','search-index.json'),JSON.stringify({version:1,file:'search-unpublished.db'}));
 } finally {
   await closeDb(db);
 }

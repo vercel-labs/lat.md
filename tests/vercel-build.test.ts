@@ -95,11 +95,7 @@ describe('Vercel UI builds', () => {
       join(dataDir, 'server.json'),
       JSON.stringify({ version: 1, basePath: '/project/', sections: [] }),
     );
-    writeFileSync(join(dataDir, 'search-fixture.db'), 'vectors');
-    writeFileSync(
-      join(dataDir, 'search-index.json'),
-      JSON.stringify({ version: 1, file: 'search-fixture.db' }),
-    );
+    writeFileSync(join(dataDir, 'search.db'), 'vectors');
     writeFileSync(dependencyFile, 'export default true');
 
     const traced = [
@@ -125,7 +121,7 @@ describe('Vercel UI builds', () => {
           },
         },
       );
-      expect(result.files).toBe(traced.length + 2);
+      expect(result.files).toBe(traced.length + 1);
       expect(result.functionPath).toBe(
         join('functions', 'project', 'api', 'search.func'),
       );
@@ -142,10 +138,7 @@ describe('Vercel UI builds', () => {
         'export default',
       );
       expect(
-        readFileSync(
-          join(functionDir, 'server-data', 'search-fixture.db'),
-          'utf8',
-        ),
+        readFileSync(join(functionDir, 'server-data', 'search.db'), 'utf8'),
       ).toBe('vectors');
       expect(
         readFileSync(
@@ -153,14 +146,6 @@ describe('Vercel UI builds', () => {
           'utf8',
         ),
       ).toContain('export default true');
-      expect(
-        JSON.parse(
-          readFileSync(
-            join(functionDir, 'server-data', 'search-index.json'),
-            'utf8',
-          ),
-        ),
-      ).toEqual({ version: 1, file: 'search-fixture.db' });
       expect(existsSync(join(functionDir, 'public'))).toBe(false);
       expect(
         JSON.parse(readFileSync(join(functionDir, '.vc-config.json'), 'utf8')),
@@ -258,7 +243,7 @@ describe('Vercel UI builds', () => {
       ).rejects.toThrow(
         `Vercel build output already exists: ${outputDir}. Use force to replace it.`,
       );
-      rmSync(join(dataDir, 'search-fixture.db'));
+      rmSync(join(dataDir, 'search.db'));
       await expect(
         buildVercelOutput(
           artifactDir,
@@ -270,10 +255,10 @@ describe('Vercel UI builds', () => {
             },
           },
         ),
-      ).rejects.toThrow(/ENOENT/);
-      expect(
-        existsSync(join(functionDir, 'server-data', 'search-fixture.db')),
-      ).toBe(true);
+      ).rejects.toThrow('Missing hybrid search database');
+      expect(existsSync(join(functionDir, 'server-data', 'search.db'))).toBe(
+        true,
+      );
     } finally {
       rmSync(buildRoot, { recursive: true, force: true });
     }

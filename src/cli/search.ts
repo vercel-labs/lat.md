@@ -1,5 +1,5 @@
 import { LEXICAL_VERSION } from '../search/lexical.js';
-import { readManifest } from '../search/db.js';
+import { hasIndex } from '../search/db.js';
 import { embeddingFingerprint } from '../search/chunks.js';
 import { writeIndex } from '../search/cache.js';
 import { dirname, join } from 'node:path';
@@ -63,7 +63,7 @@ async function withDb<T>(
     project: MarkdownProjectAnalysis,
   ) => Promise<T>,
 ): Promise<T> {
-  if (readManifest(cacheDir ?? join(latDir, '.cache'))) {
+  if (hasIndex(cacheDir ?? join(latDir, '.cache'))) {
     const db = openDb(latDir, cacheDir, true);
     try {
       const stored = await getStoredModel(db);
