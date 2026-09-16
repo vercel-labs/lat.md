@@ -43,10 +43,10 @@ export async function writeIndex<T>(
 ): Promise<T> {
   const dir = cacheDir ?? join(latDir, '.cache');
   await mkdir(dir, { recursive: true });
-  const release = await acquireSearchLock(dir);
   const path = join(dir, '_search.db');
   const activePath = join(dir, INDEX_FILE);
   let db: SearchDb | undefined;
+  const release = await acquireSearchLock(dir);
   try {
     // A crashed writer may have left a partial database and journal behind.
     await removeStaging(path);
