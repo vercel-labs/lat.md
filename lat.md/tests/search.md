@@ -78,13 +78,9 @@ however many sections it holds: the parser reads it once and section slicing reu
 Before this was pinned, a 3.5 MB file holding 12k sections was re-read once per section — 12k
 times on every search.
 
-### Rebuilds a legacy cache with no recorded model
+### Builds a fresh index beside a legacy cache
 
-Seed a 1536-dim `sections` table with rows but no `meta.embedding_model`, then run a local-backed
-search: the old file is archived with .old-12, a Turso index is built at 384 dimensions, and the query succeeds.
-
-This is the pre-versioning `.cache` upgrade path — before, the stale table was queried and threw a
-raw dimension-mismatch error.
+Search ignores legacy database bytes and builds a fresh index using the currently selected embedding backend. An invalid legacy file must not prevent a successful local search.
 
 ### Reuses an indexed search session
 
@@ -150,11 +146,9 @@ Rolled-back writes do not leak into FTS; a checkpointed database retains scored 
 
 Passage, introduction, and combined previews use the same ranked match while changing only its presentation.
 
-### Archives legacy caches without overwriting backups
+### Ignores legacy caches
 
-Migration reads the old model and archives the libSQL file with a collision-safe .old-12 suffix before publishing the new index.
-
-Legacy inspection and fixture creation finish in separate processes before archival, releasing native file handles on Windows.
+Index publication ignores old databases, sidecars, and migration metadata. It starts without an inherited model and leaves legacy files untouched, even when they contain invalid data.
 
 ### Serializes concurrent index writers
 

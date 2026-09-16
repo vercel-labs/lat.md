@@ -1,4 +1,4 @@
-import { fork, execFileSync } from 'node:child_process';
+import { fork } from 'node:child_process';
 import { once } from 'node:events';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
@@ -462,27 +462,26 @@ describe('hybrid search', () => {
     expect(both).toContain('Introduction text');
     expect(both).toContain('Matching passage');
   });
-  // @lat: [[tests/search#Hybrid Retrieval#Archives legacy caches without overwriting backups]]
-  it('archives legacy models and preserves existing backup files', async () => {
+  // @lat: [[tests/search#Hybrid Retrieval#Ignores legacy caches]]
+  it('builds a fresh index without reading or migrating legacy caches', async () => {
     const f = fixture('# Guide\n\nneedle');
     const cache = join(f.lat, '.cache');
     mkdirSync(cache);
-    const old = join(cache, 'vectors.db');
-    execFileSync(process.execPath, [
-      join(import.meta.dirname, 'support', 'seed-legacy.mjs'),
-      old,
-      'local:test:2',
-    ]);
-    writeFileSync(old + '.old-12', 'existing backup');
+    const legacy = ['vectors.db', 'vectors.db-wal', 'search-migration.json'];
+    for (const name of legacy)
+      writeFileSync(join(cache, name), 'invalid legacy data');
     await writeIndex(f.lat, undefined, false, async (db, model) => {
-      expect(model).toBe('local:test:2');
+      expect(model).toBeNull();
       await ensureSectionsSchema(db, 2);
       await indexSections(f.lat, db, simple);
-      await setStoredModel(db, model!);
+      await setStoredModel(db, 'local:test:2');
     });
-    expect(readFileSync(old + '.old-12', 'utf8')).toBe('existing backup');
-    expect(existsSync(old + '.old-12.1')).toBe(true);
-    expect(existsSync(old)).toBe(false);
+    expect(readManifest(cache)).not.toBeNull();
+    for (const name of legacy)
+      expect(readFileSync(join(cache, name), 'utf8')).toBe(
+        'invalid legacy data',
+      );
+    expect(existsSync(join(cache, 'vectors.db.old-12'))).toBe(false);
   });
   // @lat: [[tests/search#Hybrid Retrieval#Serializes concurrent index writers]]
   it('serializes writers and keeps an existing reader usable', async () => {
