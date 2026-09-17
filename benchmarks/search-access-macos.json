@@ -1,0 +1,81 @@
+{
+  "baseline": "0c8a49f",
+  "node": "v24.19.0",
+  "platform": "darwin arm64 24.6.0",
+  "iterations": 15,
+  "method": "Warm filesystem cache; alternating order; deterministic precomputed 384D embeddings; real FTS and exact vector scan. Session includes open, metadata, query and close. Persistent reuses one session. Decimal MB.",
+  "results": [
+    {
+      "passages": 1001,
+      "sizeMB": 7.79,
+      "session": {
+        "copy": {
+          "medianMs": 8.9,
+          "p95Ms": 9.82
+        },
+        "lock": {
+          "medianMs": 4.82,
+          "p95Ms": 5.37
+        }
+      },
+      "persistent": {
+        "copy": {
+          "medianMs": 2.74,
+          "p95Ms": 3.09
+        },
+        "lock": {
+          "medianMs": 4.29,
+          "p95Ms": 4.87
+        }
+      }
+    },
+    {
+      "passages": 10001,
+      "sizeMB": 77.37,
+      "session": {
+        "copy": {
+          "medianMs": 71.31,
+          "p95Ms": 89.08
+        },
+        "lock": {
+          "medianMs": 36.67,
+          "p95Ms": 46.88
+        }
+      },
+      "persistent": {
+        "copy": {
+          "medianMs": 34.11,
+          "p95Ms": 34.76
+        },
+        "lock": {
+          "medianMs": 36.15,
+          "p95Ms": 36.8
+        }
+      }
+    },
+    {
+      "passages": 50001,
+      "sizeMB": 387.39,
+      "session": {
+        "copy": {
+          "medianMs": 313.85,
+          "p95Ms": 360.23
+        },
+        "lock": {
+          "medianMs": 201.91,
+          "p95Ms": 209.7
+        }
+      },
+      "persistent": {
+        "copy": {
+          "medianMs": 193.14,
+          "p95Ms": 199.49
+        },
+        "lock": {
+          "medianMs": 200.31,
+          "p95Ms": 205.23
+        }
+      }
+    }
+  ]
+}

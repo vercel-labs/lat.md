@@ -1,6 +1,6 @@
-import { copyFile, mkdir, rename, rm } from 'node:fs/promises';
+import { copyFile, mkdir, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { acquireSearchLock } from './lock.js';
+import { acquireSearchLock, withSearchAccess } from './lock.js';
 import {
   SearchDb,
   hasIndex,
@@ -17,7 +17,7 @@ async function withFileRetry(work: () => Promise<void>): Promise<void> {
       return;
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      // Windows may briefly retain a staging handle or a reader's copy handle.
+      // Windows may briefly retain a staging handle or a reader handle.
       if (
         process.platform !== 'win32' ||
         attempt >= 9 ||
@@ -34,7 +34,7 @@ async function removeStaging(path: string): Promise<void> {
     await withFileRetry(() => rm(path + suffix, { force: true }));
 }
 
-/** Build a private staging database; readers only open snapshots of search.db. */
+/** Build a private staging database; access locks protect copies and publication of search.db. */
 export async function writeIndex<T>(
   latDir: string,
   cacheDir: string | undefined,
@@ -51,7 +51,18 @@ export async function writeIndex<T>(
     // A crashed writer may have left a partial database and journal behind.
     await removeStaging(path);
     const existing = hasIndex(dir);
-    if (existing && !rebuild) await copyFile(activePath, path);
+    if (existing && !rebuild) {
+      await withSearchAccess(dir, 'exclusive', async () => {
+        // Recover/checkpoint a WAL left by a process that died during a query.
+        const source = new SearchDb(activePath);
+        try {
+          await source.checkpoint();
+        } finally {
+          await source.close();
+        }
+        await copyFile(activePath, path);
+      });
+    }
     db = new SearchDb(path);
     const model = existing && !rebuild ? await getStoredModel(db) : null;
     await ensureMeta(db);
@@ -66,7 +77,30 @@ export async function writeIndex<T>(
     await db.checkpoint();
     await db.close();
     db = undefined;
-    if (!unchanged) await withFileRetry(() => rename(path, activePath));
+    if (!unchanged)
+      await withSearchAccess(dir, 'exclusive', async () => {
+        // Recover old sidecars before replacing their database, including after a crash.
+        if (existing) {
+          const wal = await stat(activePath + '-wal').catch(
+            (error: NodeJS.ErrnoException) => {
+              if (error.code !== 'ENOENT') throw error;
+              return undefined;
+            },
+          );
+          // A fresh rebuild must also repair an unreadable database with no WAL.
+          if (wal && wal.size > 0) {
+            const source = new SearchDb(activePath);
+            try {
+              await source.checkpoint();
+            } finally {
+              await source.close();
+            }
+          }
+          for (const suffix of ['-wal', '-shm', '-journal'])
+            await withFileRetry(() => rm(activePath + suffix, { force: true }));
+        }
+        await withFileRetry(() => rename(path, activePath));
+      });
     return result;
   } finally {
     try {

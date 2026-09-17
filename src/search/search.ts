@@ -55,24 +55,13 @@ export async function searchSections(
   embedder: Embedder,
   limit = DEFAULT_SEARCH_LIMIT,
   minSimilarity = DEFAULT_MIN_SIMILARITY,
+  preparedVector?: number[],
 ): Promise<SearchResult[]> {
   query = query.trim();
   if (!query) return [];
-  if (!Number.isInteger(limit) || limit < 1)
-    throw new Error('limit must be a positive integer');
-  if (!Number.isFinite(minSimilarity) || minSimilarity < 0 || minSimilarity > 1)
-    throw new Error('min-similarity must be a number from 0 to 1');
-  if (embedder.countTokens(query) > embedder.maxInputTokens)
-    throw new Error(
-      'Search query exceeds the embedding model token limit; shorten the query.',
-    );
-  const [vector] = await embedder.embed([query]);
-  if (
-    !vector ||
-    vector.length !== embedder.dimensions ||
-    vector.some((n) => !Number.isFinite(n))
-  )
-    throw new Error('Embedding backend returned an invalid query vector');
+  const vector =
+    preparedVector ??
+    (await prepareSearchQuery(query, embedder, limit, minSimilarity));
   const vectorJson = JSON.stringify(vector),
     fts = literalFtsQuery(query);
   const target = Math.max(50, limit),
@@ -212,4 +201,31 @@ export async function searchSections(
     });
   }
   return results;
+}
+
+/** Prepare embeddings before acquiring a database access lock. */
+export async function prepareSearchQuery(
+  query: string,
+  embedder: Embedder,
+  limit = DEFAULT_SEARCH_LIMIT,
+  minSimilarity = DEFAULT_MIN_SIMILARITY,
+): Promise<number[]> {
+  query = query.trim();
+  if (!query) return [];
+  if (!Number.isInteger(limit) || limit < 1)
+    throw new Error('limit must be a positive integer');
+  if (!Number.isFinite(minSimilarity) || minSimilarity < 0 || minSimilarity > 1)
+    throw new Error('min-similarity must be a number from 0 to 1');
+  if (embedder.countTokens(query) > embedder.maxInputTokens)
+    throw new Error(
+      'Search query exceeds the embedding model token limit; shorten the query.',
+    );
+  const [vector] = await embedder.embed([query]);
+  if (
+    !vector ||
+    vector.length !== embedder.dimensions ||
+    vector.some((n) => !Number.isFinite(n))
+  )
+    throw new Error('Embedding backend returned an invalid query vector');
+  return vector;
 }

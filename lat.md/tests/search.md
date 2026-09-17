@@ -84,7 +84,11 @@ Search ignores legacy database bytes and builds a fresh index using the currentl
 
 ### Reuses an indexed search session
 
-An indexed search session owns one database and embedder, applies each query's limit and threshold, and returns storage rows without project metadata. A shared resolver hydrates known section ids for every caller.
+An indexed search session reuses an embedder, closes database access between queries, applies each query's limit and threshold, and returns storage rows without project metadata. A shared resolver hydrates known section ids for every caller.
+
+### Rejects changed session metadata
+
+A session rejects changed index metadata before retrieval, releases database access on that error, and rejects queries after closing.
 
 ### Skips an unbuilt search index
 
@@ -146,7 +150,7 @@ A failed build preserves the exact bytes and searchable content of search.db, re
 
 ### Reuses a single database filename
 
-Repeated reindexing leaves search.db and an unlocked, persistent search-write.lock, without manifests or staging files. A writer discards abandoned staging files and sidecars. Unchanged incremental work preserves the published file.
+Repeated reindexing leaves search.db and persistent writer/access lock files, without manifests or staging files. A writer discards abandoned staging files and sidecars. Unchanged incremental work preserves the published file.
 
 ### Preserves the database when replacement fails
 
@@ -166,7 +170,7 @@ Index publication ignores old databases, sidecars, and migration metadata. It st
 
 ### Serializes concurrent index writers
 
-Concurrent writers cannot interleave staging or replacement, and an existing snapshot reader remains usable after search.db is replaced.
+Concurrent writers cannot interleave staging or replacement, and readers reopen the published database after replacement.
 
 ### Rejects invalid vectors before changing the index
 
@@ -182,9 +186,7 @@ Repeated passages from one owner trigger deeper candidate retrieval, while the h
 
 ### Keeps readers alive across process boundaries
 
-A child process can search its snapshot while the parent replaces search.db, and the child retains its original evidence until it closes.
-
-Readers on every platform use private copies so FTS can write without locking the published file. New sessions open the replacement database.
+A child process holds database access while a parent builds a replacement. Publication waits for the child to finish reading and close; new readers then see the replacement.
 
 ### Stems English lexical fields and queries
 
@@ -209,3 +211,23 @@ A contender times out while another process holds the lock, and a subsequent wri
 ### Recovers from a killed writer
 
 Killing a writer before publication preserves search.db. Waiting processes acquire the kernel lock one at a time, discard abandoned staging data, and successfully publish a replacement.
+
+### Coordinates shared and exclusive access
+
+Shared lock holders coexist across processes, exclusive access waits for every holder, process death releases ownership, and callback failures do not leak locks.
+
+### Releases database access after failed queries
+
+A failed database query closes and releases exclusive access so subsequent processes and database connections can proceed.
+
+### Embeds outside database access
+
+A blocked embedding operation leaves database access available to publication. Session closure waits for that query to finish and rejects new queries.
+
+### Recovers from a killed reader
+
+A reader killed with an open database connection releases access. Incremental indexing recovers the published database and subsequent processes can query it.
+
+### Rebuilds an unreadable published database
+
+A fresh rebuild can replace invalid cached database bytes when no pending WAL requires recovery, without opening the invalid database first.

@@ -966,7 +966,7 @@ describe('lat ui', () => {
       }));
       const search = await createPreindexedViewSearch(
         join(outputDir, 'server-data'),
-        join(outputDir, 'runtime-cache'),
+        join(outputDir, 'server-data'),
         [{ ...section, children: [] }],
         new Map([[builtSection.id.toLowerCase(), documentPath]]),
         { openSearchSession },
@@ -975,7 +975,7 @@ describe('lat ui', () => {
       expect(openSearchSession).toHaveBeenCalledWith(
         join(outputDir, 'server-data'),
         {
-          cacheDir: join(outputDir, 'runtime-cache'),
+          cacheDir: join(outputDir, 'server-data'),
           createSearchEngine,
         },
       );
@@ -1138,6 +1138,11 @@ describe('lat ui', () => {
       linkPackage('express', join(repositoryRoot, 'node_modules', 'express'));
       linkPackage('lat.md', repositoryRoot);
 
+      // Remove the builder's released lock so runtime access must recreate it.
+      rmSync(join(outputDir, 'server-data', 'search-access.lock'), {
+        force: true,
+      });
+
       const generated = (await import(
         pathToFileURL(join(outputDir, 'app.mjs')).href
       )) as {
@@ -1220,6 +1225,15 @@ describe('lat ui', () => {
       expect(payload.results.length).toBeGreaterThan(0);
       expect(payload.results).toContainEqual(
         expect.objectContaining({ path: 'guide.md' }),
+      );
+      // Queries lock the bundled database, not a private runtime copy.
+      expect(
+        existsSync(join(outputDir, 'server-data', 'search-access.lock')),
+      ).toBe(true);
+      await closeGeneratedApp();
+      closeGeneratedApp = undefined;
+      expect(existsSync(join(outputDir, 'server-data', 'search.db'))).toBe(
+        true,
       );
     } finally {
       if (server) {

@@ -30,6 +30,7 @@ vi.mock('../src/search/embedder.js', () => ({
 
 vi.mock('../src/search/search.js', () => ({
   searchSections: mocks.searchSections,
+  prepareSearchQuery: vi.fn().mockResolvedValue([1]),
 }));
 
 import {
@@ -55,9 +56,12 @@ describe('indexed search sessions', () => {
     mocks.hasIndex.mockReturnValue(true);
     mocks.openDb.mockReturnValue({
       database: 'test',
-      execute: vi
-        .fn()
-        .mockResolvedValue({ rows: [{ value: LEXICAL_VERSION }] }),
+      execute: vi.fn().mockResolvedValue({
+        rows: [
+          { key: 'lexical_version', value: LEXICAL_VERSION },
+          { key: 'embedding_model', value: 'local:test:1' },
+        ],
+      }),
     });
     mocks.ensureMeta.mockResolvedValue(undefined);
     mocks.ensureSectionsSchema.mockResolvedValue(undefined);
@@ -87,7 +91,7 @@ describe('indexed search sessions', () => {
   });
 
   // @lat: [[tests/search#RAG Tests#Reuses an indexed search session]]
-  it('reuses one database and embedder across queries', async () => {
+  it('reuses the embedder and closes database access between queries', async () => {
     const createSearchEngine = vi.fn();
     const session = await openIndexedSearchSession('/project/lat.md', {
       cacheDir: '/runtime/cache',
@@ -121,7 +125,7 @@ describe('indexed search sessions', () => {
     await session.close();
     await session.close();
 
-    expect(mocks.openDb).toHaveBeenCalledOnce();
+    expect(mocks.openDb).toHaveBeenCalledTimes(3);
     expect(mocks.openDb).toHaveBeenCalledWith(
       '/project/lat.md',
       '/runtime/cache',
@@ -142,6 +146,7 @@ describe('indexed search sessions', () => {
       expect.anything(),
       7,
       0.4,
+      [1],
     );
     expect(mocks.searchSections).toHaveBeenNthCalledWith(
       2,
@@ -150,13 +155,16 @@ describe('indexed search sessions', () => {
       expect.anything(),
       3,
       undefined,
+      [1],
     );
-    expect(mocks.closeDb).toHaveBeenCalledOnce();
+    expect(mocks.closeDb).toHaveBeenCalledTimes(3);
   });
 
   // @lat: [[tests/search#RAG Tests#Skips an unbuilt search index]]
   it('returns no matches without loading an embedder for an unbuilt index', async () => {
-    mocks.getStoredModel.mockResolvedValue(null);
+    mocks.openDb.mockReturnValue({
+      execute: vi.fn().mockResolvedValue({ rows: [] }),
+    });
     const session = await openIndexedSearchSession('/project/lat.md');
 
     await expect(session.search('query', 5)).resolves.toEqual([]);
@@ -166,5 +174,19 @@ describe('indexed search sessions', () => {
     expect(mocks.ensureSectionsSchema).not.toHaveBeenCalled();
     expect(mocks.searchSections).not.toHaveBeenCalled();
     expect(mocks.closeDb).toHaveBeenCalledOnce();
+  });
+  // @lat: [[tests/search#RAG Tests#Rejects changed session metadata]]
+  it('rejects replacement metadata and closes access after failure', async () => {
+    const session = await openIndexedSearchSession('/project/lat.md');
+    mocks.openDb.mockReturnValue({
+      execute: vi.fn().mockResolvedValue({ rows: [] }),
+    });
+    await expect(session.search('query', 5)).rejects.toThrow(
+      'Search index changed',
+    );
+    expect(mocks.searchSections).not.toHaveBeenCalled();
+    expect(mocks.closeDb).toHaveBeenCalledTimes(2);
+    await session.close();
+    await expect(session.search('query', 5)).rejects.toThrow('closed');
   });
 });

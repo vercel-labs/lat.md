@@ -11,7 +11,11 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { acquireSearchLock } from '../src/search/lock.js';
+import {
+  acquireSearchLock,
+  acquireSearchAccess,
+  withSearchAccess,
+} from '../src/search/lock.js';
 import { writeIndex } from '../src/search/cache.js';
 import { SearchDb } from '../src/search/db.js';
 import { rmDirBestEffort } from './util.js';
@@ -133,7 +137,12 @@ it('preserves publication after SIGKILL and serializes waiting replacement write
   second.child.send('release');
   await second.wait('done');
   await Promise.all(contenders.map((c) => c.exited));
-  expect(readdirSync(dir).sort()).toEqual(['search-write.lock', 'search.db']);
+  expect(readdirSync(dir).sort()).toEqual([
+    'search-access-gate.lock',
+    'search-access.lock',
+    'search-write.lock',
+    'search.db',
+  ]);
   const db = new SearchDb(join(dir, 'search.db'), true);
   try {
     expect((await db.execute('SELECT value FROM crash_test')).rows).toEqual([
@@ -142,4 +151,76 @@ it('preserves publication after SIGKILL and serializes waiting replacement write
   } finally {
     await db.close();
   }
+});
+
+// @lat: [[tests/search#Hybrid Retrieval#Coordinates shared and exclusive access]]
+it('allows shared holders across processes, excludes writers, and releases on death', async () => {
+  const dir = fixture();
+  const a = writer(dir, 'shared');
+  await a.wait('acquired');
+  const b = writer(dir, 'shared');
+  await b.wait('acquired');
+  const blocked = writer(dir, 'exclusive', 100);
+  await blocked.wait({ error: 'Search database is busy; retry shortly.' });
+  await blocked.exited;
+  a.child.kill('SIGKILL');
+  await a.exited;
+  await expect(acquireSearchAccess(dir, 'exclusive', 0)).rejects.toThrow(
+    'database is busy',
+  );
+  b.child.send('release');
+  await b.exited;
+  await expect(
+    withSearchAccess(dir, 'exclusive', async () => {
+      throw new Error('query failed');
+    }),
+  ).rejects.toThrow('query failed');
+  const release = await acquireSearchAccess(dir, 'shared', 0);
+  await release();
+});
+
+// @lat: [[tests/search#Hybrid Retrieval#Releases database access after failed queries]]
+it('closes a failed query before allowing another process to open the database', async () => {
+  const dir = fixture();
+  await writeIndex(dir, dir, true, (db) =>
+    db.execute('CREATE TABLE crash_test(value TEXT)'),
+  );
+  const db = new SearchDb(join(dir, 'search.db'), true);
+  try {
+    await expect(db.execute('SELECT * FROM missing')).rejects.toThrow();
+  } finally {
+    await db.close();
+  }
+  const other = writer(dir, 'exclusive');
+  await other.wait('acquired');
+  other.child.send('release');
+  await other.exited;
+  const next = new SearchDb(join(dir, 'search.db'), true);
+  try {
+    expect((await next.execute('SELECT * FROM crash_test')).rows).toEqual([]);
+  } finally {
+    await next.close();
+  }
+});
+
+// @lat: [[tests/search#Hybrid Retrieval#Recovers from a killed reader]]
+it('recovers database access after a reader dies with its connection open', async () => {
+  const dir = fixture();
+  await writeIndex(dir, dir, true, (db) =>
+    db.execute('CREATE TABLE crash_test(value TEXT)'),
+  );
+  const owner = writer(dir, 'reader');
+  await owner.wait('acquired');
+  const blocked = writer(dir, 'exclusive', 100);
+  await blocked.wait({ error: 'Search database is busy; retry shortly.' });
+  await blocked.exited;
+  owner.child.kill('SIGKILL');
+  await owner.exited;
+  await writeIndex(dir, dir, false, (db) =>
+    db.execute("INSERT INTO crash_test VALUES ('recovered')"),
+  );
+  const next = writer(dir, 'reader');
+  await next.wait('acquired');
+  next.child.send('release');
+  await next.exited;
 });

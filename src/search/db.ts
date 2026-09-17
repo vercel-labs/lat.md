@@ -1,8 +1,7 @@
 import { connect } from '@tursodatabase/database';
-import { existsSync, mkdirSync, mkdtempSync, copyFileSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { acquireSearchAccess } from './lock.js';
 
 export const INDEX_FILE = 'search.db';
 export const CREATE_PASSAGE_FTS =
@@ -14,23 +13,28 @@ export function hasIndex(cacheDir: string): boolean {
 /** Small SQL adapter; callers never depend on a libSQL connection. */
 export class SearchDb {
   private connection: ReturnType<typeof connect> | undefined;
+  private release: (() => Promise<void>) | undefined;
   constructor(
     readonly path: string,
-    private readonly snapshot = false,
+    private readonly published = false,
   ) {}
-  private snapshotDir: string | undefined;
   private get() {
-    if (this.connection) return this.connection;
-    let path = this.path;
-    if (this.snapshot) {
-      this.snapshotDir = mkdtempSync(join(tmpdir(), 'lat-search-reader-'));
-      path = join(this.snapshotDir, 'index.db');
-      copyFileSync(this.path, path);
+    return (this.connection ??= this.connect());
+  }
+  private async connect() {
+    // Turso 0.7.2 FTS needs writable connections and exclusive process access.
+    if (this.published)
+      this.release = await acquireSearchAccess(dirname(this.path), 'exclusive');
+    try {
+      return await connect(this.path, {
+        experimental: ['index_method'],
+        timeout: 10000,
+      });
+    } catch (error) {
+      await this.release?.();
+      this.release = undefined;
+      throw error;
     }
-    return (this.connection = connect(path, {
-      experimental: ['index_method'],
-      timeout: 10000,
-    }));
   }
   async execute(
     statement: string | { sql: string; args?: any[] },
@@ -49,29 +53,18 @@ export class SearchDb {
     try {
       if (this.connection) {
         const db = await this.connection;
-        await db.close();
-        this.connection = undefined;
+        try {
+          // Leave a self-contained file for incremental copies and publication.
+          if (this.published) await this.checkpoint();
+        } finally {
+          await db.close();
+        }
       }
     } finally {
-      if (this.snapshotDir) {
-        try {
-          await rm(this.snapshotDir, {
-            recursive: true,
-            force: true,
-            maxRetries: 3,
-            retryDelay: 20,
-          });
-        } catch (error) {
-          const code = (error as NodeJS.ErrnoException).code;
-          if (
-            process.platform !== 'win32' ||
-            !['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(code ?? '')
-          )
-            throw error;
-          // Native handles can outlive close on Windows; this is only an owned temp copy.
-        }
-        this.snapshotDir = undefined;
-      }
+      this.connection = undefined;
+      const release = this.release;
+      this.release = undefined;
+      await release?.();
     }
   }
   async checkpoint() {
@@ -82,11 +75,11 @@ export class SearchDb {
 export function openDb(
   latDir: string,
   requestedCacheDir?: string,
-  readOnly = false,
+  published = false,
 ): SearchDb {
   const cacheDir = requestedCacheDir ?? join(latDir, '.cache');
   mkdirSync(cacheDir, { recursive: true });
-  return new SearchDb(join(cacheDir, INDEX_FILE), readOnly);
+  return new SearchDb(join(cacheDir, INDEX_FILE), published);
 }
 export async function ensureMeta(db: SearchDb): Promise<void> {
   await db.execute(

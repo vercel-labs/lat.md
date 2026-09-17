@@ -1,11 +1,33 @@
 import { once } from 'node:events';
+import { SearchDb } from '../../dist/src/search/db.js';
+import { join } from 'node:path';
 import { writeIndex } from '../../dist/src/search/cache.js';
-import { acquireSearchLock } from '../../dist/src/search/lock.js';
+import {
+  acquireSearchLock,
+  acquireSearchAccess,
+} from '../../dist/src/search/lock.js';
 
 const [dir, mode, timeout] = process.argv.slice(2);
 process.send('started');
 try {
-  if (mode === 'lock') {
+  if (mode === 'shared' || mode === 'exclusive') {
+    const release = await acquireSearchAccess(dir, mode, Number(timeout));
+    try {
+      process.send('acquired');
+      await once(process, 'message');
+    } finally {
+      await release();
+    }
+  } else if (mode === 'reader') {
+    const db = new SearchDb(join(dir, 'search.db'), true);
+    try {
+      await db.execute('SELECT * FROM crash_test');
+      process.send('acquired');
+      await once(process, 'message');
+    } finally {
+      await db.close();
+    }
+  } else if (mode === 'lock') {
     const release = await acquireSearchLock(dir, Number(timeout));
     process.send('acquired');
     await once(process, 'message');
