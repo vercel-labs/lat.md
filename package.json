@@ -92,7 +92,7 @@
     "three": "^0.185.1",
     "topojson-client": "^3.1.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.7.0",
+    "typescript": "7.0.2",
     "vite": "^7.0.0",
     "vitest": "^3.0.0",
     "web-tree-sitter": "^0.26.6",

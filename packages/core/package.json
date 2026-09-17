@@ -242,7 +242,7 @@
     "@types/node": "^25.3.0",
     "mdast-util-from-markdown": "^2.0.3",
     "micromark-util-types": "^2.0.2",
-    "typescript": "^5.7.0",
+    "typescript": "7.0.2",
     "tsx": "^4.21.0"
   }
 }

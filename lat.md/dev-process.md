@@ -32,6 +32,8 @@ TypeScript ESM project with a Rust-to-WASM embedding engine. Local development m
 
 The root workspace contains the TypeScript CLI, the `@lat.md/embed` Rust/WASM engine, the `@lat.md/embed-minilm-fp16` model package, and the `website/` Next.js app.
 
+The CLI, library packages, and Vite UI use the native Go-based TypeScript 7.0.2 compiler, pinned in the root, core, and server development dependencies. It retains the `tsc` command and installs prebuilt platform binaries through pnpm; no Go toolchain is required. Node-targeted TypeScript configurations explicitly include `node` types. The separate Next.js website retains TypeScript 5.9 because Next 15 calls the JavaScript compiler API, which TypeScript 7.0 does not provide.
+
 ## Package Manager
 
 pnpm is the only supported package manager. Never use npm or yarn.
@@ -101,7 +103,7 @@ Commands for running the test suite.
 
 ### Typecheck Test
 
-Every test run includes a full `tsc --noEmit` pass over the entire codebase. If it doesn't typecheck, it doesn't pass.
+Every test run includes a full native `tsc --noEmit` pass over the root and UI projects after building core and server declarations. The subprocess has a 90-second limit inside a 120-second test budget for Windows CI.
 
 ### Continuous Integration
 

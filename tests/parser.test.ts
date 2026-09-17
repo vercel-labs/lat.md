@@ -8,8 +8,11 @@ import type { WikiLink } from '@lat.md/core/extensions/wiki-link/index';
 
 describe('typecheck', () => {
   it('passes tsc --noEmit on the entire codebase', () => {
-    execSync('pnpm typecheck', { cwd: import.meta.dirname + '/..' });
-  });
+    execSync('pnpm typecheck', {
+      cwd: import.meta.dirname + '/..',
+      timeout: 90_000,
+    });
+  }, 120_000);
 });
 
 describe('prettier', () => {
