@@ -9,7 +9,8 @@ try {
     try {
       process.send((await db.execute(query)).rows);
       await db.close();
-      process.exit(0);
+      process.send('closed');
+      process.once('message', () => process.exit(0));
     } catch (error) {
       console.error(error);
       process.exit(1);

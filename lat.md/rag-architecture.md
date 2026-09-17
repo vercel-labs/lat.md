@@ -177,7 +177,13 @@ The index uses embedded `@tursodatabase/database` 0.7.2 and one published file, 
 
 The persistent `search-write.lock` file is never removed or interpreted as PID metadata. `fs-native-extensions` locks its open descriptor; closing it or terminating the process releases ownership automatically. Acquisition polls for up to two minutes and never steals a live lock. Ownership covers staging cleanup, building, publication, and final cleanup. A subsequent writer discards staging data abandoned by a killed process. All cooperating writers must use this protocol; older PID-lock binaries must not run concurrently with it.
 
-Search sessions on every platform open private OS-temporary snapshots and remove them on close. FTS can write to those copies without holding native handles or WAL files against `search.db`, and active sessions retain their original evidence across replacement. Connections use single-process database access; experimental multiprocess WAL is unnecessary. Database generations and a search manifest are no longer published.
+Searches open `search.db` directly under the OS-backed read/write lock in [[src/search/lock.ts#acquireSearchAccess]]. Turso 0.7.2 requires writable FTS connections and single-process access, so queries take the exclusive mode. No reader database copies are created. Connections checkpoint and close before releasing access. Query embeddings are prepared outside the access lock; CLI searches revalidate metadata before retrieval.
+
+The access lock uses persistent `search-access.lock` and `search-access-gate.lock` files. The gate prevents new shared readers bypassing an exclusive accessor waiting for active readers to drain. Lock acquisition has a bounded timeout, and process death releases kernel ownership. All concurrent Lat processes must use this access-lock protocol. Index builders acquire the writer lock before access locks; queries release access before requesting indexing. Incremental copying and publication take exclusive access, while staging builds run independently of readers. Publication recovers/checkpoints a nonempty old WAL and removes sidecars before replacement; an unreadable database without a pending WAL can still be rebuilt.
+
+Missing lock files are recreated on acquisition. Lock files must not be removed or replaced while any process holds or waits for them: ownership follows the open file, so a replacement can admit a second exclusive holder. Lat does not detect external lock-file deletion; cache cleanup requires stopping all users first.
+
+Reusable search sessions retain their embedder but open and close database access per query. Changed index metadata invalidates the session rather than mixing replacement evidence with stale documents or model configuration; callers must reopen it. Closing a session rejects new requests and waits for its active queries.
 
 Legacy `vectors.db`, UUID databases, sidecars, and search manifests are ignored. No legacy database client ships with the CLI. Without `search.db`, indexing builds a fresh cache using the selected backend; hooks do not rebuild it. Embedding-policy changes require explicit reindexing, while lexical-policy upgrades reuse stored vectors.
 
@@ -195,9 +201,9 @@ Search returns sections with fused rank scores, available channel scores and ran
 
 ## Exported site search
 
-A site export packages a finished index and a search server. Runtime search copies the checkpointed database into writable temporary storage rather than indexing the vault on each request.
+A site export packages a finished index and a search server. Runtime search opens the bundled `server-data/search.db` directly under the same access locks as CLI search.
 
-[[src/view/server-build.ts]] exports sections and generates the server entrypoint; [[src/view/server-index-worker.ts]] builds the index in a child process. [[src/view/server-deployment.ts]] reads the manifest, prepares the temporary database, and serves the search route through [[src/view/preindexed-search.ts]].
+[[src/view/server-build.ts]] exports sections and generates the server entrypoint; [[src/view/server-index-worker.ts]] builds the index in a child process. [[src/view/server-deployment.ts]] reads the manifest, opens the bundled database, and serves the search route through [[src/view/preindexed-search.ts]].
 
 [[scripts/prepare-site-packages.mjs]] hydrates published artifacts matching workspace package versions. The embedding JavaScript and WASM must be released together: `@lat.md/embed@0.2.1` supplies the token-counting API, and `@lat.md/stemmer@0.1.0` supplies lexical stemming. [[scripts/vendor-site-packages.mjs]] packages branch-local runtime code for the repository preview.
 

@@ -1,8 +1,7 @@
 import { INDEX_FILE } from '../search/db.js';
-import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import type { ServerResponse } from 'node:http';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLatServerApp, type LatServerApp } from '@lat.md/server';
 import type { Express } from 'express';
@@ -30,7 +29,6 @@ export type ServerViewAppOptions = {
   app: Express;
   manifestFile: string | URL;
   indexFile: string | URL;
-  cacheDir?: string | URL;
   createSearchEngine?: CreateSearchEngine;
   search?: (query: string) => Promise<ViewSearchResponse>;
 };
@@ -82,51 +80,19 @@ type PreparedServerView = {
   close: () => Promise<void>;
 };
 
-/** Native SQLite handles may outlive close until the Windows process exits. */
-async function removeRuntimeCache(path: string): Promise<void> {
-  try {
-    await rm(path, {
-      recursive: true,
-      force: true,
-      maxRetries: 10,
-      retryDelay: 150,
-    });
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (
-      process.platform !== 'win32' ||
-      (code !== 'EBUSY' && code !== 'EPERM' && code !== 'ENOTEMPTY')
-    ) {
-      throw error;
-    }
-    // This is an owned OS-temp copy, never the deployed index or user data.
-    // A lingering native lock must not fail otherwise successful shutdown.
-  }
-}
-
 async function prepareServerView(
   options: ServerViewAppOptions,
   manifestFile: string,
   indexFile: string,
 ): Promise<PreparedServerView> {
   const manifest = await readManifest(manifestFile);
-  let runtimeCacheDir = options.cacheDir ? localPath(options.cacheDir) : '';
-  let ownsCache = false;
   let search = options.search;
   let ownedSearch: PreindexedViewSearch | undefined;
   if (!search) {
-    if (!runtimeCacheDir) {
-      runtimeCacheDir = await mkdtemp(join(tmpdir(), 'lat-ui-search-'));
-      ownsCache = true;
-    }
-    await mkdir(runtimeCacheDir, { recursive: true });
-    try {
-      await copyFile(indexFile, join(runtimeCacheDir, INDEX_FILE));
-    } catch (error) {
-      if (ownsCache) {
-        await removeRuntimeCache(runtimeCacheDir);
-      }
-      throw error;
+    if (basename(indexFile) !== INDEX_FILE) {
+      throw new Error(
+        `Server search index must be named ${INDEX_FILE}: ${indexFile}`,
+      );
     }
 
     const documentPaths = new Map<string, string>();
@@ -138,7 +104,7 @@ async function prepareServerView(
     );
     ownedSearch = await createPreindexedViewSearch(
       dirname(indexFile),
-      runtimeCacheDir,
+      dirname(indexFile),
       sections,
       documentPaths,
       undefined,
@@ -151,11 +117,7 @@ async function prepareServerView(
     manifest,
     search,
     close: async () => {
-      try {
-        await ownedSearch?.close();
-      } finally {
-        if (ownsCache) await removeRuntimeCache(runtimeCacheDir);
-      }
+      await ownedSearch?.close();
     },
   };
 }

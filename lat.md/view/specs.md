@@ -61,7 +61,7 @@ Root and nested builds preserve encoded filenames, relative links, fragments, ra
 
 `lat ui build server [output]` emits immutable public routes plus a portable Express application whose only dynamic feature is semantic search.
 
-The build creates its vector index once and stores flat section metadata beside it. Runtime search copies the database to writable temporary storage, resolves results without Markdown parsing, and never rebuilds the index. A warm server instance reuses one database handle and embedder across queries, then closes the handle before deleting owned temporary storage.
+The build creates its vector index once and stores flat section metadata beside it. Runtime search opens the bundled database directly, resolves results without Markdown parsing, and never rebuilds the index. A warm server reuses its embedder while each query opens and closes the database under the CLI access-lock protocol. The database and its directory must be writable.
 
 The generated package directly imports and constructs its pinned Express version for framework detection, then passes that app to the shared runtime and delegates `npm start`, security headers, static caching, listening, and shutdown to `@lat.md/server`. No generated listener implementation is serialized into the artifact.
 
@@ -77,7 +77,7 @@ The Node-target regression test builds a complete portable artifact, loads its g
 
 Indexing runs in a child process that exits before staging is renamed, releasing native SQLite handles on Windows. The existing analyzed snapshot crosses the process boundary intact, and indexing errors reject the build before publication.
 
-Shutdown closes search and retries removal of its owned runtime cache. Persistent Windows lock errors on that disposable copy do not fail shutdown; other cleanup errors still surface.
+Search creates access locks beside the bundled database, proving it uses the build output directly. Shutdown closes search and preserves that database; no private runtime copy is created.
 
 It verifies the document shell, immutable JavaScript and CSS assets, and semantic results from the real local embedding model and built SQLite index. The test therefore covers the generated application contract rather than substituting a fake search handler.
 

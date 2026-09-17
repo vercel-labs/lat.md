@@ -98,15 +98,17 @@ The artifact pins `lat.md`, `@lat.md/server`, and Express. Its entrypoint constr
 
 Framework-aware hosts can serve `public/` from a CDN and route remaining requests to the default Express export without platform-specific output. The entrypoint also injects a search-engine factory built from ordinary `@lat.md/embed` and model imports; those packages own and load their engine, WASM, and model assets.
 
-The build creates the semantic index once and serializes the flat section metadata required to turn index ids into browser results. [[src/view/preindexed-search.ts#createPreindexedViewSearch]] queries that copied index without importing indexing or Markdown parsers, then hydrates its storage-level rows through the same resolver as other search callers.
+The build creates the semantic index once and serializes the flat section metadata required to turn index ids into browser results. [[src/view/preindexed-search.ts#createPreindexedViewSearch]] queries that bundled index without importing indexing or Markdown parsers, then hydrates its storage-level rows through the same resolver as other search callers.
 
 [[src/view/server-build.ts#buildServerSearchIndex]] indexes the analyzed snapshot in a child process and waits for its exit before publishing staging. Process exit releases native database handles that can otherwise prevent directory renames on Windows.
 
-[[src/view/server-deployment.ts#createServerViewApp]] consumes the explicit manifest and index paths, derives static fallback content from the artifact layout, copies the immutable database into a writable runtime cache, and registers only the search API on the supplied Express app. Each server instance opens that copy and resolves its injected local embedder once; hosted keys do not alter the prebuilt index's model. The local model initializes on the first query and remains available for later warm queries. Shutdown closes the database before removing temporary storage. Git, editing, events, and repository reads remain absent.
+[[src/view/server-deployment.ts#createServerViewApp]] consumes the explicit manifest and index paths, derives static fallback content from the artifact layout, and opens the bundled `server-data/search.db` directly. Each query opens and closes the database under the same access lock as CLI search. The instance reuses its injected embedder; hosted keys do not alter the prebuilt index's model. Git, editing, events, and repository reads remain absent.
+
+The database and its directory must be writable for Turso 0.7.2 connections, database sidecars, and access-lock files. The runtime does not copy the database or provide a temporary-storage fallback for read-only deployments.
 
 Static client configuration treats search as an independent capability: pure static builds omit the control and route, while server builds point the same client at their configured search endpoint. Documents, source views, externals, and the graph remain static in both targets.
 
-Shutdown retries deletion of its owned temporary index. Persistent Windows native-file locks may leave that disposable OS-temp copy behind without failing shutdown; caller-provided caches and deployed indexes are never removed.
+Shutdown waits for active queries to close and leaves the bundled database in place.
 
 ### Vercel server export
 

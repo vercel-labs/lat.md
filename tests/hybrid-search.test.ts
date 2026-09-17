@@ -31,6 +31,8 @@ import { lexicalTokens, LEXICAL_VERSION } from '../src/search/lexical.js';
 import { stem, stemWords } from '@lat.md/stemmer';
 import { indexSections, projectFingerprint } from '../src/search/index.js';
 import { searchSections, collapse } from '../src/search/search.js';
+import { openIndexedSearchSession } from '../src/search/query.js';
+import { acquireSearchAccess } from '../src/search/lock.js';
 import { writeIndex } from '../src/search/cache.js';
 import { formatResultList } from '@lat.md/core/format';
 import { getSection } from '@lat.md/core/cli/section';
@@ -507,6 +509,8 @@ describe('hybrid search', () => {
     for (let i = 0; i < 3; i++) {
       await writeIndex(f.lat, undefined, true, build);
       expect(readdirSync(cache).filter((name) => name !== 'parsed')).toEqual([
+        'search-access-gate.lock',
+        'search-access.lock',
         'search-write.lock',
         INDEX_FILE,
       ]);
@@ -648,7 +652,7 @@ describe('hybrid search', () => {
     expect(existsSync(join(cache, 'vectors.db.old-12'))).toBe(false);
   });
   // @lat: [[tests/search#Hybrid Retrieval#Serializes concurrent index writers]]
-  it('serializes writers and keeps an existing reader usable', async () => {
+  it('serializes writers and reopens readers after publication', async () => {
     const f = fixture('# Guide\n\nneedle');
     let active = 0,
       maximum = 0;
@@ -669,6 +673,7 @@ describe('hybrid search', () => {
     const reader = openDb(f.lat, undefined, true);
     try {
       await searchSections(reader, 'needle', simple);
+      await reader.close();
       await writeIndex(f.lat, undefined, true, work);
       expect((await searchSections(reader, 'needle', simple)).length).toBe(1);
     } finally {
@@ -797,7 +802,7 @@ describe('hybrid search', () => {
     }
   });
   // @lat: [[tests/search#Hybrid Retrieval#Keeps readers alive across process boundaries]]
-  it('replaces search.db while another process reads its original snapshot', async () => {
+  it('waits for a cross-process reader before publishing search.db', async () => {
     const f = fixture('# Guide\n\nneedle original');
     const build = (db: SearchDb) =>
       ensureSectionsSchema(db, 2).then(() => indexSections(f.lat, db, simple));
@@ -820,7 +825,24 @@ describe('hybrid search', () => {
         'ready',
       );
       writeFileSync(join(f.lat, 'guide.md'), '# Guide\n\nneedle replacement');
-      await writeIndex(f.lat, undefined, false, build);
+      let built!: () => void;
+      const stagingBuilt = new Promise<void>((resolve) => {
+        built = resolve;
+      });
+      let published = false;
+      const publication = writeIndex(f.lat, undefined, true, async (db) => {
+        await build(db);
+        built();
+      }).then(() => {
+        published = true;
+      });
+      await stagingBuilt;
+      expect(published).toBe(false);
+      const closed = new Promise<void>((resolve) =>
+        child.on('message', (message) => {
+          if (message === 'closed') resolve();
+        }),
+      );
       const response = once(child, 'message');
       child.send('read');
       const [rows] = await Promise.race([response, failed]);
@@ -830,6 +852,8 @@ describe('hybrid search', () => {
           score: expect.any(Number),
         }),
       ]);
+      await closed;
+      await publication;
       const replacement = openDb(f.lat, undefined, true);
       try {
         expect(
@@ -838,15 +862,82 @@ describe('hybrid search', () => {
         ).toBe('needle replacement');
         expect(
           readdirSync(join(f.lat, '.cache')).filter(
-            (name) => name !== 'parsed',
+            (name) => name !== 'parsed' && !name.endsWith('-wal'),
           ),
-        ).toEqual(['search-write.lock', INDEX_FILE]);
+        ).toEqual([
+          'search-access-gate.lock',
+          'search-access.lock',
+          'search-write.lock',
+          INDEX_FILE,
+        ]);
       } finally {
         await replacement.close();
       }
+      child.send('exit');
       if (child.exitCode === null) await once(child, 'exit');
     } finally {
       child.kill();
+    }
+  });
+  // @lat: [[tests/search#Hybrid Retrieval#Embeds outside database access]]
+  it('allows publication while embedding and waits for active queries on close', async () => {
+    const f = fixture('# Guide\n\nneedle');
+    await writeIndex(f.lat, undefined, true, async (db) => {
+      await ensureSectionsSchema(db, 2);
+      await indexSections(f.lat, db, simple);
+      await setStoredModel(db, 'local:test:2');
+    });
+    let start!: () => void, finish!: () => void;
+    const started = new Promise<void>((resolve) => {
+      start = resolve;
+    });
+    const finishing = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const session = await openIndexedSearchSession(f.lat, {
+      createSearchEngine: async () => ({
+        ...simple,
+        embed: async (texts) => {
+          start();
+          await finishing;
+          return simple.embed(texts);
+        },
+      }),
+    });
+    const pending = session.search('needle', 5);
+    await started;
+    const release = await acquireSearchAccess(
+      join(f.lat, '.cache'),
+      'exclusive',
+      0,
+    );
+    await release();
+    let closed = false;
+    const closing = session.close().then(() => {
+      closed = true;
+    });
+    expect(closed).toBe(false);
+    await expect(session.search('needle', 5)).rejects.toThrow('closed');
+    finish();
+    expect(await pending).toHaveLength(1);
+    await closing;
+    expect(closed).toBe(true);
+  });
+  // @lat: [[tests/search#Hybrid Retrieval#Rebuilds an unreadable published database]]
+  it('replaces an unreadable database during a fresh rebuild', async () => {
+    const f = fixture('# Guide\n\nneedle');
+    const cache = join(f.lat, '.cache');
+    mkdirSync(cache);
+    writeFileSync(join(cache, INDEX_FILE), 'invalid cached database');
+    await writeIndex(f.lat, undefined, true, async (db) => {
+      await ensureSectionsSchema(db, 2);
+      await indexSections(f.lat, db, simple);
+    });
+    const reader = openDb(f.lat, undefined, true);
+    try {
+      expect(await searchSections(reader, 'needle', simple)).toHaveLength(1);
+    } finally {
+      await reader.close();
     }
   });
 });
