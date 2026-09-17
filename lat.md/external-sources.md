@@ -292,13 +292,13 @@ It accepts only HTTPS, substitutes the effective commit and normalized repositor
 
 The checkout provider maintains partial Git storage for Lat rather than a full user-facing working tree.
 
-It fetches the pinned commit with blob filtering and reads referenced files from `<commit>:<path>`, downloading blobs lazily through the checkout's verified Lat-owned `origin`. Every Git subprocess uses an argument array and never invokes a shell.
+Lat creates bare repositories without Git templates in its user cache outside the project. It fetches the pinned commit with blob filtering and reads referenced files from `<commit>:<path>`, downloading blobs lazily through its verified `origin`. Repository-supplied Git caches and configuration are never opened or migrated. Git subprocesses use argument arrays. On Windows they explicitly enable `core.longpaths` so managed cache and staging paths work beyond the legacy path limit without depending on ambient Git configuration. Initialization starts from the filesystem root. Git working directories remain subject to Windows process-creation limits; long-path support covers object and pack filenames below them.
 
 Agents that need an editable checkout use the suggested sparse-clone commands rendered by `lat external show`; Lat never executes those suggestions.
 
 ## Cache and Invalidation
 
-External content is cached per source below `lat.md/.cache/external/` so a commit change can invalidate one source completely without disturbing the others.
+External content is cached per source. Fetched files stay below `lat.md/.cache/external/`; managed Git repositories live in a user cache outside the project. Commit changes invalidate only the affected source.
 
 ### Cache Layout
 
@@ -311,7 +311,9 @@ lat.md/.cache/external/
 └── next-docs.json
 ```
 
-The directory has one strategy-specific layout. With `fetch`, it is a sparse file tree containing individually retrieved files at their complete repository-relative paths after applying `prefix`. With `checkout`, it is the Lat-managed Git repository itself. With `local`, the directory must not exist because content comes directly from `local-path`.
+With `fetch`, the in-project directory contains individually retrieved files at their complete repository-relative paths after applying `prefix`. With `local`, the directory must not exist because content comes directly from `local-path`.
+
+With `checkout`, the repository, metadata, and lock live under the platform user cache at `lat/external-checkouts-v1/<project-hash>/`. The hash identifies the canonical documentation directory. Lat rejects a cache location inside the project, including aliases through symlinks, and rejects symlinks within its cache tree. Existing in-project checkout caches are discarded using filesystem operations without invoking Git or trusting their metadata.
 
 The `.json` suffix cannot collide with a source directory because dots are forbidden in source names. Internal metadata records the exact selected provider source, effective commit, and strategy-specific format:
 
@@ -334,9 +336,9 @@ The exact selected provider source, effective commit, and strategy define a sour
 
 Before resolving an external link, Lat reads `<source>.json` and compares its schema version, source string, full commit SHA, and `fetch`, `checkout`, or `local` strategy with effective configuration. Missing, malformed, or mismatched metadata makes the previous generation stale, including metadata written by another external-source schema version.
 
-For managed checkouts, Lat also verifies that the repository's recorded `origin` identifies the configured repository. A mismatch invalidates the entire generation instead of trusting edited Git configuration.
+For managed checkouts, metadata comes exclusively from the outside-project user cache. Lat also verifies that its repository's recorded `origin` identifies the configured repository. A mismatch invalidates the entire generation.
 
-Lat then deletes only `lat.md/.cache/external/<source>/`. For `fetch` or `checkout` it initializes a fresh directory for the selected provider; for `local` it leaves the directory absent. It atomically replaces the metadata file after transition. Invalidation and initialization are serialized per source.
+Lat deletes the stale source directory in the selected provider's cache root. For `fetch` or `checkout` it initializes a fresh directory; for `local` it leaves the directory absent. It atomically replaces the metadata file after transition. Invalidation and initialization are serialized per source.
 
 Serialization combines an in-process queue with a transient per-source filesystem lock, so concurrent commands and server requests cannot publish competing generations or duplicate a cache miss.
 
@@ -344,7 +346,9 @@ Every resolution also enforces the `local` invariant: if metadata says `local` b
 
 Because cache entries use complete repository-relative paths, changing `prefix` changes the lookup path rather than reusing bytes fetched for a different path. Lat does not automatically evict files made unreachable within an otherwise active source.
 
-After successfully loading and validating canonical configuration, Lat compares configured source names with the cache entries it owns. For each removed source, it deletes both `lat.md/.cache/external/<source>/` and `<source>.json` under that source's invalidation lock.
+After successfully loading and validating canonical configuration, Lat compares configured source names with the cache entries it owns. For each removed source, it deletes the source directory and metadata under that source's invalidation lock in both cache roots. Switching between checkout and other providers also removes the previous provider's cache.
+
+Cache access rejects symlinks from the documentation directory through cache roots, source directories, metadata, and lock paths before cleanup or generation initialization. This prevents repository-planted symlinks from redirecting cache operations outside the checkout. Parsed-cache paths use the same validation.
 
 A malformed or invalid configuration never acts like an empty source list: cleanup runs only from a valid configuration snapshot. In-flight retrievals check that snapshot before publishing, so a removed source cannot recreate its cache after deletion.
 

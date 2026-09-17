@@ -1,3 +1,4 @@
+import { assertCachePath } from './cache-path.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative } from 'node:path';
@@ -44,12 +45,15 @@ function cacheShard(identity: string): string {
 export function parsedCachePath(latDir: string, identity: string): string {
   const normalizedIdentity = toPosix(identity).normalize('NFC');
   const digest = hashParserContent(normalizedIdentity);
-  return join(
+  return assertCachePath(
     latDir,
-    '.cache',
-    'parsed',
-    cacheShard(normalizedIdentity),
-    `${digest}_${readablePath(normalizedIdentity)}`,
+    join(
+      latDir,
+      '.cache',
+      'parsed',
+      cacheShard(normalizedIdentity),
+      `${digest}_${readablePath(normalizedIdentity)}`,
+    ),
   );
 }
 

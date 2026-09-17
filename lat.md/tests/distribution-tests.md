@@ -25,3 +25,11 @@ The generated action works after relocation, checks a workspace subdirectory con
 ## Action preserves validation failures
 
 Broken references fail the action with their original diagnostics. Invalid profiling inputs and nonexistent working directories also fail rather than silently succeeding.
+
+## Action rejects cache symlinks
+
+The prebuilt checker rejects symlinks at the documentation directory, cache roots, parser shards, source directories, metadata, and locks. Outside files remain unchanged, including removed-source JSON and adjacent directories.
+
+## Action ignores planted Git caches
+
+A planted bare repository demonstrably runs a credential helper against an HTTPS 401. The action discards it without execution and builds its own outside-project cache. Cache homes inside the checkout, including symlink aliases, are rejected.

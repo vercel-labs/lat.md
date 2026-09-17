@@ -1,4 +1,6 @@
+import { assertCachePath, managedCacheRoot } from './cache-path.js';
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import {
   existsSync,
   lstatSync,
@@ -20,6 +22,7 @@ import {
   dirname,
   extname,
   isAbsolute,
+  parse as parsePath,
   join,
   relative,
   resolve,
@@ -394,7 +397,13 @@ async function git(
   args: string[],
   options: { cwd?: string; maxBuffer?: number; trim?: boolean } = {},
 ): Promise<string> {
-  const { stdout } = await execFileAsync('git', args, {
+  // Global/system config is intentionally disabled, including Git for Windows'
+  // long-path setting. Supply it explicitly for init, fetch, and lazy reads.
+  const gitArgs =
+    process.platform === 'win32'
+      ? ['-c', 'core.longpaths=true', ...args]
+      : args;
+  const { stdout } = await execFileAsync('git', gitArgs, {
     cwd: options.cwd,
     encoding: 'utf8',
     env: gitEnvironment(),
@@ -640,15 +649,31 @@ function unknownExternalHandle(
 }
 
 function cacheRoot(latDir: string): string {
-  return join(latDir, '.cache', 'external');
+  return assertCachePath(latDir, join(latDir, '.cache', 'external'));
 }
 
 export function externalCachePaths(latDir: string, handle: string) {
   const root = cacheRoot(latDir);
+  assertCachePath(latDir, join(root, `${handle}.json.lock`, 'owner.json'));
   return {
     root,
-    directory: join(root, handle),
-    metadata: join(root, `${handle}.json`),
+    directory: assertCachePath(latDir, join(root, handle)),
+    metadata: assertCachePath(latDir, join(root, `${handle}.json`)),
+  };
+}
+
+/** Git repositories are never loaded from repository-supplied cache files. */
+export function managedCheckoutPaths(
+  latDir: string,
+  handle: string,
+  projectRoot = dirname(latDir),
+) {
+  const root = managedCacheRoot(latDir, projectRoot);
+  assertCachePath(root, join(root, `${handle}.json.lock`, 'owner.json'));
+  return {
+    root,
+    directory: assertCachePath(root, join(root, handle)),
+    metadata: assertCachePath(root, join(root, `${handle}.json`)),
   };
 }
 
@@ -656,9 +681,13 @@ export function readExternalCacheMetadata(
   latDir: string,
   handle: string,
 ): ExternalCacheMetadata | null {
+  return readCacheMetadata(externalCachePaths(latDir, handle).metadata);
+}
+
+function readCacheMetadata(path: string): ExternalCacheMetadata | null {
   try {
     const value = JSON.parse(
-      readFileSync(externalCachePaths(latDir, handle).metadata, 'utf8'),
+      readFileSync(path, 'utf8'),
     ) as ExternalCacheMetadata;
     if (
       value.ver !== EXTERNAL_SOURCES_SCHEMA_VER ||
@@ -733,7 +762,7 @@ async function acquireFilesystemLock(
 ): Promise<() => Promise<void>> {
   const path = `${key}.lock`;
   const owner = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  await mkdir(dirname(path), { recursive: true });
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const started = Date.now();
   while (true) {
     try {
@@ -835,7 +864,11 @@ async function initializeCheckout(
   directory: string,
   source: EffectiveExternalSource,
 ): Promise<void> {
-  await git(['init', '--bare', directory]);
+  await git(['init', '--bare', '--template=', directory], {
+    // Windows cannot spawn a child with a working directory beyond MAX_PATH.
+    // Git receives the absolute destination and handles it with core.longpaths.
+    cwd: parsePath(directory).root,
+  });
   await git(['-C', directory, 'remote', 'add', 'origin', source.repo]);
   await git(['-C', directory, 'config', 'remote.origin.promisor', 'true']);
   await git([
@@ -879,13 +912,12 @@ async function checkoutHasUnsafeUrlRewrite(
 }
 
 async function ensureGenerationUnlocked(
-  latDir: string,
+  paths: ReturnType<typeof externalCachePaths>,
   source: EffectiveExternalSource,
 ): Promise<string> {
-  const paths = externalCachePaths(latDir, source.handle);
-  await mkdir(paths.root, { recursive: true });
+  await mkdir(paths.root, { recursive: true, mode: 0o700 });
   const expected = expectedMetadata(source);
-  let current = readExternalCacheMetadata(latDir, source.handle);
+  let current = readCacheMetadata(paths.metadata);
   if (
     sameMetadata(current, expected) &&
     source.effectiveStrategy === 'checkout'
@@ -918,7 +950,7 @@ async function ensureGenerationUnlocked(
   await rm(paths.metadata, { force: true });
   if (source.effectiveStrategy !== 'local') {
     if (source.effectiveStrategy === 'checkout') {
-      const staging = `${paths.directory}.staging-${process.pid}-${Date.now()}`;
+      const staging = `${paths.directory}.staging-${randomUUID()}`;
       try {
         await initializeCheckout(staging, source);
         await rename(staging, paths.directory);
@@ -937,24 +969,43 @@ async function ensureGenerationUnlocked(
 async function validateRemovedCaches(
   snapshot: ExternalSourcesSnapshot,
   latDir: string,
+  projectRoot: string,
 ) {
   if (!snapshot.validCanonical) return;
-  const root = cacheRoot(latDir);
-  let entries: string[];
-  try {
-    entries = await readdir(root);
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (!entry.endsWith('.json')) continue;
-    const handle = entry.slice(0, -5);
-    if (!HANDLE_RE.test(handle) || snapshot.sources.has(handle)) continue;
-    const paths = externalCachePaths(latDir, handle);
-    await serialized(paths.metadata, async () => {
-      await rm(paths.directory, { recursive: true, force: true });
-      await rm(paths.metadata, { force: true });
-    });
+  for (const managed of [false, true]) {
+    const root = managed
+      ? managedCacheRoot(latDir, projectRoot)
+      : cacheRoot(latDir);
+    let entries: string[];
+    try {
+      entries = await readdir(root);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw error;
+    }
+    for (const entry of entries) {
+      if (!entry.endsWith('.json')) continue;
+      const handle = entry.slice(0, -5);
+      if (!HANDLE_RE.test(handle)) continue;
+      const source = snapshot.sources.get(handle);
+      if (
+        source &&
+        (managed
+          ? source.effectiveStrategy === 'checkout'
+          : source.effectiveStrategy !== 'checkout')
+      )
+        continue;
+      const pathsForHandle = () =>
+        managed
+          ? managedCheckoutPaths(latDir, handle, projectRoot)
+          : externalCachePaths(latDir, handle);
+      const paths = pathsForHandle();
+      await serialized(paths.metadata, async () => {
+        pathsForHandle();
+        await rm(paths.directory, { recursive: true, force: true });
+        await rm(paths.metadata, { force: true });
+      });
+    }
   }
 }
 
@@ -1064,10 +1115,13 @@ async function readProviderContent(
   ca?: string | Buffer,
   ignoreLocal = false,
 ): Promise<{ content: string; provider: EffectiveExternalStrategy }> {
-  const paths = externalCachePaths(latDir, source.handle);
+  const paths =
+    source.effectiveStrategy === 'checkout'
+      ? managedCheckoutPaths(latDir, source.handle, projectRoot)
+      : externalCachePaths(latDir, source.handle);
   return serialized(paths.metadata, async () => {
     await assertCurrentGeneration(latDir, projectRoot, source, ignoreLocal);
-    const directory = await ensureGenerationUnlocked(latDir, source);
+    const directory = await ensureGenerationUnlocked(paths, source);
     let content: string;
     if (source.effectiveStrategy === 'local') {
       const path = assertNoSymlinks(
@@ -1081,7 +1135,10 @@ async function readProviderContent(
         { maxBuffer: MAX_BYTES + 1024, trim: false },
       );
     } else {
-      const path = join(directory, ...target.repositoryPath.split('/'));
+      const path = assertCachePath(
+        latDir,
+        join(directory, ...target.repositoryPath.split('/')),
+      );
       try {
         content = await readFile(path, 'utf8');
       } catch {
@@ -1268,6 +1325,7 @@ export class ExternalResolver {
     this.reconciliationPromise ??= validateRemovedCaches(
       this.snapshot,
       this.latDir,
+      this.projectRoot,
     );
     return this.reconciliationPromise;
   }
