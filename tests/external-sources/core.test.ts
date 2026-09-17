@@ -5,6 +5,8 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -13,6 +15,7 @@ import {
   createExternalResolver,
   EXTERNAL_SOURCES_SCHEMA_VER,
   externalCachePaths,
+  managedCheckoutPaths,
   inferExternalFetchUrl,
   loadExternalSources,
   normalizeExternalDefaultFileExtension,
@@ -37,15 +40,21 @@ describe.sequential('external source core', () => {
   let fixture: ExternalGitFixture;
   const projects: string[] = [];
   const previousCa = process.env.GIT_SSL_CAINFO;
+  const previousCacheHome = process.env.XDG_CACHE_HOME;
+  const cacheHome = mkdtempSync(join(tmpdir(), 'lat-managed-cache-test-'));
 
   beforeAll(async () => {
     fixture = await createExternalGitFixture();
     process.env.GIT_SSL_CAINFO = TEST_CERT_PATH;
+    process.env.XDG_CACHE_HOME = cacheHome;
   }, 30_000);
 
   afterAll(async () => {
     if (previousCa === undefined) delete process.env.GIT_SSL_CAINFO;
     else process.env.GIT_SSL_CAINFO = previousCa;
+    if (previousCacheHome === undefined) delete process.env.XDG_CACHE_HOME;
+    else process.env.XDG_CACHE_HOME = previousCacheHome;
+    rmDirBestEffort(cacheHome);
     for (const project of projects) rmDirBestEffort(project);
     await fixture.close();
   });
@@ -305,13 +314,35 @@ describe.sequential('external source core', () => {
     expect(checkoutResult.provider).toBe('checkout');
     expect(checkoutResult.content).toContain('Second version navigation.');
     expect(checkoutResult.fullContent.endsWith('\n')).toBe(true);
-    expect(readExternalCacheMetadata(checkout.latDir, 'upstream')).toEqual({
+    expect(
+      JSON.parse(
+        readFileSync(
+          managedCheckoutPaths(checkout.latDir, 'upstream').metadata,
+          'utf8',
+        ),
+      ),
+    ).toEqual({
       ver: EXTERNAL_SOURCES_SCHEMA_VER,
       source: fixture.repoUrl,
       commit: fixture.commit2,
       strategy: 'checkout',
     });
-    const checkoutCache = externalCachePaths(checkout.latDir, 'upstream');
+    const checkoutCache = managedCheckoutPaths(checkout.latDir, 'upstream');
+    expect(checkoutCache.directory.startsWith(realpathSync(cacheHome))).toBe(
+      true,
+    );
+    expect(
+      existsSync(externalCachePaths(checkout.latDir, 'upstream').directory),
+    ).toBe(false);
+    const metadataTime = statSync(checkoutCache.metadata).mtimeMs;
+    const warmCheckout = await createExternalResolver(
+      checkout.latDir,
+      checkout.root,
+    );
+    expect(
+      (await warmCheckout.resolve('upstream:guide.md#Navigation')).content,
+    ).toContain('Second version navigation.');
+    expect(statSync(checkoutCache.metadata).mtimeMs).toBe(metadataTime);
     execFileSync('git', [
       '-C',
       checkoutCache.directory,
@@ -331,6 +362,16 @@ describe.sequential('external source core', () => {
         { encoding: 'utf8' },
       ).trim(),
     ).toBe(fixture.repoUrl);
+
+    writeFileSync(
+      join(checkout.latDir, 'lat.md'),
+      '# Root\n\nNo external sources.\n',
+    );
+    await (
+      await createExternalResolver(checkout.latDir, checkout.root)
+    ).reconcile();
+    expect(existsSync(checkoutCache.directory)).toBe(false);
+    expect(existsSync(checkoutCache.metadata)).toBe(false);
 
     const fallback = createExternalProject(fixture, {
       strategy: 'fetch',
@@ -460,6 +501,50 @@ describe.sequential('external source core', () => {
       ]);
     }
   }, 30_000);
+
+  // @lat: [[tests/external-tests#External Sources#Retrieval strategies#Long managed cache paths]]
+  it('fetches and reopens repositories with long object and pack paths', async () => {
+    const project = createExternalProject(fixture, {
+      strategy: 'checkout',
+      commit: fixture.commit2,
+    });
+    projects.push(project.root);
+    try {
+      const stagingSuffix = `.staging-${'a'.repeat(36)}`;
+      const baseStaging =
+        managedCheckoutPaths(project.latDir, 'upstream').directory +
+        stagingSuffix;
+      // Account for platform-dependent temp roots instead of assuming their length.
+      process.env.XDG_CACHE_HOME = join(
+        cacheHome,
+        'x'.repeat(Math.max(1, 240 - baseStaging.length - 1)),
+      );
+      const paths = managedCheckoutPaths(project.latDir, 'upstream');
+      // The reported failure was in pack/object filenames, not the process cwd.
+      // Windows process creation still requires a working directory under MAX_PATH.
+      const staging = paths.directory + stagingSuffix;
+      const pack = join(
+        staging,
+        'objects',
+        'pack',
+        `pack-${'a'.repeat(40)}.promisor`,
+      );
+      expect(pack.length).toBeGreaterThan(260);
+      if (process.platform === 'win32')
+        expect(staging.length).toBeLessThan(260);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const resolver = await createExternalResolver(
+          project.latDir,
+          project.root,
+        );
+        const result = await resolver.resolve('upstream:guide.md#Navigation');
+        expect(result.content).toContain('Second version navigation.');
+        expect(result.provider).toBe('checkout');
+      }
+    } finally {
+      process.env.XDG_CACHE_HOME = cacheHome;
+    }
+  });
 
   // @lat: [[tests/external-tests#External Sources#Cache reconciliation]]
   it('replaces generations, removes stale bytes, and evicts removed sources', async () => {

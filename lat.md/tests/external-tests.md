@@ -15,9 +15,17 @@ Strict configuration and target tests cover canonical and local schemas, URL nor
 
 Hermetic HTTPS tests exercise raw-file fetches, managed partial Git checkouts, and local overrides with multiple remote URLs and mismatch diagnostics without contacting public hosts.
 
+Managed checkout tests verify outside-project storage, warm reuse across resolvers, origin repair, and removal of user-cache files when a source is removed.
+
 Fetch tests reject repository-browser HTML so a misconfigured raw-file template reports the provider problem instead of misleading document-fragment errors.
 
 Local override coverage accepts root and nested checkout paths regardless of Windows path spelling, then resolves content from the discovered worktree root.
+
+### Long managed cache paths
+
+Managed Git repositories initialize, fetch, and reopen when staging object and pack filenames exceed 260 characters.
+
+Windows subprocesses explicitly enable long-path support even though ambient Git configuration is disabled. The regression sizes its cache path from the actual temporary root, keeping pack paths above 260 characters and the Windows staging working directory below that limit.
 
 ## Document formats
 
