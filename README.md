@@ -48,7 +48,7 @@ npm install -g @lat.md/core
 lat-core check
 ```
 
-`lat-core` also provides `locate`, `section`, `refs`, `expand`, `external`, and `config`. Both packages can be installed together; they expose different executable names.
+`lat-core` also provides `locate`, `section`, `refs`, `expand`, `external`, and `paths`. Both packages can be installed together; they expose different executable names.
 
 ### GitHub Actions
 
@@ -110,7 +110,7 @@ To use higher-quality hosted embeddings instead, provide an OpenAI (`sk-...`) or
 1. `LAT_LLM_KEY` env var — direct value
 2. `LAT_LLM_KEY_FILE` env var — path to a file containing the key
 3. `LAT_LLM_KEY_HELPER` env var — shell command that prints the key (10s timeout)
-4. Config file — power users can set `llm_key` manually. Run `lat config` to print its location.
+4. Config file — power users can set `llm_key` manually. Run `lat paths --config` to print its location. Run `lat paths` to see cache and other storage paths with their purposes.
 
 Switch backends any time with `lat reindex` (`--local` to force the offline model, `--remote` to use your key).
 

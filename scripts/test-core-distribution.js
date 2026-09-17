@@ -90,9 +90,14 @@ test('packed core exposes only core commands without heavy dependencies', () => 
     'refs',
     'expand',
     'external',
-    'config',
+    'paths',
   ])
     assert.match(help, new RegExp(`\\n  ${name}[ \\[]`));
+  assert.doesNotMatch(help, /\n  config[ \[]/);
+  assert.equal(
+    run(process.execPath, [cli, 'paths', '--config']),
+    run(process.execPath, [cli, 'config']),
+  );
   for (const name of ['search', 'reindex', 'ui', 'init', 'hook', 'mcp'])
     assert.doesNotMatch(help, new RegExp(`\\n  ${name}[ \\[]`));
   for (const name of [

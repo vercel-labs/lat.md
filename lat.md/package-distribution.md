@@ -8,7 +8,7 @@ Lat separates core validation and navigation from the full CLI. The same core ch
 
 | Distribution | Executable | Command scope |
 | --- | --- | --- |
-| `@lat.md/core` | `lat-core` | `check`, `locate`, `section`, `refs`, `expand`, `external`, `config` |
+| `@lat.md/core` | `lat-core` | `check`, `locate`, `section`, `refs`, `expand`, `external`, `info` |
 | `lat.md` | `lat` | Core plus UI, search, reindexing, initialization, hooks, MCP, and template generation |
 
 All check subcommands and the hidden `prompt` alias remain available in core. Shared implementations preserve validation semantics and explicit check-directory behavior from [[cli]]. Help and navigation hints identify the invoked executable and available commands; each executable reports its own package version. Initialization and generated agent integrations remain in the full package because they use search and the `lat` executable.
