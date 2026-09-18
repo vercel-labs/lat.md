@@ -72,6 +72,8 @@ export function chunkFile(
   let ancestors: Section[] = [];
   for (const block of file.blocks) {
     if (block.type === 'heading' || block.type === 'yaml') continue;
+    // Content before the first heading is outside the section graph.
+    if (!ordered.length || block.endLine < ordered[0].startLine) continue;
     while (
       sectionIndex < ordered.length &&
       ordered[sectionIndex].startLine <= block.startLine

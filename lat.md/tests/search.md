@@ -106,6 +106,10 @@ The package build fails clearly when generated wasm-bindgen output no longer con
 
 Tests in [[tests/hybrid-search.test.ts]] verify passage ownership, token safety, hybrid evidence, and transactional cache publication.
 
+### Skips document preambles
+
+Indexing skips logos and prose before the first heading without failing. Heading-owned passages retain their section IDs and remain searchable.
+
 ### Keeps duplicate and formatted headings distinct
 
 Indexing preserves separate passages and search results for repeated or formatted headings. Incremental edits keep sibling content intact, and unchanged indexes refresh obsolete parser freshness metadata without re-embedding.
