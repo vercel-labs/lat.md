@@ -24,7 +24,9 @@ See [[rag-architecture#Candidate retrieval and fusion]] for the RRF formula, wor
 
 ## Coverage and ownership
 
-Each Markdown body block belongs to its deepest containing section. Parents store their own passages and parent relationships, without duplicating descendant bodies in ancestor embeddings.
+Each Markdown body block within a section belongs to its deepest containing section. Parents store their own passages and parent relationships, without duplicating descendant bodies in ancestor embeddings.
+
+Content before the first heading is outside the section graph and is not indexed. Logos, badges, and introductory prose in this preamble do not prevent indexing the sections that follow; see [[tests/search#Hybrid Retrieval#Skips document preambles]].
 
 For example, a wiki guide can contain an Images section with a nested Syntax section. Dashed arrows below show section containment; solid arrows show passage ownership.
 

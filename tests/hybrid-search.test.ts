@@ -77,6 +77,29 @@ async function indexed(markdown: string) {
 }
 
 describe('hybrid search', () => {
+  // @lat: [[tests/search#Hybrid Retrieval#Skips document preambles]]
+  it('indexes heading-owned content after a logo and introductory preamble', async () => {
+    const f = await indexed(
+      '![Logo](logo.svg)\n\nPreambleonly text.\n\n## Start here\n\nuniquesectionbody\n',
+    );
+    try {
+      const rows = (await f.db.execute('SELECT section_id,body FROM chunks'))
+        .rows;
+      expect(rows).toHaveLength(1);
+      expect(rows[0].section_id).toBe('lat.md/guide#Start here');
+      expect(rows[0].body).toBe('uniquesectionbody');
+      const results = await searchSections(
+        f.db,
+        'uniquesectionbody',
+        simple,
+        10,
+      );
+      expect(results.map((r) => r.heading)).toEqual(['Start here']);
+    } finally {
+      await f.db.close();
+    }
+  });
+
   // @lat: [[tests/search#Hybrid Retrieval#Keeps duplicate and formatted headings distinct]]
   it('indexes repeated and formatted headings without mixing their passages', async () => {
     const markdown =
