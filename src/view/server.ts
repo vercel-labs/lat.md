@@ -1,3 +1,7 @@
+import {
+  trustedLiveRequest,
+  RESOURCE_CONTENT_SECURITY_POLICY,
+} from './request-security.js';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import {
@@ -233,9 +237,18 @@ export async function createViewApp(
 
   const handleRequest: LatServerRequestHandler = (req, res) => {
     void (async () => {
+      if (!trustedLiveRequest(req, host)) {
+        send(
+          res,
+          403,
+          'text/plain; charset=utf-8',
+          'Untrusted request origin or host',
+        );
+        return;
+      }
       const method = req.method ?? 'GET';
       const headOnly = method === 'HEAD';
-      const url = new URL(req.url ?? '/', `http://${host}`);
+      const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
       const documentEdit =
         method === 'PATCH' && url.pathname === '/api/document';
       if (method !== 'GET' && !headOnly && !documentEdit) {
@@ -546,6 +559,14 @@ export async function createViewApp(
         try {
           const body = await store.getDocumentResource(resourcePath);
           res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader(
+            'Content-Security-Policy',
+            RESOURCE_CONTENT_SECURITY_POLICY,
+          );
+          res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+          if (/\.(?:html?|xhtml|xml|[cm]?js)$/i.test(resourcePath)) {
+            res.setHeader('Content-Disposition', 'attachment');
+          }
           send(res, 200, contentType(resourcePath), body, headOnly);
         } catch (error) {
           if (!(error instanceof ViewDocumentNotFoundError)) throw error;
