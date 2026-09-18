@@ -6,6 +6,7 @@ import {
   readFileSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { agentInvocation } from './agent-invocation.js';
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { styleText } from 'node:util';
@@ -904,9 +905,8 @@ async function setupPi(
     ),
   );
 
-  const template = readPiExtensionTemplate().replace(
-    '__LAT_BIN__',
-    latBinString(style),
+  const template = readPiExtensionTemplate().replace('__LAT_INVOCATION__', () =>
+    JSON.stringify(agentInvocation(style, resolveLatInvocation())),
   );
 
   const hash = await writeTemplateFile(
@@ -973,8 +973,8 @@ async function setupOpenCode(
   );
 
   const template = readOpenCodePluginTemplate().replace(
-    '__LAT_BIN__',
-    latBinString(style),
+    '__LAT_INVOCATION__',
+    () => JSON.stringify(agentInvocation(style, resolveLatInvocation())),
   );
 
   const hash = await writeTemplateFile(

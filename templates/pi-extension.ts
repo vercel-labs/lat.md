@@ -30,12 +30,12 @@ function collapsibleResult(
   );
 }
 
-/** Absolute path to the lat binary, injected by `lat init`. */
-const LAT = "__LAT_BIN__";
+/** Executable and prefix arguments, injected by `lat init`. */
+const LAT = __LAT_INVOCATION__;
 
 function run(args: string[], cwd?: string): string {
-  const { execSync } = require("child_process") as typeof import("child_process");
-  return execSync(`${LAT} ${args.join(" ")}`, {
+  const { execFileSync } = require("child_process") as typeof import("child_process");
+  return execFileSync(LAT.command, [...LAT.args, ...args], {
     cwd: cwd ?? process.cwd(),
     encoding: "utf-8",
     timeout: 30_000,
@@ -69,7 +69,7 @@ export default function (pi: ExtensionAPI) {
       ),
     }),
     async execute(_id, params) {
-      const args = ["search", JSON.stringify(params.query)];
+      const args = ["search", params.query];
       if (params.limit) args.push("--limit", String(params.limit));
       const output = tryRun(args);
       return {
@@ -99,7 +99,7 @@ export default function (pi: ExtensionAPI) {
       }),
     }),
     async execute(_id, params) {
-      const output = tryRun(["section", JSON.stringify(params.query)]);
+      const output = tryRun(["section", params.query]);
       return {
         content: [
           { type: "text", text: output || "Section not found." },
@@ -126,7 +126,7 @@ export default function (pi: ExtensionAPI) {
       query: Type.String({ description: "Section name to locate" }),
     }),
     async execute(_id, params) {
-      const output = tryRun(["locate", JSON.stringify(params.query)]);
+      const output = tryRun(["locate", params.query]);
       return {
         content: [
           { type: "text", text: output || "No sections matching query." },
@@ -179,7 +179,7 @@ export default function (pi: ExtensionAPI) {
       text: Type.String({ description: "Text containing [[refs]] to expand" }),
     }),
     async execute(_id, params) {
-      const output = tryRun(["expand", JSON.stringify(params.text)]);
+      const output = tryRun(["expand", params.text]);
       return {
         content: [{ type: "text", text: output || params.text }],
       };
@@ -205,7 +205,7 @@ export default function (pi: ExtensionAPI) {
       }),
     }),
     async execute(_id, params) {
-      const output = tryRun(["refs", JSON.stringify(params.query)]);
+      const output = tryRun(["refs", params.query]);
       return {
         content: [{ type: "text", text: output || "No references found." }],
       };

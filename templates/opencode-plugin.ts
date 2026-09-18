@@ -1,11 +1,11 @@
 import { type Plugin, tool } from "@opencode-ai/plugin"
-import { execSync } from "child_process"
+import { execSync, execFileSync } from "child_process"
 
-/** Absolute path to the lat binary, injected by `lat init`. */
-const LAT = "__LAT_BIN__"
+/** Executable and prefix arguments, injected by `lat init`. */
+const LAT = __LAT_INVOCATION__
 
 function run(args: string[]): string {
-  return execSync(`${LAT} ${args.join(" ")}`, {
+  return execFileSync(LAT.command, [...LAT.args, ...args], {
     cwd: process.cwd(),
     encoding: "utf-8",
     timeout: 30_000,
@@ -33,7 +33,7 @@ export const LatPlugin: Plugin = async (ctx) => {
           ),
         },
         async execute(args) {
-          const cliArgs = ["search", JSON.stringify(args.query)]
+          const cliArgs = ["search", args.query]
           if (args.limit) cliArgs.push("--limit", String(args.limit))
           const output = tryRun(cliArgs)
           return output || "No results found."
@@ -49,7 +49,7 @@ export const LatPlugin: Plugin = async (ctx) => {
           ),
         },
         async execute(args) {
-          const output = tryRun(["section", JSON.stringify(args.query)])
+          const output = tryRun(["section", args.query])
           return output || "Section not found."
         },
       }),
@@ -61,7 +61,7 @@ export const LatPlugin: Plugin = async (ctx) => {
           query: tool.schema.string("Section name to locate"),
         },
         async execute(args) {
-          const output = tryRun(["locate", JSON.stringify(args.query)])
+          const output = tryRun(["locate", args.query])
           return output || "No sections matching query."
         },
       }),
@@ -87,7 +87,7 @@ export const LatPlugin: Plugin = async (ctx) => {
           text: tool.schema.string("Text containing [[refs]] to expand"),
         },
         async execute(args) {
-          const output = tryRun(["expand", JSON.stringify(args.text)])
+          const output = tryRun(["expand", args.text])
           return output || args.text
         },
       }),
@@ -101,7 +101,7 @@ export const LatPlugin: Plugin = async (ctx) => {
           ),
         },
         async execute(args) {
-          const output = tryRun(["refs", JSON.stringify(args.query)])
+          const output = tryRun(["refs", args.query])
           return output || "No references found."
         },
       }),

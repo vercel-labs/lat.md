@@ -88,3 +88,7 @@ Every generated Markdown instruction template passes local graph validation, pre
 ## Lat-owned build output ignore
 
 Initialization adds `.lat-build` to a Git project's root `.gitignore` while leaving platform-specific output to project configuration.
+
+## Generated tools preserve literal arguments
+
+Pi and OpenCode callbacks pass quotes, newlines, shell substitutions, and spaces as literal CLI arguments without executing them. Command descriptors retain launcher flags and support each installation style.
