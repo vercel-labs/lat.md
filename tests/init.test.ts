@@ -7,6 +7,9 @@ import {
   readFileSync,
   rmSync,
   writeFileSync,
+  symlinkSync,
+  readdirSync,
+  lstatSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -334,6 +337,111 @@ describe('lat init embedding setup', () => {
       expect(readFileSync(path, 'utf8')).toBe(original);
     }
     expect(checklistMenu).not.toHaveBeenCalled();
+  });
+
+  // @lat: [[tests/init#Initialization confines every write]]
+  it.each([
+    'AGENTS.md',
+    'CLAUDE.md',
+    '.github/copilot-instructions.md',
+    '.cursor/rules/lat.md',
+    '.cursor/hooks.json',
+    '.mcp.json',
+    '.cursor/mcp.json',
+    '.vscode/mcp.json',
+    '.codex/config.toml',
+    '.claude/settings.json',
+    '.codex/hooks.json',
+    '.pi/extensions/lat.ts',
+    '.opencode/plugins/lat.ts',
+    '.agents/skills/lat-md/SKILL.md',
+    'lat.md/config.local.yaml',
+    'lat.md/.cache/lat_init.json',
+    '.gitignore',
+    'lat.md/.gitignore',
+  ])('rejects existing and dangling external symlinks at %s', async (path) => {
+    createLatDir();
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValue([
+      'claude',
+      'codex',
+      'cursor',
+      'copilot',
+      'pi',
+      'opencode',
+    ]);
+    selectMenu.mockResolvedValue('global');
+    const outside = mkdtempSync(join(tmpdir(), 'lat-init-victim-'));
+    const victim = join(outside, 'victim');
+    const destination = join(root, path);
+    mkdirSync(dirname(destination), { recursive: true });
+    try {
+      for (const existing of [true, false]) {
+        if (existing) writeFileSync(victim, 'unchanged');
+        else rmSync(victim, { force: true });
+        rmSync(destination, { force: true });
+        symlinkSync(victim, destination);
+        await expect(initCmd(root)).rejects.toThrow(path);
+        if (existing) expect(readFileSync(victim, 'utf8')).toBe('unchanged');
+        else expect(existsSync(victim)).toBe(false);
+      }
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    'lat.md',
+    'lat.md/.cache',
+    '.claude',
+    '.codex',
+    '.cursor',
+    '.vscode',
+    '.pi',
+    '.opencode',
+    '.github',
+    '.agents',
+  ])('rejects external directory symlinks at %s', async (path) => {
+    createLatDir();
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValue([
+      'claude',
+      'codex',
+      'cursor',
+      'copilot',
+      'pi',
+      'opencode',
+    ]);
+    selectMenu.mockResolvedValue('global');
+    const outside = mkdtempSync(join(tmpdir(), 'lat-init-victim-'));
+    const destination = join(root, path);
+    rmSync(destination, { recursive: true, force: true });
+    mkdirSync(dirname(destination), { recursive: true });
+    symlinkSync(
+      outside,
+      destination,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    try {
+      await expect(initCmd(root)).rejects.toThrow(path);
+      expect(readdirSync(outside)).toEqual([]);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves in-project instruction symlinks and unrelated user text', async () => {
+    createLatDir();
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValue(['codex']);
+    selectMenu.mockResolvedValue('global');
+    const target = join(root, 'instructions.md');
+    writeFileSync(target, '# My instructions\n\nKeep this text.\n');
+    symlinkSync(target, join(root, 'AGENTS.md'));
+    await initCmd(root);
+    expect(lstatSync(join(root, 'AGENTS.md')).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, 'utf8')).toContain('Keep this text.');
+    expect(readFileSync(target, 'utf8')).toContain('%% lat:begin %%');
   });
 
   // @lat: [[init#Embedding setup#Fresh init pins local embeddings]]

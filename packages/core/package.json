@@ -199,6 +199,10 @@
     "./walk": {
       "types": "./dist/walk.d.ts",
       "import": "./dist/walk.js"
+    },
+    "./project-write": {
+      "types": "./dist/project-write.d.ts",
+      "import": "./dist/project-write.js"
     }
   },
   "files": [

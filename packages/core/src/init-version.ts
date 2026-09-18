@@ -1,6 +1,7 @@
+import { projectWritePath, writeProjectFile } from './project-write.js';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 /**
  * Bump this number whenever `lat init` setup or defaults change in a way that
@@ -16,7 +17,10 @@ type InitMeta = {
 };
 
 function cachePath(latDir: string): string {
-  return join(latDir, '.cache', 'lat_init.json');
+  return projectWritePath(
+    dirname(latDir),
+    join(latDir, '.cache', 'lat_init.json'),
+  );
 }
 
 function readMeta(latDir: string): InitMeta | null {
@@ -48,7 +52,7 @@ export function writeInitMeta(
   latDir: string,
   fileHashes: Record<string, string>,
 ): void {
-  const cacheDir = join(latDir, '.cache');
+  const cacheDir = projectWritePath(dirname(latDir), join(latDir, '.cache'));
   mkdirSync(cacheDir, { recursive: true });
   // Merge with existing hashes so we don't lose entries from agents
   // that weren't selected this run
@@ -58,5 +62,9 @@ export function writeInitMeta(
     init_version: INIT_VERSION,
     file_hashes: mergedHashes,
   };
-  writeFileSync(cachePath(latDir), JSON.stringify(data, null, 2) + '\n');
+  writeProjectFile(
+    dirname(latDir),
+    cachePath(latDir),
+    JSON.stringify(data, null, 2) + '\n',
+  );
 }

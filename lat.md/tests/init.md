@@ -92,3 +92,7 @@ Initialization adds `.lat-build` to a Git project's root `.gitignore` while leav
 ## Generated tools preserve literal arguments
 
 Pi and OpenCode callbacks pass quotes, newlines, shell substitutions, and spaces as literal CLI arguments without executing them. Command descriptors retain launcher flags and support each installation style.
+
+## Initialization confines every write
+
+Every init destination rejects external and dangling symlinks, including linked parent directories. Valid in-project instruction symlinks, user text, and unrelated settings survive setup.

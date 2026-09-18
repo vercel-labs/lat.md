@@ -206,6 +206,12 @@ Sets up `CLAUDE.md` and two agent hooks for the Claude Code coding agent.
 - `.claude` directory added to `.gitignore` (settings contain local absolute paths in hook commands)
 - [[cli#mcp]] server registered in `.mcp.json` at the project root (added to `.gitignore` since it contains absolute paths)
 
+### Initialization write boundaries
+
+Setup validates project destinations before reading or writing them, rejecting escaping or dangling symlinks in files and ancestor directories.
+
+The shared [[packages/core/src/project-write.ts]] guard covers generated instructions, skills, plugins, hooks, MCP settings, ignore files, local preferences, and init metadata. Writes replace validated files atomically and preserve existing in-project symlinks and user-edit prompts. This protects against repository-planted paths; it does not promise isolation from a same-user process racing filesystem changes.
+
 ### Pi
 
 Sets up a Pi extension that registers lat tools as native Pi tools and hooks into the agent lifecycle.

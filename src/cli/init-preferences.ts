@@ -1,9 +1,13 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { projectWritePath, writeProjectFile } from '@lat.md/core/project-write';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { isMap, parseDocument } from 'yaml';
 
 function readPreferences(latDir: string) {
-  const path = join(latDir, 'config.local.yaml');
+  const path = projectWritePath(
+    dirname(latDir),
+    join(latDir, 'config.local.yaml'),
+  );
   const document = parseDocument(
     existsSync(path) ? readFileSync(path, 'utf8') : '',
   );
@@ -37,5 +41,5 @@ export function readInitAgents(latDir: string): string[] {
 export function writeInitAgents(latDir: string, agents: string[]): void {
   const { path, document } = readPreferences(latDir);
   document.setIn(['init', 'agents'], agents);
-  writeFileSync(path, document.toString());
+  writeProjectFile(dirname(latDir), path, document.toString());
 }
