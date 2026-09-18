@@ -66,7 +66,9 @@ export type ExternalGitFixture = {
   close(): Promise<void>;
 };
 
-export async function createExternalGitFixture(): Promise<ExternalGitFixture> {
+export async function createExternalGitFixture(
+  documents: Record<string, string> = {},
+): Promise<ExternalGitFixture> {
   const root = mkdtempSync(join(tmpdir(), 'lat-external-git-'));
   const checkout = join(root, 'checkout');
   const repositories = join(root, 'repositories');
@@ -113,6 +115,8 @@ export async function createExternalGitFixture(): Promise<ExternalGitFixture> {
     join(checkout, 'docs', 'Widget.java'),
     'class Widget {\n  String widget() {\n    return "first";\n  }\n}\n',
   );
+  for (const [path, content] of Object.entries(documents))
+    writeFileSync(join(checkout, path), content);
   await git(['add', '.'], checkout);
   await git(['commit', '-m', 'first'], checkout);
   const commit1 = await git(['rev-parse', 'HEAD'], checkout);

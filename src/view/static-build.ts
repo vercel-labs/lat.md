@@ -1,3 +1,4 @@
+import { createPublicationPolicy } from './publication.js';
 import { createHash } from 'node:crypto';
 import {
   cp,
@@ -361,8 +362,14 @@ function positiveInteger(value: string | null): number {
 }
 
 function sourceRequest(value: string): ViewStaticSourceRequest | null {
-  const url = new URL(decodeHtmlUrlAttribute(value), 'http://lat.local');
-  if (!url.pathname.startsWith('/code/')) return null;
+  let url: URL;
+  try {
+    url = new URL(decodeHtmlUrlAttribute(value), 'http://lat.local');
+  } catch {
+    return null;
+  }
+  if (url.origin !== 'http://lat.local' || !url.pathname.startsWith('/code/'))
+    return null;
   let path: string;
   let symbol: string;
   try {
@@ -371,6 +378,15 @@ function sourceRequest(value: string): ViewStaticSourceRequest | null {
       .split('/')
       .map(decodeURIComponent)
       .join('/');
+    if (
+      path.split('/').some((part) => !part || part === '.' || part === '..') ||
+      path.includes('\\') ||
+      path.includes('\0') ||
+      /^[a-z]:/i.test(path)
+    )
+      return null;
+    // Encoded separators cannot create extra route components after decoding.
+    if (/%(?:2f|5c)/i.test(url.pathname)) return null;
     symbol = decodeURIComponent(url.hash.slice(1));
   } catch {
     return null;
@@ -394,7 +410,11 @@ function externalRequest(
   } catch {
     return null;
   }
-  if (!url.pathname.startsWith('/external/')) return null;
+  if (
+    url.origin !== 'http://lat.local' ||
+    !url.pathname.startsWith('/external/')
+  )
+    return null;
   try {
     const parts = url.pathname
       .slice('/external/'.length)
@@ -694,12 +714,36 @@ function redirectShell(target: string, basePath: string): string {
 `;
 }
 
+/** All authored route writes must remain strictly below the payload root. */
+function publicationOutputPath(root: string, ...parts: string[]): string {
+  if (
+    parts.some(
+      (part) =>
+        part.includes('\\') ||
+        part.includes('\0') ||
+        part.split('/').some((segment) => segment === '..' || segment === '.'),
+    )
+  )
+    throw new Error('Unsafe export route');
+  const path = resolve(root, ...parts);
+  const rel = relative(root, path);
+  if (
+    !rel ||
+    rel.startsWith(`..${sep}`) ||
+    rel === '..' ||
+    /^[a-z]:/i.test(rel) ||
+    rel.startsWith(sep)
+  )
+    throw new Error('Export route is outside the output directory');
+  return path;
+}
+
 async function writeRouteShell(
   outputDir: string,
   route: string,
   shell: string,
 ): Promise<void> {
-  const path = join(outputDir, ...route.split('/'), 'index.html');
+  const path = publicationOutputPath(outputDir, route, 'index.html');
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, shell);
 }
@@ -725,15 +769,16 @@ export async function buildStaticView(
   const stagingDir = await mkdtemp(
     join(dirname(outputDir), '.lat-static-staging-'),
   );
-  const store = await createViewStore(ctx.latDir, ctx.projectRoot, {
-    codeExcludePaths: [outputDir, ...(options.codeExcludePaths ?? [])],
-    git: false,
-    watch: false,
-    externalIgnoreLocal: true,
-    externalCa: options.externalCa,
-  });
-
+  let store: Awaited<ReturnType<typeof createViewStore>> | undefined;
   try {
+    store = await createViewStore(ctx.latDir, ctx.projectRoot, {
+      codeExcludePaths: [outputDir, ...(options.codeExcludePaths ?? [])],
+      git: false,
+      watch: false,
+      externalIgnoreLocal: true,
+      externalCa: options.externalCa,
+      publishable: await createPublicationPolicy(ctx.projectRoot),
+    });
     const clientHtml = await readFile(join(clientDir, 'index.html'), 'utf8');
     const payloadDir = staticViewPayloadDir(stagingDir, basePath);
     await mkdir(payloadDir, { recursive: true });
@@ -802,7 +847,6 @@ export async function buildStaticView(
       externals.set(target, external);
       const before = externalRequests.size;
       if (external.kind === 'markdown') {
-        sourceRequestsFromDocument(external.document, sourceRequests);
         externalRequestsFromDocument(
           external.document,
           externalRequests,
@@ -810,7 +854,6 @@ export async function buildStaticView(
           external.document.path,
         );
       } else {
-        sourceRequestsFromSource(external.source, sourceRequests);
         externalRequestsFromSource(
           external.source,
           externalRequests,
@@ -888,7 +931,7 @@ export async function buildStaticView(
         rewritten,
       );
       const source = await store.getDocumentSource(path);
-      const rawPath = join(payloadDir, ...path.split('/'));
+      const rawPath = publicationOutputPath(payloadDir, path);
       await mkdir(dirname(rawPath), { recursive: true });
       await writeFile(rawPath, source.content);
       const route = path.slice(0, -'.md'.length);
@@ -907,7 +950,7 @@ export async function buildStaticView(
           `Could not export document resource ${path}: ${(error as Error).message}`,
         );
       }
-      const outputPath = join(payloadDir, 'resources', ...path.split('/'));
+      const outputPath = publicationOutputPath(payloadDir, 'resources', path);
       await mkdir(dirname(outputPath), { recursive: true });
       await writeFile(outputPath, content);
     }
@@ -1066,6 +1109,6 @@ export async function buildStaticView(
     await removeViewBuildStaging(stagingDir);
     throw error;
   } finally {
-    await store.close();
+    await store?.close();
   }
 }

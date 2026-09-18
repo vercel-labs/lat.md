@@ -132,7 +132,7 @@ function externalDocumentLink(
     href.startsWith('?') ||
     href.startsWith('//') ||
     /^[a-z][a-z\d+.-]*:/i.test(href) ||
-    /^\/(?:code|docs|external)(?:\/|$)/.test(href)
+    /^\/external(?:\/|$)/.test(href)
   ) {
     return undefined;
   }
@@ -248,6 +248,7 @@ export async function createMarkdownWikiLinkResolver(
   loadedSections: Section[],
   referenceIndex?: ViewReferenceIndex,
   externalResolver?: ExternalResolver,
+  publishable?: (path: string) => Promise<boolean>,
 ): Promise<
   (
     target: string,
@@ -304,7 +305,8 @@ export async function createMarkdownWikiLinkResolver(
     }
 
     const source = viewSourceTarget(target);
-    if (!source) return null;
+    if (!source || (publishable && !(await publishable(source.path))))
+      return null;
     try {
       await readViewSource(latDir, projectRoot, source.path, source.symbol);
       let section: Section | undefined;
@@ -335,6 +337,7 @@ export async function getViewExternal(
   external: ExternalResolver,
   allSections: Section[],
   referenceIndex: ViewReferenceIndex,
+  publishable?: (path: string) => Promise<boolean>,
 ): Promise<ViewExternalDocument> {
   let resolved;
   try {
@@ -349,6 +352,7 @@ export async function getViewExternal(
       allSections,
       referenceIndex,
       external,
+      publishable,
     );
 
   if (resolved.kind === 'document') {
@@ -361,7 +365,29 @@ export async function getViewExternal(
     );
     const analysis = resolved.document;
     const sections = externalDocumentSections(virtualPath, analysis);
-    const resolver = await createResolver(resolved.target.resolvedPath);
+    // Remote-authored wiki links may resolve only to configured external files.
+    // Do not call the local resolver before rewriting their URLs.
+    const available = availableExternalFiles(
+      external,
+      referenceIndex,
+      resolved.target,
+    );
+    const resolver = async (target: string) => {
+      try {
+        const parsed = external.parse(target);
+        if (parsed)
+          return { href: externalUrl(parsed.identity), referenceCount: 0 };
+      } catch {
+        return null;
+      }
+      const href = externalDocumentLink(
+        target,
+        resolved.target,
+        external,
+        available,
+      );
+      return typeof href === 'string' ? { href, referenceCount: 0 } : null;
+    };
     const rendered =
       analysis.format === 'markdown'
         ? await renderMarkdown(
@@ -557,6 +583,7 @@ export async function getViewSource(
   requestedLine = 0,
   allSections: Section[] = [],
   referenceIndex?: ViewReferenceIndex,
+  publishable?: (path: string) => Promise<boolean>,
 ): Promise<ViewSourceDocument> {
   const source = await readViewSource(
     latDir,
@@ -578,6 +605,8 @@ export async function getViewSource(
             path,
             allSections,
             referenceIndex,
+            undefined,
+            publishable,
           ),
       )
     : { context: null, otherReferences: [] };

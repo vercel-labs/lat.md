@@ -418,3 +418,11 @@ An explicit `--port <number>` accepts 1–65535 and fails clearly rather than se
 ## Live request and resource isolation
 
 The live server validates Host and Origin against its listener, rejects cross-origin edits, and isolates raw resources with sandbox CSP and attachment responses for active HTML and script formats.
+
+## Export publication boundaries
+
+Exports reject private, ignored, and untracked source/resource files before reading their content, including backlink snippets and symlink aliases. Foreign origins and encoded path separators cannot trigger local reads or escaping output writes.
+
+## External documents cannot publish local source
+
+External Markdown and AsciiDoc links never authorize local source exports or live local-code navigation. Legitimate configured external links remain available.

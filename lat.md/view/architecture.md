@@ -255,3 +255,11 @@ The graph renderer and projection load on demand; deterministic document/code cl
 Live UI requests must address the configured listener or a loopback alias on its actual port. Browser Origin headers must match the request authority; forwarding headers cannot bypass this check.
 
 Repository resources use a sandbox CSP without script or same-origin privileges. HTML, XML, and JavaScript resources download as attachments; passive images and SVG remain embeddable. These checks apply to the editable live server, not public exported sites, and are not an authentication system.
+
+## Publication scope
+
+Static and server builds publish linked source and resource files only within an explicit file inventory. Interactive browsing retains its broader project-contained read behavior.
+
+In Git projects, publication requires a tracked regular file that is not ignored. Outside Git, the ordinary walker applies `.gitignore` rules. Dot paths, dependency trees, and `config.local.yaml` are always excluded, including through symlink aliases. Add intended public files to Git and remove ignore rules before building; excluded links fail the build while preserving the previous output.
+
+The same policy filters code-reference files before snippets enter documents or graph data. External documents do not authorize local source collection. Foreign-origin links are not local routes, and decoded paths and route writes remain confined to the export payload.

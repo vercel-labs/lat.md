@@ -67,6 +67,7 @@ import {
   getViewExternal,
   getViewSource,
   ViewDocumentNotFoundError,
+  ViewSourceNotFoundError,
 } from './repository.js';
 import {
   buildViewReferenceIndex,
@@ -97,6 +98,8 @@ export type ViewProjectSnapshot = {
 };
 
 export type ViewStoreOptions = {
+  /** Export-only allowlist, applied before source/backlink/resource reads. */
+  publishable?: (path: string) => Promise<boolean>;
   codeExcludePaths?: string[];
   debounceMs?: number;
   git?: boolean;
@@ -194,6 +197,7 @@ async function loadCodeReferenceFiles(
 async function scanCodeState(
   projectRoot: string,
   excludedPaths: readonly string[] = [],
+  publishable?: (path: string) => Promise<boolean>,
 ): Promise<{
   files: Map<string, ViewCodeReferenceFile>;
   scope: Set<string>;
@@ -205,7 +209,13 @@ async function scanCodeState(
   ]);
   const allowed = (path: string) =>
     !excludedCodePath(projectRoot, path, excludedPaths);
-  const files = sourceFiles.filter(allowed);
+  const candidates = sourceFiles.filter(allowed);
+  const decisions = await Promise.all(
+    candidates.map(
+      (path) => publishable?.(projectPath(projectRoot, path)) ?? true,
+    ),
+  );
+  const files = candidates.filter((_, index) => decisions[index]);
   const scope = new Set(files.map((path) => projectPath(projectRoot, path)));
   const refs = scan.refs.filter(
     (ref) => allowed(ref.file) && scope.has(ref.file),
@@ -459,6 +469,7 @@ export class ViewStore {
       snapshot.allSections,
       snapshot.references,
       snapshot.external,
+      this.options.publishable,
     );
     return (await renderMarkdown(markdown, requestedPath, resolver)).tree;
   }
@@ -483,6 +494,7 @@ export class ViewStore {
       snapshot.allSections,
       snapshot.references,
       snapshot.external,
+      this.options.publishable,
     );
     const rendered = await renderMarkdown(
       file.content,
@@ -550,6 +562,7 @@ export class ViewStore {
             snapshot.allSections,
             snapshot.references,
             snapshot.external,
+            this.options.publishable,
           ),
       ),
       frontmatter: {
@@ -586,6 +599,15 @@ export class ViewStore {
   }
 
   async getDocumentResource(requestedPath: string): Promise<Buffer> {
+    if (
+      this.options.publishable &&
+      !(await this.options.publishable(
+        projectPath(this.projectRoot, resolve(this.latDir, requestedPath)),
+      ))
+    )
+      throw new ViewDocumentNotFoundError(
+        `Resource is excluded from publication: ${requestedPath}`,
+      );
     if (
       !requestedPath ||
       requestedPath.includes('\\') ||
@@ -655,12 +677,19 @@ export class ViewStore {
     return operation;
   }
 
-  getSource(
+  async getSource(
     requestedPath: string,
     requestedSymbol = '',
     origin?: { sectionId: string; line: number },
     requestedLine = 0,
   ): Promise<ViewSourceDocument> {
+    if (
+      this.options.publishable &&
+      !(await this.options.publishable(requestedPath))
+    )
+      throw new ViewSourceNotFoundError(
+        `Source is excluded from publication: ${requestedPath}`,
+      );
     const snapshot = this.snapshotValue;
     return getViewSource(
       this.latDir,
@@ -671,6 +700,7 @@ export class ViewStore {
       requestedLine,
       snapshot.allSections,
       snapshot.references,
+      this.options.publishable,
     );
   }
 
@@ -683,6 +713,7 @@ export class ViewStore {
       snapshot.external,
       snapshot.allSections,
       snapshot.references,
+      this.options.publishable,
     );
   }
 
@@ -883,6 +914,7 @@ export class ViewStore {
       const nextCode = await scanCodeState(
         this.projectRoot,
         this.options.codeExcludePaths,
+        this.options.publishable,
       );
       codeFiles = nextCode.files;
       this.codeScope = nextCode.scope;
@@ -957,7 +989,7 @@ export async function createViewStore(
     await Promise.all([
       realpath(latDir),
       listLatticeFiles(latDir),
-      scanCodeState(projectRoot, options.codeExcludePaths),
+      scanCodeState(projectRoot, options.codeExcludePaths, options.publishable),
       options.git === false
         ? Promise.resolve(null)
         : findViewGitRepository(projectRoot, latDir),
