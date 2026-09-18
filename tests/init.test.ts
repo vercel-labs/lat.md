@@ -381,7 +381,7 @@ describe('lat init embedding setup', () => {
         else rmSync(victim, { force: true });
         rmSync(destination, { force: true });
         symlinkSync(victim, destination);
-        await expect(initCmd(root)).rejects.toThrow(path);
+        await expect(initCmd(root)).rejects.toThrow(join(...path.split('/')));
         if (existing) expect(readFileSync(victim, 'utf8')).toBe('unchanged');
         else expect(existsSync(victim)).toBe(false);
       }
@@ -423,7 +423,7 @@ describe('lat init embedding setup', () => {
       process.platform === 'win32' ? 'junction' : 'dir',
     );
     try {
-      await expect(initCmd(root)).rejects.toThrow(path);
+      await expect(initCmd(root)).rejects.toThrow(join(...path.split('/')));
       expect(readdirSync(outside)).toEqual([]);
     } finally {
       rmSync(outside, { recursive: true, force: true });
