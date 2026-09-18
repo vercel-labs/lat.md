@@ -317,6 +317,9 @@ export function App() {
   const [historyScroll, setHistoryScroll] = useState<ViewScrollPosition | null>(
     null,
   );
+  const [fragmentScroll, setFragmentScroll] = useState<{ hash: string } | null>(
+    null,
+  );
   const pageRef = useRef<ViewPage | null>(page);
   pageRef.current = page;
   const documentDirty = useRef(false);
@@ -511,6 +514,7 @@ export function App() {
       if (!preservesDocument) documentDirty.current = false;
       acceptedLocation.current = nextLocation;
       positionedLocation.current = null;
+      setFragmentScroll(null);
       setHistoryScroll(historyScrollPosition(event.state));
       if (
         viewPathname(window.location.pathname) !== '/graph' &&
@@ -640,7 +644,9 @@ export function App() {
         ? new URL(location, window.location.origin).search
         : '',
     );
-    if (!page || positionedLocation.current === location) return;
+    if (!page || (positionedLocation.current === location && !fragmentScroll))
+      return;
+    setFragmentScroll(null);
     if (graphActive) {
       window.scrollTo({ top: 0, behavior: 'instant' });
       positionedLocation.current = location;
@@ -660,11 +666,11 @@ export function App() {
       return;
     }
     if (page.kind === 'markdown') {
-      if (matches[0]) {
+      if (!fragmentScroll && matches[0]) {
         matches[0].scrollIntoView({ behavior: 'instant', block: 'center' });
       } else
         scrollToDocumentLocation(
-          window.location.hash,
+          fragmentScroll?.hash ?? window.location.hash,
           {
             getElementById: (id) => window.document.getElementById(id),
             scrollTo: (options) => window.scrollTo(options),
@@ -682,7 +688,14 @@ export function App() {
       }
     }
     positionedLocation.current = location;
-  }, [graphActive, historyScroll, location, page, editingDocument]);
+  }, [
+    graphActive,
+    historyScroll,
+    location,
+    page,
+    editingDocument,
+    fragmentScroll,
+  ]);
 
   function saveCurrentScroll(): void {
     window.history.replaceState(
@@ -718,6 +731,12 @@ export function App() {
           })()) &&
       isSameRenderedDocument(new URL(window.location.href), url);
     const nextLocation = `${url.pathname}${url.search}${url.hash}`;
+    // Explicit fragment navigation wins over search-result positioning. A new
+    // request also repositions a repeated click without adding history entries.
+    if (preservesDocument) {
+      setHistoryScroll(null);
+      setFragmentScroll({ hash: url.hash });
+    }
     if (nextLocation === currentLocation()) {
       if (!page || error) retryPage();
       return;
@@ -732,6 +751,7 @@ export function App() {
       return;
     }
     if (!preservesDocument) documentDirty.current = false;
+    if (!preservesDocument) setFragmentScroll(null);
     saveCurrentScroll();
     positionedLocation.current = null;
     setHistoryScroll(null);

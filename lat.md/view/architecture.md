@@ -182,7 +182,7 @@ The current section and its entire subtree stay subtly emphasized while readers 
 
 TOC entries show an orange disc when their section contains a rendered Git change and a red disc when it owns validation errors. Git discs follow the Git visibility toggle; error discs remain visible.
 
-Same-document fragment navigation updates history and scroll position without clearing, refetching, or remounting the rendered Markdown. The H1 TOC fragment positions the viewport at document scroll-top zero; source fragments remain part of route identity because they select code symbols.
+Same-document fragment navigation updates history and scroll position without clearing, refetching, or remounting the rendered Markdown. Explicit same-document section clicks take priority over search-match positioning, including repeat clicks on the current fragment, while retaining highlighted passages. The H1 TOC fragment positions the viewport at document scroll-top zero; source fragments remain part of route identity because they select code symbols.
 
 Wide layouts give the sticky TOC a fixed 286px column and the available viewport height. Its list uses normal block flow, stays content-height when short, and scrolls behind a hidden scrollbar when long. Fixed link metrics never shrink to fit overflow.
 

@@ -399,6 +399,12 @@ Selecting the H1 entry in the page TOC keeps its canonical fragment while positi
 
 Fragment-only rerenders preserve the keyed React fence components, while a changed document tree updates or unmounts Mermaid, map, and STL resources through normal component lifecycle.
 
+## TOC navigation from search results
+
+TOC clicks scroll to the selected heading even when the URL contains search highlights, including repeated clicks on the current fragment.
+
+Initial search-result navigation centers its highlighted passage. Subsequent section clicks preserve those highlights and the mounted document without refetching; H1 clicks scroll to the top, and history navigation restores saved positions.
+
 ## Restores history scroll positions
 
 In-app navigation records each viewport and restores it before revealing content reached through Back.

@@ -270,9 +270,6 @@ export function DocumentToc({
                 setActiveId(item.id);
                 setExpanded(false);
                 onNavigate(event);
-                if (item.depth === 1 && event.defaultPrevented) {
-                  window.scrollTo({ top: 0, behavior: 'instant' });
-                }
               }}
               style={
                 {
