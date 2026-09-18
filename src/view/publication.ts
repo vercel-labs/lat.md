@@ -17,8 +17,8 @@ function publicPath(path: string): boolean {
     .split('/')
     .every(
       (part) =>
-        part !== 'config.local.yaml' &&
-        part !== 'node_modules' &&
+        part.toLowerCase() !== 'config.local.yaml' &&
+        part.toLowerCase() !== 'node_modules' &&
         !part.startsWith('.'),
     );
 }

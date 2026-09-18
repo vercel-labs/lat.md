@@ -79,6 +79,10 @@ it.each([false, true])(
       join(latDir, 'config.local.yaml'),
       '# PRIVATE_LOCAL_CONFIG_MARKER\n',
     );
+    await writeFile(
+      join(latDir, 'CONFIG.LOCAL.YAML'),
+      '# PRIVATE_CASE_MARKER\n',
+    );
     await mkdir(join(latDir, '.cache'));
     await writeFile(
       join(latDir, '.cache', 'secret.json'),
@@ -88,6 +92,7 @@ it.each([false, true])(
       '/code/.env',
       '/code/ignored.ts',
       '/resources/config.local.yaml',
+      '/resources/CONFIG.LOCAL.YAML',
       '/resources/.cache/secret.json',
     ]) {
       await writeFile(
