@@ -62,3 +62,11 @@ Outgoing source and code-backlink snippet lines use Markdown inline-code delimit
 ## formatSectionOutput includes all parts
 
 `formatSectionOutput` produces styled output containing section id, location, raw content, "This section references" with outgoing refs, "Referenced by" with incoming refs, and "Referenced by code" with `@lat:` back-references.
+
+## Source reads stay inside the project
+
+Source symbol lookup and section snippets reject parent traversal and symlinks escaping the project while preserving ordinary in-project references.
+
+## Malformed index entries remain bounded
+
+Long unterminated index aliases do not cause quadratic regular-expression backtracking; valid entries retain their target names.

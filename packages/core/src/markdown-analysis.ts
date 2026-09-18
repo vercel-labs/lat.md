@@ -190,7 +190,7 @@ function extractDestinationLinks(tree: Root): MarkdownDestinationLink[] {
 
 function extractIndexEntries(content: string): string[] {
   const names = new Set<string>();
-  const pattern = /^- \[\[([^\]]+?)(?:\|[^\]]+)?\]\]/gm;
+  const pattern = /^- \[\[([^\]|]+)(?:\|[^\]]*)?\]\]/gm;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(content)) !== null) names.add(match[1]);
   return [...names];

@@ -24,3 +24,7 @@ Git projects inspect tracked regular files; non-Git projects walk visible, non-i
 ## Scans Dart references around annotations
 
 Dart `// @lat:` references retain their authored line numbers before ordinary declarations and between metadata annotations and declarations, and dangling targets remain normal code-reference errors.
+
+## Unambiguous reference filenames
+
+Ripgrep and the fallback preserve colon and newline filenames exactly, preventing a filename from redirecting backlink snippets to another file.

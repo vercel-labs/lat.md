@@ -63,3 +63,14 @@ export async function inspectRepositoryPath(
     return { kind: 'missing' };
   }
 }
+
+/** Resolve only an existing, contained regular file for a source-content read. */
+export async function repositoryFilePath(
+  projectRoot: string,
+  authoredPath: string,
+): Promise<string | null> {
+  const path = normalizeRepositoryPath(authoredPath);
+  if (path === null) return null;
+  const inspected = await inspectRepositoryPath(projectRoot, path);
+  return inspected.kind === 'file' ? inspected.realPath : null;
+}

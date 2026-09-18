@@ -1,3 +1,4 @@
+import { repositoryFilePath } from './repository-path.js';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -1645,6 +1646,8 @@ export async function resolveSourceSymbol(
   projectRoot: string,
   options: ResolveSourceSymbolOptions = {},
 ): Promise<{ found: boolean; symbols: SourceSymbol[]; error?: string }> {
+  const safePath = await repositoryFilePath(projectRoot, filePath);
+  if (!safePath) return { found: false, symbols: [] };
   const absPath = join(projectRoot, filePath);
   const latDir = options.latDir ?? join(projectRoot, 'lat.md');
   const cacheKey = `${latDir}\0${absPath}`;
@@ -1656,7 +1659,7 @@ export async function resolveSourceSymbol(
       const readStarted = performance.now();
       let content: string;
       try {
-        content = await readFile(absPath, 'utf-8');
+        content = await readFile(safePath, 'utf-8');
       } catch {
         return { symbols: [] };
       }

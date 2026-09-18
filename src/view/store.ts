@@ -1,3 +1,4 @@
+import { repositoryFilePath } from '@lat.md/core/repository-path';
 import { randomUUID } from 'node:crypto';
 import { watch as watchFiles, type FSWatcher } from 'node:fs';
 import {
@@ -178,7 +179,9 @@ async function loadCodeReferenceFiles(
   await Promise.all(
     [...refsByFile].map(async ([path, fileRefs]) => {
       try {
-        const content = await readFile(resolve(projectRoot, path), 'utf8');
+        const safePath = await repositoryFilePath(projectRoot, path);
+        if (!safePath) return;
+        const content = await readFile(safePath, 'utf8');
         files.set(path, { path, lines: content.split('\n'), refs: fileRefs });
       } catch {
         // A file may disappear between the project scan and this read.
@@ -203,8 +206,10 @@ async function scanCodeState(
   const allowed = (path: string) =>
     !excludedCodePath(projectRoot, path, excludedPaths);
   const files = sourceFiles.filter(allowed);
-  const refs = scan.refs.filter((ref) => allowed(ref.file));
   const scope = new Set(files.map((path) => projectPath(projectRoot, path)));
+  const refs = scan.refs.filter(
+    (ref) => allowed(ref.file) && scope.has(ref.file),
+  );
   return {
     files: await loadCodeReferenceFiles(projectRoot, refs),
     scope,

@@ -448,7 +448,7 @@ function immediateEntries(walkedPaths: string[]): string[] {
 /** Parse bullet items from an index file. Matches `- [[name]] — description` */
 function parseIndexEntries(content: string): Set<string> {
   const names = new Set<string>();
-  const re = /^- \[\[([^\]]+?)(?:\|[^\]]+)?\]\]/gm;
+  const re = /^- \[\[([^\]|]+)(?:\|[^\]]*)?\]\]/gm;
   let match;
   while ((match = re.exec(content)) !== null) {
     names.add(match[1]);

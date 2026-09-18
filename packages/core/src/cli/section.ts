@@ -1,3 +1,4 @@
+import { repositoryFilePath } from '../repository-path.js';
 import { readFile } from 'node:fs/promises';
 import { extname, join, relative } from 'node:path';
 import {
@@ -124,6 +125,8 @@ export async function getSection(
     const filePart = hashIdx === -1 ? ref.target : ref.target.slice(0, hashIdx);
     const ext = extname(filePart);
     if (isSourceFileExtension(ext)) {
+      const sourcePath = await repositoryFilePath(ctx.projectRoot, filePart);
+      if (!sourcePath) continue;
       const targetLower = ref.target.toLowerCase();
       if (!seen.has(targetLower)) {
         seen.add(targetLower);
@@ -149,10 +152,7 @@ export async function getSection(
               line = sym.startLine;
               endLine = sym.endLine;
               try {
-                const src = await readFile(
-                  join(ctx.projectRoot, filePart),
-                  'utf-8',
-                );
+                const src = await readFile(sourcePath, 'utf-8');
                 const srcLines = src.split('\n');
                 const start = sym.startLine - 1;
                 const end = Math.min(srcLines.length, start + 5);
@@ -218,7 +218,8 @@ export async function getSection(
       slugIndex,
     );
     if (subtreeSectionIds.has(codeResolved.toLowerCase())) {
-      const absFile = join(ctx.projectRoot, ref.file);
+      const absFile = await repositoryFilePath(ctx.projectRoot, ref.file);
+      if (!absFile) continue;
       let snippet = '';
       try {
         const src = await readFile(absFile, 'utf-8');
