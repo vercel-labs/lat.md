@@ -51,7 +51,7 @@ pnpm exec lat expand "the task, including any [[refs]]"
 
 Use `pnpm exec lat locate "Section Name"` for direct lookup. Update `lat.md/` for meaningful changes to implemented functionality, architecture, behavior, or tests. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Follow `AGENTS.md` for section and code-reference conventions.
 
-Add or update tests with behavior changes. Important tests have a specification under `lat.md/tests/` and exactly one nearby `@lat:` comment in the corresponding test.
+Add or update tests with behavior changes. Important tests have a specification under `lat.md/knowledge/tests/` and exactly one nearby `@lat:` comment in the corresponding test.
 
 Before opening or updating a pull request, run:
 
@@ -115,7 +115,7 @@ Cross-platform correctness relies on two conventions: stored paths are always PO
 
 ## Site Development
 
-The repository's site project exports the root vault through `lat ui build server`, exercising the same portable artifact users deploy.
+The public [[site]] is the `.lat-build/server/` output of `lat ui build server`, so documentation changes are deployed through the same portable artifact users receive.
 
 `pnpm build:site` compiles the shared server, downloads the exact published WASM and model artifacts matching this checkout, builds Lat, and writes the server artifact to `.lat-build/server/`.
 
@@ -158,7 +158,7 @@ Prettier with no semicolons, single quotes, trailing commas. Run `pnpm format` b
 
 ## Publishing
 
-The workspace publishes the full CLI plus core, server, stemmer, embedding engine, and model packages. [[lat.md/package-distribution]] defines the lightweight core CLI and GitHub Action distribution.
+The workspace publishes the full CLI plus core, server, stemmer, embedding engine, and model packages. [[lat.md/knowledge/package-distribution]] defines the lightweight core CLI and GitHub Action distribution.
 
 The root `bin` entry exposes `lat`; `@lat.md/core` exposes `lat-core`. Only `dist/src` and `templates` are included in the root package — tests and the [[website]] are excluded; each supporting package ships its own `dist` and the model package also ships its weights.
 
