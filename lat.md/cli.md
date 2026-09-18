@@ -2,6 +2,8 @@
 
 The `lat` command line tool. Entry point: [[src/cli/index.ts]].
 
+Human-readable command output uses Markdown-like text: headings, lists, and inline code for paths and command names.
+
 **Design principle: shared core, thin wrappers.** Every CLI command and its corresponding [[cli#mcp]] tool share the same command function (e.g. `locateCommand`, `sectionCommand`, `refsCommand`). Each command function accepts a `CmdContext` (with a `Styler` abstraction for chalk vs plain formatting) and returns a `CmdResult` (`{ output, isError? }`). CLI and MCP are thin wrappers that construct the appropriate context and handle the result — CLI calls `handleResult` (print + exit code), MCP calls `toMcp` (wrap in MCP response). Some commands have a separate business-logic layer (e.g. `getSection`, `findRefs`, `runSearch`) that returns structured data, called by the command function. Shared types live in [[packages/core/src/context.ts]]. Never duplicate business logic between CLI and MCP.
 
 ## locate
@@ -274,9 +276,21 @@ Template content is wrapped in visible `%% lat:begin %%` / `%% lat:end %%` marke
 
 Implementation: [[src/cli/init.ts]], checklist menu in [[src/cli/checklist-menu.ts]], single-select menu in [[packages/core/src/cli/select-menu.ts]], version tracking in [[packages/core/src/init-version.ts]]
 
+## paths
+
+Print resolved configuration, cache, and project storage locations as Markdown headings and lists, with inline-code paths and short descriptions. Missing files are labeled without creating them, and the command works outside a project.
+
+`lat paths --config` prints only the user configuration file location and existence status. The previous `lat config` command remains a hidden compatibility alias. Neither command displays secrets or runs credential helpers.
+
+`--dir` selects the project. Project output includes canonical and local configuration, configured local external working trees, the managed Git cache, parsed results, and downloaded external files. The full CLI also lists search databases and locks, initialization state, and default UI build outputs. Transient implementation storage is omitted. `lat-core paths` lists only core storage.
+
+Implementation: [[packages/core/src/cli/paths.ts#pathsCommand]]
+
 ## Configuration File
 
-User-level configuration is stored in `~/.config/lat/config.json` (XDG Base Directory on Linux/macOS, `%APPDATA%\lat\config.json` on Windows). The `XDG_CONFIG_HOME` env var is respected if set.
+User-level configuration stores embedding preferences and optional hosted credentials. `lat paths --config` reports the effective path, honoring `XDG_CONFIG_HOME`.
+
+Defaults are `~/.config/lat/config.json` on Linux, `~/Library/Application Support/lat/config.json` on macOS, and `%APPDATA%\Config\lat\config.json` on Windows. On Windows, a `config` subdirectory is also appended to `XDG_CONFIG_HOME`; the XDG library matches the parent directory’s capitalization.
 
 Currently supports:
 

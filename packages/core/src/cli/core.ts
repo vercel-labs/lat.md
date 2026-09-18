@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
@@ -319,13 +319,20 @@ export function createCli({
     });
 
   program
-    .command('config')
-    .description('Show configuration file path')
+    .command('paths')
+    .description('Show configuration, cache, and temporary file locations')
+    .option('--config', 'show only the user configuration file path')
+    .action(async (options: { config?: boolean }) => {
+      const { pathsCommand } = await import('./paths.js');
+      console.log(pathsCommand({ ...program.opts(), ...options, search }));
+    });
+
+  program
+    .command('config', { hidden: true })
+    .description('Alias for paths --config')
     .action(async () => {
-      const { getConfigPath } = await import('../config.js');
-      const configPath = getConfigPath();
-      const exists = existsSync(configPath);
-      console.log(`Config file: ${configPath}${exists ? '' : ' (not found)'}`);
+      const { pathsCommand } = await import('./paths.js');
+      console.log(pathsCommand({ config: true }));
     });
 
   return { program, args: checkTargetArgs.args };
