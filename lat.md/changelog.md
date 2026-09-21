@@ -21,6 +21,14 @@ Lat adds a browser and publishing tools, pinned upstream references, hybrid sear
 - Refined graph styling and reduced wheel-zoom speed for finer camera control. [#145](https://github.com/vercel-labs/lat.md/pull/145) [#148](https://github.com/vercel-labs/lat.md/pull/148) [#158](https://github.com/vercel-labs/lat.md/pull/158)
 - Added linked vault resources and hosted documentation badges to rendered pages. [#124](https://github.com/vercel-labs/lat.md/pull/124) [#137](https://github.com/vercel-labs/lat.md/pull/137)
 
+- Added TOC navigation that prioritizes explicit section choices over search-passage positioning, including repeated clicks on the current fragment. [#182](https://github.com/vercel-labs/lat.md/pull/182)
+- Added live updates with background stream cleanup and external previews that ignore their own cache writes. [#114](https://github.com/vercel-labs/lat.md/pull/114) [#160](https://github.com/vercel-labs/lat.md/pull/160)
+- Added source previews for ordinary Markdown links to repository text files. [#161](https://github.com/vercel-labs/lat.md/pull/161)
+- Supported multiline HTML labels in Mermaid diagrams and Git diff styling around diagrams and rich fences. [#157](https://github.com/vercel-labs/lat.md/pull/157) [#159](https://github.com/vercel-labs/lat.md/pull/159)
+- Added separate addition/removal styling for replaced Markdown list items. [#129](https://github.com/vercel-labs/lat.md/pull/129)
+- Adapted code blocks and TOC layout for mobile screens, kept source badges with wrapped labels, and omitted external-link icons on linked images. [#97](https://github.com/vercel-labs/lat.md/pull/97) [#98](https://github.com/vercel-labs/lat.md/pull/98) [#121](https://github.com/vercel-labs/lat.md/pull/121)
+- Validated live UI hosts and origins and isolated linked resources from the application origin. [#180](https://github.com/vercel-labs/lat.md/pull/180)
+
 ### Features: publishing
 
 Publish the same graph as a static site or a portable server with search, using [[browser#Publish|Lat UI build commands]].
@@ -28,6 +36,9 @@ Publish the same graph as a static site or a portable server with search, using 
 - Added static export with documents, source previews, backlinks, graph navigation, and resources, exposed as `lat ui build static`. [#94](https://github.com/vercel-labs/lat.md/pull/94) [#124](https://github.com/vercel-labs/lat.md/pull/124) [#132](https://github.com/vercel-labs/lat.md/pull/132)
 - Added `lat ui build server` with static pages, a build-time search index, and a portable Express app using the shared `@lat.md/server` runtime. [#127](https://github.com/vercel-labs/lat.md/pull/127) [#132](https://github.com/vercel-labs/lat.md/pull/132)
 - Added `--target vercel` to package static content and the search runtime as Vercel Build Output API artifacts. [#135](https://github.com/vercel-labs/lat.md/pull/135)
+
+- Enforced export boundaries so published artifacts include intended content and referenced resources without exposing unrelated project files. [#181](https://github.com/vercel-labs/lat.md/pull/181)
+- Deployed server search opens its bundled database directly and requires a writable database directory. [#174](https://github.com/vercel-labs/lat.md/pull/174)
 
 ### Features: external sources and source links
 
@@ -42,7 +53,7 @@ Publish the same graph as a static site or a portable server with search, using 
 
 ### Features: search
 
-Hybrid retrieval combines semantic similarity with full-text matching and shows the passages behind each result.
+Hybrid retrieval combines semantic similarity with full-text matching and shows the passages behind each result. See [[rag-architecture#RAG Architecture|RAG architecture]] for details.
 
 - Added passage-based indexing of complete section bodies, combining semantic and stemmed full-text rankings while reusing embeddings for unchanged passages. [#150](https://github.com/vercel-labs/lat.md/pull/150) [#151](https://github.com/vercel-labs/lat.md/pull/151)
 - Added passage evidence, line ranges, expandable previews, destination highlights, and semantic/lexical score details to browser search results. [#152](https://github.com/vercel-labs/lat.md/pull/152)
@@ -65,24 +76,13 @@ Validation gains broader coverage and reusable caches, while setup supports ligh
 - Included untracked source and documentation files in stop-hook change analysis. [#115](https://github.com/vercel-labs/lat.md/pull/115)
 - Switched CLI, library, and UI builds to the native Go-based TypeScript compiler, using prebuilt binaries without requiring Go. [#176](https://github.com/vercel-labs/lat.md/pull/176)
 
-### Bug fixes: navigation and rendering
-
-These fixes keep browser navigation responsive and preserve document meaning during rendering.
-
-- Fixed TOC navigation from search results and repeated clicks on the current fragment, so explicit section choices override search-passage positioning. [#182](https://github.com/vercel-labs/lat.md/pull/182)
-- Released background event streams to prevent stalled navigation, and stopped external previews restarting on their own cache writes. [#114](https://github.com/vercel-labs/lat.md/pull/114) [#160](https://github.com/vercel-labs/lat.md/pull/160)
-- Fixed ordinary Markdown links to repository text files opening as vault resources instead of source previews. [#161](https://github.com/vercel-labs/lat.md/pull/161)
-- Fixed multiline HTML labels in Mermaid diagrams and preserved Git diff styling around rendered diagrams and rich fences. [#157](https://github.com/vercel-labs/lat.md/pull/157) [#159](https://github.com/vercel-labs/lat.md/pull/159)
-- Fixed replaced Markdown list items losing addition/removal styling or merging old and new text into one bullet. [#129](https://github.com/vercel-labs/lat.md/pull/129)
-- Fixed mobile code overflow and TOC layout, kept source badges with wrapped labels, and removed external-link icons from linked images. [#97](https://github.com/vercel-labs/lat.md/pull/97) [#98](https://github.com/vercel-labs/lat.md/pull/98) [#121](https://github.com/vercel-labs/lat.md/pull/121)
-
 ### Bug fixes: indexing and integration
 
 Search rebuilds and generated agent commands now handle failures and concurrent work more reliably.
 
 - Fixed duplicate or formatted headings crashing reindexing, and removed full-text scoring drift after document edits. [#154](https://github.com/vercel-labs/lat.md/pull/154) [#167](https://github.com/vercel-labs/lat.md/pull/167)
 - Made index publication atomic and serialized concurrent writers with OS locks released on exit or process death, preserving the previous index after failed rebuilds. [#168](https://github.com/vercel-labs/lat.md/pull/168) [#169](https://github.com/vercel-labs/lat.md/pull/169)
-- Replaced per-reader database copies with scoped access locks; deployed UI search now opens its bundled database directly and requires a writable database directory. [#174](https://github.com/vercel-labs/lat.md/pull/174)
+- Replaced per-reader database copies with scoped access locks. [#174](https://github.com/vercel-labs/lat.md/pull/174)
 - Fixed local Node hooks to retain their executable and invocation arguments.
 - Improved managed external Git cache handling on Windows. [#173](https://github.com/vercel-labs/lat.md/pull/173)
 
@@ -92,28 +92,32 @@ Repository-controlled paths, content, and configuration receive stricter boundar
 
 - Prevented shell evaluation of queries and paths passed through generated agent tools. [#177](https://github.com/vercel-labs/lat.md/pull/177)
 - Confined source-reference reads to allowed project files and hardened reference parsing against unsafe paths. [#178](https://github.com/vercel-labs/lat.md/pull/178)
-- Validated live UI hosts and origins and isolated linked resources from the application origin. [#180](https://github.com/vercel-labs/lat.md/pull/180)
 - Confined initialization writes to the project, including symlinked paths. [#179](https://github.com/vercel-labs/lat.md/pull/179)
 - Prevented cache cleanup from following symlinks outside the project and moved managed Git caches outside checkouts to avoid trusting repository-planted Git configuration. [#173](https://github.com/vercel-labs/lat.md/pull/173)
-- Enforced export boundaries so published artifacts include intended content and referenced resources without exposing unrelated project files. [#181](https://github.com/vercel-labs/lat.md/pull/181)
 
 ---
 
 ## 0.12.2
 
-Windows source-code reference validation now resolves paths consistently with other platforms. [Release #84](https://github.com/vercel-labs/lat.md/pull/84)
+Windows source-code reference validation now resolves paths consistently with other platforms.
 
-- Fixed Windows code-reference path resolution so valid references resolve consistently across platforms. [#83](https://github.com/vercel-labs/lat.md/pull/83)
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.12.2) · [PR #84](https://github.com/vercel-labs/lat.md/pull/84)
+
+- Normalized authored Windows paths for code-reference validation and exact `lat locate` lookup, while preserving heading text after the first `#`. [#83](https://github.com/vercel-labs/lat.md/pull/83)
 
 ## 0.12.1
 
-Lat gains Windows support across CLI paths, tooling, and continuous integration. [Release #78](https://github.com/vercel-labs/lat.md/pull/78)
+Lat gains Windows support across CLI paths, tooling, and continuous integration.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.12.1) · [PR #78](https://github.com/vercel-labs/lat.md/pull/78)
 
 - Normalized section paths across Windows and Unix, added Windows CI, and fixed platform-specific test timeouts and database file-lock cleanup failures. [#77](https://github.com/vercel-labs/lat.md/pull/77)
 
 ## 0.12.0
 
-Semantic search becomes offline-first with a bundled local embedding engine and an explicit index-rebuild command. [Release #76](https://github.com/vercel-labs/lat.md/pull/76)
+Semantic search becomes offline-first with a bundled local embedding engine and an explicit index-rebuild command.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.12.0) · [PR #76](https://github.com/vercel-labs/lat.md/pull/76)
 
 ### Features and improvements
 
@@ -122,7 +126,8 @@ Local search no longer requires a hosted API key or a network connection.
 - Bundled a Rust/WASM embedding engine and model for offline search, with worker-thread parallelism and reduced batch-padding overhead. [#75](https://github.com/vercel-labs/lat.md/pull/75)
 - Added `lat reindex` to replace `lat search --reindex`, with backend selection, a durable local preference, a `--remote` override, and progress driven by completed work. [#75](https://github.com/vercel-labs/lat.md/pull/75)
 - Made queries use the backend recorded in the index, preventing credential changes from silently switching models. [#75](https://github.com/vercel-labs/lat.md/pull/75)
-- Improved initialization onboarding and added a repository workflow for `lat check` in GitHub Actions. [#39](https://github.com/vercel-labs/lat.md/pull/39) [#48](https://github.com/vercel-labs/lat.md/pull/48)
+- Added multi-select agent setup, marker-based instruction updates that preserve user-authored content, and actionable next steps. [#39](https://github.com/vercel-labs/lat.md/pull/39)
+- Added a repository workflow for `lat check` in GitHub Actions. [#48](https://github.com/vercel-labs/lat.md/pull/48)
 
 ### Bug fixes
 
@@ -130,13 +135,16 @@ Index rebuilds handle bad credentials, legacy caches, and worker failures more s
 
 - Handled invalid credentials, rebuilt legacy caches lacking model metadata, reported worker crashes, and cleaned up failed index builds; backend preferences are saved only after successful builds. [#75](https://github.com/vercel-labs/lat.md/pull/75)
 - Made prompt hooks read-only so retrieving context cannot trigger index rebuilds. [#75](https://github.com/vercel-labs/lat.md/pull/75)
+- Removed `wasm-opt` from the embedding build to fix a `WebAssembly.Table.grow` failure in CI. [#75](https://github.com/vercel-labs/lat.md/pull/75)
 - Replaced this repository’s linked agent instruction files with copies to prevent recursive instruction discovery. [#49](https://github.com/vercel-labs/lat.md/pull/49)
 
 ---
 
 ## 0.11.0
 
-Agent setup expands to Codex and OpenCode, and C links can target fields and enum values. [Release #38](https://github.com/vercel-labs/lat.md/pull/38)
+Agent setup expands to Codex and OpenCode, and C links can target fields and enum values.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.11.0) · [PR #38](https://github.com/vercel-labs/lat.md/pull/38)
 
 - Added Codex MCP setup, OpenCode plugin-registered tools, and Cursor stop hooks for end-of-task validation.
 - Added C struct-field and enum-value links, including qualified targets and fields inside anonymous structs and unions.
@@ -145,39 +153,49 @@ Agent setup expands to Codex and OpenCode, and C links can target fields and enu
 
 ## 0.10.4
 
-Section output identifies the complete line range of referenced source definitions. [Release #37](https://github.com/vercel-labs/lat.md/pull/37)
+Section output identifies the complete line range of referenced source definitions.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.10.4) · [PR #37](https://github.com/vercel-labs/lat.md/pull/37)
 
 - Added complete source-definition line ranges to `lat section` output, such as `file.ts:10-25`.
 
 ## 0.10.3
 
-C source links recognize declarations inside additional language and preprocessor constructs. [Release #35](https://github.com/vercel-labs/lat.md/pull/35)
+C source links recognize declarations inside additional language and preprocessor constructs.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.10.3) · [PR #35](https://github.com/vercel-labs/lat.md/pull/35)
 
 - Fixed C declaration lookup inside preprocessor conditionals and `extern "C"` blocks, including pointer typedefs and function declarations.
 
 ## 0.10.2
 
-Source parsing uses memory more reliably and recognizes more C declarations. [Release #34](https://github.com/vercel-labs/lat.md/pull/34)
+Source parsing uses memory more reliably and recognizes more C declarations.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.10.2) · [PR #34](https://github.com/vercel-labs/lat.md/pull/34)
 
 - Fixed a tree-sitter WASM memory leak and cached parsed source symbols to avoid reparsing unchanged files.
 - Fixed missing C pointer-returning functions, function-like macros, and array variables.
 
 ## 0.10.1
 
-Python source links correctly identify decorated declarations. [Release #33](https://github.com/vercel-labs/lat.md/pull/33)
+Python source links correctly identify decorated declarations.
 
-- Fixed source-symbol lookup for decorated Python functions and classes.
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.10.1) · [PR #33](https://github.com/vercel-labs/lat.md/pull/33)
+
+- Fixed source-symbol lookup for decorated Python functions, classes, and methods, including code-reference comments between decorators and declarations.
 
 ## 0.10.0
 
-Reference discovery becomes faster, and section output includes more useful source context. [Release #30](https://github.com/vercel-labs/lat.md/pull/30)
+Reference discovery becomes faster, and section output includes more useful source context.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.10.0) · [PR #30](https://github.com/vercel-labs/lat.md/pull/30)
 
 ### Features and improvements
 
 Readers can follow documentation-to-code relationships without opening every source file manually.
 
 - Added source-file reference queries, code backlinks, and outgoing definition snippets in `lat section`; `lat refs` now includes Markdown and code by default.
-- Added ripgrep-backed discovery with a TypeScript fallback, check timing, and installation suggestions when ripgrep is unavailable.
+- Added ripgrep-backed discovery with a TypeScript fallback, check timing, and ripgrep installation suggestions; exercised both scanners in CI. [#26](https://github.com/vercel-labs/lat.md/pull/26)
 - Rendered Pi tool results and custom Lat messages as styled Markdown.
 
 ### Bug fixes
@@ -190,7 +208,9 @@ Reference paths and fallback selection now behave consistently.
 
 ## 0.9.0
 
-Agent initialization installs reusable guidance for maintaining Lat documentation. [Release #25](https://github.com/vercel-labs/lat.md/pull/25)
+Agent initialization installs reusable guidance for maintaining Lat documentation.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.9.0) · [PR #25](https://github.com/vercel-labs/lat.md/pull/25)
 
 - Added the `lat-md` authoring skill to initialization for supported agents and clarified the setup menu’s continuation action.
 
@@ -198,29 +218,35 @@ Agent initialization installs reusable guidance for maintaining Lat documentatio
 
 ## 0.8.2
 
-Initialization makes command invocation explicit and checks setup prerequisites more consistently. [Release #24](https://github.com/vercel-labs/lat.md/pull/24)
+Initialization makes command invocation explicit and checks setup prerequisites more consistently.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.8.2) · [PR #24](https://github.com/vercel-labs/lat.md/pull/24)
 
 ### Features and improvements
 
 Users can choose how generated integrations invoke Lat.
 
-- Added a global, local, or `npx` command-style choice and an upfront npm version check during initialization.
+- Added a global, local, or `npx` command-style choice and an upfront check for a newer Lat version on npm during initialization.
 
 ### Bug fixes
 
 Setup respects existing configuration and tracked files.
 
-- Used the shared credential resolver for setup key checks and stopped ignoring integration files already tracked by Git.
+- Made setup recognize keys supplied through `LAT_LLM_KEY_FILE` and `LAT_LLM_KEY_HELPER`, and stopped ignoring integration files already tracked by Git.
 
 ## 0.8.1
 
-Interactive initialization no longer crashes when successive prompts share standard input. [Release #23](https://github.com/vercel-labs/lat.md/pull/23)
+Interactive initialization no longer crashes when successive prompts share standard input.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.8.1) · [PR #23](https://github.com/vercel-labs/lat.md/pull/23)
 
 - Fixed initialization crashing when readline and selection menus share stdin.
 
 ## 0.8.0
 
-Pi integration and interactive agent selection simplify onboarding. [Release #22](https://github.com/vercel-labs/lat.md/pull/22)
+Pi integration and interactive agent selection simplify onboarding.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.8.0) · [PR #22](https://github.com/vercel-labs/lat.md/pull/22)
 
 ### Features and improvements
 
@@ -240,19 +266,25 @@ Agent hooks and development installs handle their invocation and event formats c
 
 ## 0.7.2
 
-Section output includes descendants, and stop hooks block only when follow-up work is needed. [Release #21](https://github.com/vercel-labs/lat.md/pull/21)
+Section output includes descendants, and stop hooks block only when follow-up work is needed.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.7.2) · [PR #21](https://github.com/vercel-labs/lat.md/pull/21)
 
 - Included subsections in `lat section` output and limited stop-hook blocking to validation failures or out-of-sync documentation.
 
 ## 0.7.1
 
-CLI output becomes easier to scan, and YAML frontmatter is parsed correctly. [Release #18](https://github.com/vercel-labs/lat.md/pull/18)
+CLI output becomes easier to scan, and YAML frontmatter is parsed correctly.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.7.1) · [PR #18](https://github.com/vercel-labs/lat.md/pull/18)
 
 - Added Markdown headings, blockquotes, and navigation hints to command output, and fixed YAML frontmatter parsing.
 
 ## 0.7.0
 
-Section retrieval, more source languages, and versioned initialization broaden Lat's agent workflow. [Release #17](https://github.com/vercel-labs/lat.md/pull/17)
+Section retrieval, more source languages, and versioned initialization broaden Lat's agent workflow.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.7.0) · [PR #17](https://github.com/vercel-labs/lat.md/pull/17)
 
 ### Features and improvements
 
@@ -261,7 +293,7 @@ New commands expose full context and validate the structure that makes it useful
 - Added `lat section` and its MCP tool, renamed `lat prompt` to `lat expand`, and added hook reference expansion and search navigation hints.
 - Added Rust, Go, and C source links, including Rust implementation methods, Go methods, and declarations in `.c` and `.h` files.
 - Added `lat check sections` to require concise leading paragraphs beneath headings.
-- Added init versions, generated-file hashes, automatic refreshes, overwrite prompts for user edits, and hook synchronization; replaced the shell prompt hook with a native command.
+- Added init versions, generated-file hashes, automatic refreshes, overwrite prompts for user edits, and hook synchronization; replaced the shell hook with a native command that directs agents to search before work.
 
 ### Bug fixes
 
@@ -274,15 +306,128 @@ Validation and setup report invalid inputs instead of hiding failures.
 
 ## 0.6.0
 
-Wiki links can target source-code symbols as well as documentation sections. [Release #16](https://github.com/vercel-labs/lat.md/pull/16)
+Wiki links can target source-code symbols as well as documentation sections.
 
-- Added project-root-relative source links for JavaScript, TypeScript, and Python declarations and supported class members, so vault documents can reference code elsewhere in the repository.
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.6.0) · [PR #16](https://github.com/vercel-labs/lat.md/pull/16)
+
+- Added project-root-relative source links for JavaScript, TypeScript, and Python declarations and class members; canonical section IDs gained the `lat.md/` prefix while short references stayed compatible.
 
 ---
 
 ## 0.5.0
 
-Initialization guidance and canonical section IDs make project setup and links more predictable. [Release #15](https://github.com/vercel-labs/lat.md/pull/15)
+Initialization guidance and canonical section IDs make project setup and links more predictable.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.5.0) · [PR #15](https://github.com/vercel-labs/lat.md/pull/15)
 
 - Suggested `lat init` when no vault exists, and changed directory index entries to wiki links for graph navigation and validation.
 - Fixed canonical section IDs to include the root H1 heading instead of dropping it from section paths.
+
+---
+
+## 0.4.3
+
+Long-running MCP sessions see filesystem changes instead of returning stale sections and references.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.4.3) · [PR #14](https://github.com/vercel-labs/lat.md/pull/14)
+
+- Removed module-level file-walker and section caches that persisted across MCP calls, so subsequent requests read updated project content.
+
+## 0.4.2
+
+VS Code recognizes the MCP server configuration generated by initialization.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.4.2) · [PR #13](https://github.com/vercel-labs/lat.md/pull/13)
+
+- Fixed VS Code MCP setup to use the top-level `servers` key, while preserving `mcpServers` for Claude Code and Cursor. [#12](https://github.com/vercel-labs/lat.md/pull/12)
+
+## 0.4.1
+
+Embedding credentials can come from a file or helper command instead of a directly configured key.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.4.1) · [PR #11](https://github.com/vercel-labs/lat.md/pull/11)
+
+- Added `LAT_LLM_KEY_FILE` and `LAT_LLM_KEY_HELPER`; resolution prefers `LAT_LLM_KEY`, then the key file, helper command, and user configuration, in that order.
+- Added `lat config` to print the configuration-file path and updated diagnostics to describe all credential sources.
+
+## 0.4.0
+
+An MCP server and per-agent setup connect Lat to more coding tools, with persistent user-level embedding credentials.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.4.0) · [PR #9](https://github.com/vercel-labs/lat.md/pull/9)
+
+- Added `lat mcp`, exposing locate, search, prompt expansion, checking, and reference lookup over stdio.
+- Added per-agent initialization for Claude Code, Cursor, VS Code Copilot, and Codex/OpenCode, with dedicated instructions, MCP configuration, and activation guidance.
+- Added an XDG user configuration file and interactive embedding-key setup, removing the need to configure an environment variable for every session.
+- Standardized provider messages on “Vercel AI Gateway.”
+
+---
+
+## 0.3.0
+
+Section discovery distinguishes exact and approximate matches, and Claude Code can retrieve context on each prompt.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.3.0) · [PR #6](https://github.com/vercel-labs/lat.md/pull/6)
+
+- Added tiered section matching with exact, file-stem/subsection, and fuzzy lookup; CLI output identifies match reasons and prompt expansion reports confidence.
+- Tightened wiki-link validation to reject bare headings, local heading-only targets, and skipped intermediate headings rather than silently accepting ambiguous links.
+- Made `lat init` install a Claude Code prompt hook that directs the agent to consult the graph through `lat search` and `lat prompt`.
+
+---
+
+## 0.2.3
+
+The first 0.2 package currently listed on npm adds nested vaults, short references, and directory-index checks.
+
+[Release notes](https://github.com/vercel-labs/lat.md/releases/tag/v0.2.3) · [PR #5](https://github.com/vercel-labs/lat.md/pull/5)
+
+The 0.2.0–0.2.2 PRs record earlier iterations of these features and publishing fixes, but those versions are absent from npm. The official 0.2.3 notes summarize the series. [#2](https://github.com/vercel-labs/lat.md/pull/2) [#3](https://github.com/vercel-labs/lat.md/pull/3) [#4](https://github.com/vercel-labs/lat.md/pull/4)
+
+### Features and improvements
+
+Nested knowledge directories remain addressable and discoverable through validated indexes.
+
+- Added subdirectory support with vault-relative section IDs and Obsidian-style short references; ambiguous file stems report candidate paths.
+- Added `lat check index` to require a same-named index file listing each directory’s contents with bullet points.
+- Unified file walking with `.gitignore` handling and filesystem memoization, and formatted validation errors as Markdown-style bullets with indented context.
+
+### Publishing fixes
+
+Automated releases use npm trusted publishing without a stored npm token.
+
+- Added the publishing workflow and fixed OIDC authentication by upgrading npm and removing conflicting registry configuration. [#5](https://github.com/vercel-labs/lat.md/pull/5)
+
+---
+
+## 0.1.4
+
+Generated agent guidance explains that test-spec sections need meaningful descriptions.
+
+- Added descriptions to generated test-spec examples and explicitly prohibited empty heading-only sections. [fe91836](https://github.com/vercel-labs/lat.md/commit/fe91836ec6eb4e3b80031270d616500d743b83af)
+
+## 0.1.3
+
+CLI startup is quieter, and generated instructions make test-spec backlinks more precise.
+
+- Suppressed transitive dependency deprecation warnings and required one nearby code-reference comment per test specification in agent guidance. [1f0cc84](https://github.com/vercel-labs/lat.md/commit/1f0cc84d649b56509288e2308d707be79f5a46b6)
+
+## 0.1.2
+
+Generated instructions establish a before-work context lookup and an after-work documentation and validation checklist.
+
+- Added explicit search and prompt-expansion steps, required documentation updates and `lat check`, and explained API-key setup and test-spec coverage. [e386d64](https://github.com/vercel-labs/lat.md/commit/e386d644606e14c9050cbd90c1d4c518e290a695)
+
+## 0.1.1
+
+Lat gains validation, semantic search, prompt expansion, and project initialization beyond the original lookup commands.
+
+- Added `lat check` for wiki links, source-code mentions, and required test-spec backlinks, including Python comments.
+- Added hosted semantic search through `lat search`, with result limits and index rebuilding.
+- Added `lat prompt` to expand references into section context from an argument or stdin, and improved fuzzy section and reference lookup.
+- Added `lat init` and `lat gen` for vault scaffolding and agent instructions, plus global project-directory and color controls. [2bcea2f](https://github.com/vercel-labs/lat.md/commit/2bcea2f70fdb122c4b6a6132f0ea5befde006eef)
+
+## 0.1.0
+
+The initial published CLI finds Markdown sections and their incoming references.
+
+- Added `lat locate` for section lookup and `lat refs` with Markdown, code, or combined reference scopes. [7504423](https://github.com/vercel-labs/lat.md/commit/750442318d3b984945170c3f9350142a1b2b3ed9)
