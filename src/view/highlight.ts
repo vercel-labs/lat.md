@@ -1,90 +1,19 @@
 import { extname } from 'node:path';
 import type { ElementContent } from 'hast';
 import { createLowlight } from 'lowlight';
-import bash from 'highlight.js/lib/languages/bash';
-import c from 'highlight.js/lib/languages/c';
-import css from 'highlight.js/lib/languages/css';
-import dart from 'highlight.js/lib/languages/dart';
-import diff from 'highlight.js/lib/languages/diff';
-import go from 'highlight.js/lib/languages/go';
-import java from 'highlight.js/lib/languages/java';
-import javascript from 'highlight.js/lib/languages/javascript';
-import json from 'highlight.js/lib/languages/json';
-import markdown from 'highlight.js/lib/languages/markdown';
-import python from 'highlight.js/lib/languages/python';
-import ruby from 'highlight.js/lib/languages/ruby';
-import rust from 'highlight.js/lib/languages/rust';
-import typescript from 'highlight.js/lib/languages/typescript';
-import xml from 'highlight.js/lib/languages/xml';
-import yaml from 'highlight.js/lib/languages/yaml';
+import hljs from 'highlight.js';
 import { textDocumentTree, toViewDocumentTree } from './document-tree.js';
 import type { ViewDocumentTree } from './protocol.js';
 
-const lowlight = createLowlight({
-  bash,
-  c,
-  css,
-  dart,
-  diff,
-  go,
-  java,
-  javascript,
-  json,
-  markdown,
-  python,
-  ruby,
-  rust,
-  typescript,
-  xml,
-  yaml,
-});
+const lowlight = createLowlight();
+// Use Highlight.js directly: Lowlight's bundled registry can lag behind it.
+for (const language of hljs.listLanguages()) {
+  const definition = hljs.getLanguage(language)?.rawDefinition;
+  if (definition) lowlight.register(language, definition);
+}
 
-const languageAliases: Record<string, string> = {
-  bash: 'bash',
-  c: 'c',
-  css: 'css',
-  dart: 'dart',
-  diff: 'diff',
-  go: 'go',
-  h: 'c',
-  html: 'xml',
-  java: 'java',
-  js: 'javascript',
-  javascript: 'javascript',
-  json: 'json',
-  jsx: 'javascript',
-  markdown: 'markdown',
-  md: 'markdown',
-  py: 'python',
-  python: 'python',
-  rb: 'ruby',
-  ruby: 'ruby',
-  rs: 'rust',
-  rust: 'rust',
-  sh: 'bash',
-  shell: 'bash',
-  svg: 'xml',
-  ts: 'typescript',
-  tsx: 'typescript',
-  typescript: 'typescript',
-  xml: 'xml',
-  yaml: 'yaml',
-  yml: 'yaml',
-};
-
-const languageByExtension: Record<string, string> = {
-  '.c': 'c',
-  '.dart': 'dart',
-  '.go': 'go',
-  '.h': 'c',
-  '.java': 'java',
-  '.js': 'javascript',
-  '.jsx': 'javascript',
-  '.py': 'python',
-  '.rs': 'rust',
-  '.ts': 'typescript',
-  '.tsx': 'typescript',
-};
+// Preserve Lat's shell-script interpretation of this label.
+const languageAliases = new Map([['shell', 'bash']]);
 
 export type HighlightedCodeTree = {
   type: 'root';
@@ -96,8 +25,9 @@ export function highlightCode(
   language: string,
   content: string,
 ): HighlightedCodeTree | null {
-  const registeredLanguage = languageAliases[language.toLowerCase()];
-  if (!registeredLanguage) return null;
+  const label = language.toLowerCase();
+  const registeredLanguage = languageAliases.get(label) ?? label;
+  if (!lowlight.registered(registeredLanguage)) return null;
   const tree = lowlight.highlight(registeredLanguage, content);
   return {
     type: 'root',
@@ -135,7 +65,7 @@ export function highlightSource(
   content: string,
 ): ViewDocumentTree[] {
   const normalized = content.replaceAll('\r\n', '\n');
-  const language = languageByExtension[extname(path)];
+  const language = extname(path).slice(1);
   if (!language) return normalized.split('\n').map(textDocumentTree);
   const highlighted = highlightCode(language, normalized);
   if (!highlighted) return normalized.split('\n').map(textDocumentTree);

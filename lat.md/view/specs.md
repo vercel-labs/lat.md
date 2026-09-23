@@ -432,3 +432,7 @@ Exports reject private, ignored, and untracked source/resource files before read
 ## External documents cannot publish local source
 
 External Markdown and AsciiDoc links never authorize local source exports or live local-code navigation. Legitimate configured external links remain available.
+
+## Supports the full Highlight.js language registry
+
+Every bundled language and alias is accepted case-insensitively while preserving literal source safely. Source extensions select matching grammars, including languages beyond the common set, and the shell label retains Bash behavior.

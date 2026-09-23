@@ -40,7 +40,9 @@ GitHub-style `:name:` emoji shortcodes render as accessible Unicode emoji or Git
 
 ## Fenced Code Highlighting
 
-Fenced code blocks use their language label for safe server-side Lowlight trees, with common source, shell, web, data, diff, and Markdown grammars supported and unknown labels retained as plain code.
+Fenced code blocks support the full bundled Highlight.js language set and aliases through safe server-side Lowlight trees. Unknown labels remain plain code.
+
+[[src/view/highlight.ts#highlightCode]] matches labels case-insensitively and preserves Lat's `shell` alias for Bash scripts. [[src/view/highlight.ts#highlightSource]] uses file extensions as language labels, with unrecognized extensions rendered as plain text.
 
 ## Math
 
