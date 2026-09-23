@@ -2550,6 +2550,19 @@ describe('lat ui', () => {
     );
     expect(dartLink.html).toContain('>DART</span>');
 
+    const swiftLink = await renderMarkdown(
+      '[[src/Greeter.swift#Greeter#greet]]',
+      'lat.md',
+      async () => ({
+        href: '/code/src/Greeter.swift?symbol=Greeter%23greet',
+        referenceCount: 0,
+      }),
+    );
+    expect(swiftLink.html).toContain(
+      'class="code-link-language code-language-swift"',
+    );
+    expect(swiftLink.html).toContain('>SWIFT</span>');
+
     const javaLink = await renderMarkdown(
       '[[src/Greeter.java#Greeter#greet]]',
       'lat.md',

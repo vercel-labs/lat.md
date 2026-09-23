@@ -106,6 +106,7 @@ const grammarMap = {
   '.php': 'tree-sitter-php.wasm',
   '.py': 'tree-sitter-python.wasm',
   '.rs': 'tree-sitter-rust.wasm',
+  '.swift': 'tree-sitter-swift.wasm',
   '.ts': 'tree-sitter-typescript.wasm',
   '.tsx': 'tree-sitter-tsx.wasm',
 } satisfies Record<SourceFileExtension, string>;
@@ -626,6 +627,112 @@ function extractDartSymbols(tree: Tree): SourceSymbol[] {
     }
   }
 
+  return symbols;
+}
+
+function swiftName(name: string): string {
+  return name.replace(/`/g, '');
+}
+
+function extractSwiftSymbols(tree: Tree): SourceSymbol[] {
+  const symbols: SourceSymbol[] = [];
+  const lines = tree.rootNode.text.split('\n');
+  function push(
+    node: SyntaxNode,
+    name: string,
+    kind: SourceSymbol['kind'],
+    parent?: string,
+  ): SourceSymbol {
+    const symbol: SourceSymbol = {
+      name: swiftName(name),
+      kind,
+      ...(parent ? { parent } : {}),
+      startLine: node.startPosition.row + 1,
+      endLine: node.endPosition.row + 1,
+      signature:
+        lines[
+          (node.childForFieldName('name') ?? node).startPosition.row
+        ]?.trim() ?? '',
+    };
+    symbols.push(symbol);
+    return symbol;
+  }
+  function scope(container: SyntaxNode, parent?: string): void {
+    for (const node of container.namedChildren) {
+      const name = node.childForFieldName('name');
+      if (
+        node.type === 'class_declaration' ||
+        node.type === 'protocol_declaration'
+      ) {
+        if (!name) continue;
+        // Extensions contribute members to the extended type, not a second definition.
+        const isExtension = node.children.some(
+          (child) => child.type === 'extension',
+        );
+        const typeName = swiftName(
+          name.type === 'user_type'
+            ? (name.namedChildren
+                .filter((child) => child.type === 'type_identifier')
+                .at(-1)?.text ?? name.text)
+            : name.text,
+        );
+        if (!isExtension) {
+          const symbol = push(
+            node,
+            typeName,
+            node.type === 'protocol_declaration' ? 'interface' : 'class',
+          );
+          if (parent) symbols.push({ ...symbol, parent });
+        }
+        const body = node.childForFieldName('body');
+        if (body) scope(body, typeName);
+      } else if (
+        node.type === 'function_declaration' ||
+        node.type === 'protocol_function_declaration'
+      ) {
+        if (name) push(node, name.text, parent ? 'method' : 'function', parent);
+      } else if (
+        [
+          'init_declaration',
+          'deinit_declaration',
+          'subscript_declaration',
+        ].includes(node.type)
+      ) {
+        if (parent)
+          push(node, node.type.replace('_declaration', ''), 'method', parent);
+      } else if (
+        node.type === 'typealias_declaration' ||
+        node.type === 'associatedtype_declaration'
+      ) {
+        if (name) push(node, name.text, 'type', parent);
+      } else if (
+        node.type === 'property_declaration' ||
+        node.type === 'protocol_property_declaration'
+      ) {
+        const kind = node.namedChildren.some(
+          (child) =>
+            child.type === 'value_binding_pattern' && child.text === 'let',
+        )
+          ? 'const'
+          : 'variable';
+        function binding(pattern: SyntaxNode): void {
+          if (pattern.type === 'simple_identifier') {
+            if (pattern.text !== '_') push(node, pattern.text, kind, parent);
+          } else if (pattern.type === 'pattern') {
+            for (const child of pattern.namedChildren) binding(child);
+          }
+        }
+        for (const child of node.namedChildren) {
+          if (child.type === 'pattern') binding(child);
+        }
+      } else if (node.type === 'enum_entry') {
+        for (const child of node.childrenForFieldName('name')) {
+          push(node, child.text, 'const', parent);
+        }
+      }
+    }
+  }
+  scope(tree.rootNode);
   return symbols;
 }
 
@@ -1457,6 +1564,7 @@ const symbolExtractors = {
   '.php': extractPhpSymbols,
   '.py': extractPySymbols,
   '.rs': extractRustSymbols,
+  '.swift': extractSwiftSymbols,
   '.ts': extractTsSymbols,
   '.tsx': extractTsSymbols,
 } satisfies Record<SourceFileExtension, (tree: Tree) => SourceSymbol[]>;

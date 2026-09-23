@@ -22,7 +22,7 @@ Each resolver loads provider content and analyzes a complete external file once 
 
 ## Source analysis
 
-A source analysis is the serializable symbol table extracted from one supported JavaScript, TypeScript, Python, Dart, Java, Rust, Go, C, or PHP file.
+A source analysis is the serializable symbol table extracted from one supported JavaScript, TypeScript, Python, Dart, Java, Rust, Go, C, PHP, or Swift file.
 
 It records symbol names, kinds, parents, source ranges, and signatures. Tree-sitter syntax trees and grammar instances remain private parser state and are never serialized.
 

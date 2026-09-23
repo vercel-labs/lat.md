@@ -12,6 +12,7 @@ export const SOURCE_FILE_EXTENSIONS = [
   '.php',
   '.py',
   '.rs',
+  '.swift',
   '.ts',
   '.tsx',
 ] as const;

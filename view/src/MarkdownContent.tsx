@@ -135,6 +135,7 @@ function CodeReference({ reference }: { reference: ViewCodeBackReference }) {
     ['.c', ['code-language-c', 'C']],
     ['.h', ['code-language-c', 'C']],
     ['.dart', ['code-language-dart', 'DART']],
+    ['.swift', ['code-language-swift', 'SWIFT']],
     ['.java', ['code-language-java', 'JAVA']],
   ]).get(extension.toLowerCase()) ?? ['', '</>'];
   return (

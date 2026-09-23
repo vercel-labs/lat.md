@@ -29,6 +29,7 @@ const SOURCE_CACHE_FIXTURES = {
   },
   '.php': { content: '<?php function cached() {}\n', symbol: 'cached' },
   '.py': { content: 'def cached():\n    return None\n', symbol: 'cached' },
+  '.swift': { content: 'func cached() {}\n', symbol: 'cached' },
   '.rs': { content: 'pub fn cached() {}\n', symbol: 'cached' },
   '.ts': { content: 'export function cached() {}\n', symbol: 'cached' },
   '.tsx': {

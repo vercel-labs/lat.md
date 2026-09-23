@@ -147,6 +147,13 @@ describe('source highlighting', () => {
     expect(treeClasses(dart[0])).toContain('hljs-class');
     expect(treeText(dart[0])).toContain('Greeter');
 
+    const swift = highlightSource(
+      'src/Greeter.swift',
+      'struct Greeter { func greet() {} }',
+    );
+    expect(treeClasses(swift[0])).toContain('hljs-keyword');
+    expect(treeText(swift[0])).toBe('struct Greeter { func greet() {} }');
+
     const java = highlightSource(
       'src/Greeter.java',
       'class Greeter { String greet() { return "hello"; } }',
