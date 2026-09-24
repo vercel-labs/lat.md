@@ -15,7 +15,7 @@ Lat adds a browser and publishing tools, pinned upstream references, hybrid sear
 - Added Git change highlighting and validation indicators; `--no-git` disables Git integration. [#92](https://github.com/vercel-labs/lat.md/pull/92) [#94](https://github.com/vercel-labs/lat.md/pull/94) [#132](https://github.com/vercel-labs/lat.md/pull/132)
 - Added section menus for backlinks, copying links or IDs, section output, and raw Markdown. [#104](https://github.com/vercel-labs/lat.md/pull/104) [#139](https://github.com/vercel-labs/lat.md/pull/139)
 - Added conflict-aware Markdown editing with CodeMirror: saves merge independent disk edits and report conflicts. [#117](https://github.com/vercel-labs/lat.md/pull/117)
-- Added GitHub-flavored Markdown, tables, task lists, code highlighting, math, Mermaid diagrams, interactive maps, and STL previews. [#103](https://github.com/vercel-labs/lat.md/pull/103)
+- Added GitHub-flavored Markdown, tables, task lists, highlighting for all bundled Highlight.js languages and aliases, math, Mermaid diagrams, interactive maps, and STL previews. [#103](https://github.com/vercel-labs/lat.md/pull/103) [#185](https://github.com/vercel-labs/lat.md/pull/185)
 - Added code-block copy buttons that preserve whitespace and report clipboard failures. [#143](https://github.com/vercel-labs/lat.md/pull/143)
 - Added extensionless document URLs at the site root, with raw Markdown served separately. [#119](https://github.com/vercel-labs/lat.md/pull/119) [#146](https://github.com/vercel-labs/lat.md/pull/146)
 - Refined graph styling and reduced wheel-zoom speed for finer camera control. [#145](https://github.com/vercel-labs/lat.md/pull/145) [#148](https://github.com/vercel-labs/lat.md/pull/148) [#158](https://github.com/vercel-labs/lat.md/pull/158)
@@ -49,6 +49,7 @@ Publish the same graph as a static site or a portable server with search, using 
 - Rendered external reStructuredText and AsciiDoc through native syntax trees, with unavailable-link handling and stale-cache-lock recovery. [#108](https://github.com/vercel-labs/lat.md/pull/108)
 - Added wiki links to arbitrary repository files and directories, including formats without a source parser. [#116](https://github.com/vercel-labs/lat.md/pull/116)
 - Added Dart, Java, and PHP declarations to source links and code-reference validation. [#109](https://github.com/vercel-labs/lat.md/pull/109) [#110](https://github.com/vercel-labs/lat.md/pull/110) [#165](https://github.com/vercel-labs/lat.md/pull/165)
+- Added Swift source links for declarations, nested types, extension members, and enum cases, with validation, code-reference scanning, and highlighted previews. [#186](https://github.com/vercel-labs/lat.md/pull/186)
 - Improved section reference output with linked definitions and reference context. [#105](https://github.com/vercel-labs/lat.md/pull/105)
 
 ### Features: search
@@ -82,6 +83,7 @@ Search rebuilds and generated agent commands now handle failures and concurrent 
 
 - Fixed duplicate or formatted headings crashing reindexing, and removed full-text scoring drift after document edits. [#154](https://github.com/vercel-labs/lat.md/pull/154) [#167](https://github.com/vercel-labs/lat.md/pull/167)
 - Made index publication atomic and serialized concurrent writers with OS locks released on exit or process death, preserving the previous index after failed rebuilds. [#168](https://github.com/vercel-labs/lat.md/pull/168) [#169](https://github.com/vercel-labs/lat.md/pull/169)
+- Fixed indexing crashes when logos or introductory text precede the first heading; indexing skips that preamble and keeps the following sections searchable. [#184](https://github.com/vercel-labs/lat.md/pull/184)
 - Replaced per-reader database copies with scoped access locks. [#174](https://github.com/vercel-labs/lat.md/pull/174)
 - Fixed local Node hooks to retain their executable and invocation arguments.
 - Improved managed external Git cache handling on Windows. [#173](https://github.com/vercel-labs/lat.md/pull/173)
