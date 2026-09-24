@@ -83,7 +83,7 @@ Generated agent guidance must remain valid Markdown wherever project layouts exp
 
 ### Templates satisfy graph validation
 
-Every generated Markdown instruction template passes local graph validation, preventing setup-owned content from breaking `lat check` when an instruction file is symlinked into `lat.md/`.
+Every generated Markdown instruction template passes local graph validation and omits default prompt-expansion guidance, so setup neither breaks graph checks nor directs agents to expand prompts.
 
 ## Lat-owned build output ignore
 

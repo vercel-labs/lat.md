@@ -3,7 +3,6 @@
 Use Lat's knowledge graph to ground each task before changing code.
 
 - Use the `lat_search` tool to find sections relevant to your task. Read them to understand the design intent before writing code.
-- Use the `lat_expand` tool on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
 
 # Post-task checklist (REQUIRED — do not skip)
 
@@ -23,13 +22,12 @@ The graph lives in `lat.md/` as cross-linked Markdown describing **what** the pr
 
 # Tools
 
-Use the Lat MCP tools to navigate, expand, and validate the project knowledge graph.
+Use the Lat MCP tools to navigate and validate the project knowledge graph.
 
 You have access to the following MCP tools from the `lat` server:
 
 - **lat_locate** — find a section by name (exact, fuzzy)
 - **lat_search** — semantic search across all sections
-- **lat_expand** — expand `[[refs]]` in text to resolved locations
 - **lat_check** — run full graph and documentation validation
 - **lat_refs** — find what references a section
 

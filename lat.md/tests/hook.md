@@ -57,9 +57,9 @@ When Cursor needs more work at stop time, the hook returns a `followup_message` 
 
 When Codex needs more work at stop time, the hook returns the same guarded `decision: "block"` continuation payload used for Claude.
 
-## Codex prompt hook reads the Codex prompt field
+## Prompt hooks do not expand references
 
-The Codex `UserPromptSubmit` adapter reads `prompt`, expands wiki links, and returns the resolved prompt as additional developer context.
+Claude and Codex prompt hooks retain search guidance without expanding wiki links, requesting manual expansion, or asking users to repair unresolved prompt references.
 
 ## Codex hook setup preserves non-lat hooks
 

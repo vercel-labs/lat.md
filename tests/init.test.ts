@@ -110,6 +110,7 @@ describe('generated Markdown templates', () => {
         '/project',
       );
       expect(analysis.diagnostics, name).toEqual([]);
+      expect(content, name).not.toMatch(/lat(?: |_)expand/);
     }
   });
 });

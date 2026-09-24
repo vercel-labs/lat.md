@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
  * requires users to re-run it (e.g. new hooks, generated files, MCP config, or
  * a configuration migration).
  */
-export const INIT_VERSION = 4;
+export const INIT_VERSION = 5;
 
 type InitMeta = {
   init_version: number;

@@ -299,23 +299,30 @@ describe('hook stop', () => {
 });
 
 describe('Codex hook integration', () => {
-  // @lat: [[tests/hook#Codex prompt hook reads the Codex prompt field]]
-  it('reads the Codex prompt field and expands wiki links', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'lat-codex-prompt-'));
-    const projectDir = join(dir, 'project');
-    cpSync(clean, projectDir, { recursive: true });
-    try {
-      const { stdout } = runHook('codex', 'UserPromptSubmit', projectDir, {
-        prompt: 'Update [[feature]]',
-      });
-      const parsed = JSON.parse(stdout);
-      const context = parsed.hookSpecificOutput.additionalContext;
-      expect(context).toContain('Expanded user prompt');
-      expect(context).toContain('[[lat.md/feature#Feature]]');
-    } finally {
-      rmDirBestEffort(dir);
-    }
-  });
+  // @lat: [[tests/hook#Prompt hooks do not expand references]]
+  it.each(['claude', 'codex'])(
+    '%s prompt hooks retain search guidance without expanding references',
+    (agent) => {
+      const dir = mkdtempSync(join(tmpdir(), 'lat-codex-prompt-'));
+      const projectDir = join(dir, 'project');
+      cpSync(clean, projectDir, { recursive: true });
+      try {
+        const { stdout } = runHook(agent, 'UserPromptSubmit', projectDir, {
+          [agent === 'codex' ? 'prompt' : 'user_prompt']:
+            'Update [[feature]] and [[missing]]',
+        });
+        const parsed = JSON.parse(stdout);
+        const context = parsed.hookSpecificOutput.additionalContext;
+        expect(context).toContain('lat search');
+        expect(context).not.toContain('Expanded user prompt');
+        expect(context).not.toContain('<lat-context>');
+        expect(context).not.toContain('lat expand');
+        expect(context).not.toContain('Ask the user to correct');
+      } finally {
+        rmDirBestEffort(dir);
+      }
+    },
+  );
 
   // @lat: [[tests/hook#Codex hook setup preserves non-lat hooks]]
   it('syncs Codex hooks while preserving non-lat hooks', () => {

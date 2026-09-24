@@ -2,7 +2,6 @@
 # Before starting work
 
 - Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
-- Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
 
 # Post-task checklist (REQUIRED — do not skip)
 
@@ -24,7 +23,6 @@ This project uses [lat.md](https://www.npmjs.com/package/lat.md) to maintain a s
 lat locate "Section Name"      # find a section by name (exact, fuzzy)
 lat refs "file#Section"        # find what references a section
 lat search "natural language"  # semantic search across all sections
-lat expand "user prompt text"  # expand [[refs]] to resolved locations
 lat check                      # run full graph and documentation validation
 ```
 

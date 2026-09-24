@@ -4,7 +4,6 @@
 Use Lat's knowledge graph to ground each task before changing code.
 
 - Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
-- Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
 
 # Post-task checklist (REQUIRED — do not skip)
 
@@ -26,13 +25,12 @@ Project-specific lat documentation belongs in `lat.md/`. Do not modify this gene
 
 # Commands
 
-Use these commands to navigate, expand, and validate the project knowledge graph.
+Use these commands to navigate and validate the project knowledge graph.
 
 ```bash
 lat locate "Section Name"      # find a section by name (exact, fuzzy)
 lat refs "file#Section"        # find what references a section
 lat search "natural language"  # semantic search across all sections
-lat expand "user prompt text"  # expand [[refs]] to resolved locations
 lat external show <handle>      # inspect a pinned external source before cloning it
 lat check                      # run full graph and documentation validation
 ```

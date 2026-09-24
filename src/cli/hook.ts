@@ -3,7 +3,6 @@ import { lstatSync, readFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { findLatticeDir } from '@lat.md/core/project-discovery';
 import { plainStyler, type CmdContext } from '@lat.md/core/context';
-import { expandPrompt } from '@lat.md/core/cli/expand';
 import { runSearch } from './search.js';
 import { DEFAULT_SEARCH_LIMIT } from '../search/search.js';
 import { getSection, formatSectionOutput } from '@lat.md/core/cli/section';
@@ -53,10 +52,6 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
-function hasWikiLinks(text: string): boolean {
-  return /\[\[[^\]]+\]\]/.test(text);
-}
-
 function makeHookCtx(latDir: string): CmdContext {
   return {
     latDir,
@@ -66,7 +61,7 @@ function makeHookCtx(latDir: string): CmdContext {
   };
 }
 
-async function searchAndExpand(
+async function searchContextForPrompt(
   ctx: CmdContext,
   userPrompt: string,
 ): Promise<string | null> {
@@ -133,33 +128,9 @@ async function handleUserPromptSubmit(): Promise<void> {
   if (latDir && userPrompt) {
     const ctx = makeHookCtx(latDir);
 
-    // If the user prompt contains [[refs]], resolve them inline
-    if (hasWikiLinks(userPrompt)) {
-      try {
-        const expanded = await expandPrompt(ctx, userPrompt);
-        if (expanded) {
-          parts.push(
-            '',
-            'Expanded user prompt with resolved [[refs]]:',
-            expanded,
-          );
-        } else {
-          parts.push(
-            '',
-            'NOTE: The user prompt contains [[refs]] but they could not be resolved. Ask the user to correct them.',
-          );
-        }
-      } catch {
-        parts.push(
-          '',
-          'NOTE: The user prompt contains [[refs]] but resolution failed. Run `lat expand` on the prompt text manually.',
-        );
-      }
-    }
-
     // Search for relevant sections and include their full content
     try {
-      const searchContext = await searchAndExpand(ctx, userPrompt);
+      const searchContext = await searchContextForPrompt(ctx, userPrompt);
       if (searchContext) {
         parts.push('', searchContext);
       }

@@ -42,11 +42,11 @@ pnpm is the only supported package manager. Never use npm or yarn.
 
 Contributions start from the knowledge graph and keep its design and test specifications synchronized with meaningful implementation changes.
 
-Before changing code, find the relevant intent and expand wiki references in the task:
+Before changing code, find and read the relevant design intent:
 
 ```bash
 pnpm exec lat search "topic or behavior"
-pnpm exec lat expand "the task, including any [[refs]]"
+pnpm exec lat section "section#id"
 ```
 
 Use `pnpm exec lat locate "Section Name"` for direct lookup. Update `lat.md/` for meaningful changes to implemented functionality, architecture, behavior, or tests. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Follow `AGENTS.md` for section and code-reference conventions.
