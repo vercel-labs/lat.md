@@ -9,3 +9,4 @@ New to Lat? Start with [[quick-start]].
 - [[agent-workflows]] — Give agents context and review their changes
 - [[upstream]] — Reference documentation and code from other repositories
 - [[browser]] — Browse, edit, and publish your project knowledge
+- [[syntax-primer]] — Write Markdown, links, code, math, and diagrams
