@@ -2283,11 +2283,189 @@ a.wiki-link-active {
   border-radius: 10px;
 }
 
+.markdown .markdown-mermaid {
+  --mermaid-surface: var(--gray-100);
+  --mermaid-ink: color-mix(in srgb, var(--text) 85%, var(--mermaid-surface));
+  --mermaid-line: var(--gray-700);
+  position: relative;
+  background: var(--mermaid-surface);
+}
+
+/* Mermaid emits ID-scoped theme rules. Override its neutral light palette
+   for both SVG text and HTML labels, including sequence message arrows. */
+.markdown-mermaid
+  svg
+  :is(
+    text,
+    tspan,
+    .label,
+    .nodeLabel,
+    .edgeLabel,
+    .messageText,
+    .loopText,
+    .noteText
+  ) {
+  fill: var(--mermaid-ink) !important;
+  color: var(--mermaid-ink) !important;
+}
+
+.markdown-mermaid
+  svg
+  :is(
+    .node rect,
+    .node circle,
+    .node ellipse,
+    .node polygon,
+    .node path,
+    rect.actor,
+    .labelBox,
+    .note,
+    .activation0,
+    .activation1,
+    .activation2,
+    .cluster rect
+  ) {
+  fill: var(--mermaid-surface) !important;
+  stroke: var(--mermaid-line) !important;
+  stroke-width: 1px !important;
+}
+
+.markdown-mermaid
+  svg
+  :is(.flowchart-link, .messageLine0, .messageLine1, .actor-line, .loopLine) {
+  stroke: var(--mermaid-line) !important;
+  stroke-width: 1.2px !important;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.markdown-mermaid svg :is(marker path, marker polygon, .arrowheadPath) {
+  fill: var(--mermaid-line) !important;
+  stroke: var(--mermaid-line) !important;
+}
+
+.markdown-mermaid svg :is(.edgeLabel, .edgeLabel p, .labelBkg) {
+  background: var(--mermaid-surface) !important;
+  fill: var(--mermaid-surface) !important;
+}
+
+.markdown-mermaid svg .edgeLabel text {
+  fill: var(--mermaid-ink) !important;
+}
+
 .markdown .markdown-mermaid svg {
   display: block;
   max-width: 100%;
   height: auto;
   margin: 0 auto;
+}
+
+.markdown .markdown-mermaid-source {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  white-space: pre;
+}
+
+.markdown-mermaid-toolbar {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.markdown-mermaid > .markdown-mermaid-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  margin: 0;
+}
+
+.markdown-mermaid > .markdown-mermaid-toolbar > button {
+  padding: 5px;
+  opacity: 0.7;
+}
+
+.markdown-mermaid-button {
+  padding: 6px 10px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.markdown-mermaid-button:hover {
+  background: var(--background);
+}
+
+.markdown-mermaid-button:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .markdown-mermaid > .markdown-mermaid-toolbar > button {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .markdown-mermaid:hover > .markdown-mermaid-toolbar > button,
+  .markdown-mermaid:focus-within > .markdown-mermaid-toolbar > button {
+    opacity: 0.7;
+    pointer-events: auto;
+  }
+}
+
+@media (any-pointer: coarse) {
+  .markdown-mermaid > .markdown-mermaid-toolbar > button {
+    min-width: 44px;
+    min-height: 44px;
+    opacity: 0.7;
+    pointer-events: auto;
+  }
+}
+
+.markdown-mermaid > .markdown-mermaid-toolbar > button:hover,
+.markdown-mermaid > .markdown-mermaid-toolbar > button:focus-visible {
+  opacity: 1;
+}
+
+.markdown .markdown-mermaid-fullscreen {
+  box-sizing: border-box;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 18px;
+  color: var(--text);
+  background: var(--mermaid-surface);
+  border: 0;
+}
+
+.markdown-mermaid-fullscreen[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.markdown-mermaid-fullscreen-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.markdown .markdown-mermaid-fullscreen-canvas > svg {
+  width: 100%;
+  height: 100%;
+  max-width: none !important;
 }
 
 .markdown .markdown-map {

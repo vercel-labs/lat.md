@@ -215,6 +215,9 @@ function FenceError({
 
 function MermaidFence({ fallback, source }: Omit<RichFenceProps, 'kind'>) {
   const container = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [raw, setRaw] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
   const [rendered, setRendered] = useState<{
@@ -226,6 +229,8 @@ function MermaidFence({ fallback, source }: Omit<RichFenceProps, 'kind'>) {
     let active = true;
     setError('');
     setRendered(null);
+    setFullscreen(false);
+    setRaw(false);
     void getMermaid()
       .then((mermaid) => mermaid.render(nextMermaidDiagramId(), source))
       .then((result) => {
@@ -244,8 +249,11 @@ function MermaidFence({ fallback, source }: Omit<RichFenceProps, 'kind'>) {
   }, [attempt, source]);
 
   useLayoutEffect(() => {
-    if (rendered?.bind && container.current) rendered.bind(container.current);
-  }, [rendered]);
+    if (fullscreen) dialog.current?.showModal();
+    else if (dialog.current?.open) dialog.current.close();
+    if (!raw && rendered?.bind && container.current)
+      rendered.bind(container.current);
+  }, [rendered, fullscreen, raw]);
 
   if (error) {
     return (
@@ -258,14 +266,83 @@ function MermaidFence({ fallback, source }: Omit<RichFenceProps, 'kind'>) {
     );
   }
   if (!rendered) return fallback;
+  const rawToggle = (
+    <button
+      className="markdown-mermaid-button"
+      type="button"
+      onClick={() => setRaw((value) => !value)}
+    >
+      {raw ? 'View chart' : 'View raw'}
+    </button>
+  );
+  const content = raw ? (
+    <pre className="markdown-mermaid-source">
+      <code>{source}</code>
+    </pre>
+  ) : (
+    renderSvgNode(rendered.root, 'svg')
+  );
   return (
     <div
       aria-label="Mermaid diagram"
       className="markdown-diagram markdown-mermaid"
       ref={container}
-      role="img"
+      role="group"
     >
-      {renderSvgNode(rendered.root, 'svg')}
+      <div className="markdown-mermaid-toolbar">
+        {rawToggle}
+        <button
+          className="markdown-mermaid-button"
+          type="button"
+          aria-label="View Mermaid diagram full screen"
+          title="Full screen"
+          onClick={() => setFullscreen(true)}
+        >
+          <svg
+            aria-hidden="true"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7" />
+          </svg>
+        </button>
+      </div>
+      {!fullscreen && content}
+      <dialog
+        aria-label="Full-screen Mermaid diagram"
+        className="markdown-mermaid-fullscreen"
+        ref={dialog}
+        onClose={() => setFullscreen(false)}
+        onCancel={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setFullscreen(false);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') event.stopPropagation();
+        }}
+      >
+        <div className="markdown-mermaid-toolbar">
+          {rawToggle}
+          <button
+            className="markdown-mermaid-button"
+            type="button"
+            autoFocus
+            onClick={() => setFullscreen(false)}
+          >
+            Close full screen
+          </button>
+        </div>
+        <div className="markdown-mermaid-fullscreen-canvas">
+          {fullscreen && content}
+        </div>
+      </dialog>
     </div>
   );
 }

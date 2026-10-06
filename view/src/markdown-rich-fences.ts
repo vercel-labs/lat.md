@@ -59,6 +59,7 @@ export const getMermaid = recoverableLazyImport(async () => {
     startOnLoad: false,
     suppressErrorRendering: true,
     theme: 'neutral',
+    flowchart: { curve: 'basis' },
   });
   return mermaid;
 });

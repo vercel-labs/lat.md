@@ -16,7 +16,7 @@ The browser uses a monochrome visual system: pure black or white foundations, ne
 
 The shared client uses Geist typography and system-selected light/dark themes. Geist Sans and Geist Mono ship as self-hosted Vite assets in live, static, and server deployments, including nested bases. Controls retain visible keyboard focus.
 
-The installed runtime uses Node HTTP and prebuilt Vite assets. Browser renderer inputs remain development dependencies because Vite emits their code, styles, and fonts into the published lazy assets instead of making npm consumers install redundant source packages.
+The installed runtime uses Node HTTP and prebuilt Vite assets. Browser-only renderer inputs remain development dependencies because Vite emits their code, styles, and fonts into the published lazy assets. Core separately emits a [[package-distribution#Dependency Boundary#Mermaid validation bundle|build-time Mermaid bundle]] for [[markdown#Mermaid Diagrams#Readability checks|diagram validation]].
 
 The server highlighter similarly bundles Lowlight with only Lat's supported Highlight.js grammars, keeping the full language set out of production dependencies.
 

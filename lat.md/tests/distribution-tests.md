@@ -8,11 +8,13 @@ Distribution tests exercise packed installations and the relocated check action 
 
 ## Core installs independently
 
-A packed core install exposes `lat-core` with validation and navigation commands, excludes UI/search dependencies, and reports valid and invalid documentation correctly, including explicit check directories.
+A packed core install exposes validation and navigation commands, excludes UI/search and Mermaid build dependencies, and reports valid and invalid documentation correctly, including explicit check directories.
 
 ## Core ships parser and worker assets
 
-The packed core executes Markdown worker analysis, loads every supported source grammar, and parses external AsciiDoc and reStructuredText documents from an isolated consumer installation.
+The packed core executes Markdown workers, loads every source grammar, parses external AsciiDoc and reStructuredText, and runs bundled Mermaid/Dagre analysis from an isolated production installation.
+
+The Mermaid bundle includes license notices and a size manifest within its 3 MiB gzip budget. Diagram analysis succeeds without Mermaid, Dagre, JSDOM, or esbuild installed as production packages.
 
 ## Full and core installations agree
 

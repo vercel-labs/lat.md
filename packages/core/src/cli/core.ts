@@ -269,6 +269,16 @@ export function createCli({
       handleResult(await checkSectionsCommand(ctx));
     });
 
+  check
+    .command('diagrams')
+    .usage('[-- <directory>]')
+    .description('Validate Mermaid flowchart readability and box count')
+    .action(async () => {
+      const ctx = resolveCheckContext(program.opts(), checkTargetArgs.target);
+      const { checkDiagramsCommand } = await import('./check.js');
+      handleResult(await checkDiagramsCommand(ctx));
+    });
+
   async function runExpand(
     text: string | undefined,
     opts: { stdin?: boolean },
