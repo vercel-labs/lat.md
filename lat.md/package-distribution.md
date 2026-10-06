@@ -19,9 +19,23 @@ All check subcommands and the hidden `prompt` alias remain available in core. Sh
 
 Core excludes database and writer-lock bindings, stemmers, embedding engines and weights, HTTP/MCP servers, browser assets, and deployment tooling. [[packages/core/package.json]] declares its independent build, public module exports, executable, and runtime dependencies. Shared document-tree and search metadata types live in core without search execution code.
 
-Validation retains every supported source language and external document format. [[packages/core/src/source-parser.ts]] loads Tree-sitter and language grammars; [[packages/core/src/external-documents.ts]] uses AsciiDoc and reStructuredText parsers for external headings. Parser workers and dynamically loaded modules ship with core. Lazy loading reduces startup work but does not reduce the installed dependency tree.
+Validation retains every supported source language and external document format. [[packages/core/src/source-parser.ts]] loads Tree-sitter and language grammars; [[packages/core/src/external-documents.ts]] uses AsciiDoc and reStructuredText parsers for external headings. Parser workers and dynamically loaded modules ship with core. Mermaid validation ships as a generated bundle rather than adding its upstream dependency tree to production installs.
 
 `pnpm build:core` compiles core without UI builds, Rust, or model downloads. The full build first builds core and clears obsolete root output so moved modules do not remain in the published full package. [[scripts/vendor-site-packages.mjs]] includes core when constructing a portable site distribution from unpublished workspace packages.
+
+### Mermaid validation bundle
+
+[[packages/core/scripts/build-mermaid.mjs]] bundles the lazy validation worker with esbuild. Mermaid, Dagre, JSDOM, and esbuild are pinned build dependencies; consumers need no extra installation or browser download.
+
+The build tree-shakes, minifies, and splits upstream modules into core's generated `dist/mermaid-runtime` directory. It preserves upstream parsing and layout implementations without checked-in vendored source. Asset adapters inline JSDOM's stylesheet and expose CSS-tree's JSON loads to esbuild; JSDOM's synchronous XHR helper is emitted beside its chunks. Optional Canvas remains unused by text analysis.
+
+The build rejects unexpected external package imports, includes third-party licenses, and fails above a 3 MiB gzip budget. The generated size manifest records the sum of individually gzipped bundle files; this is a build guard, not a measurement of the complete npm install. [[scripts/test-core-distribution.js]] exercises the worker from a packed production install without upstream development packages.
+
+### Hosted tokenizer bundle
+
+[[packages/embed/scripts/build-remote.mjs]] bundles the hosted embedding backend with only the upstream encoding used by Lat. `js-tiktoken` and esbuild are build dependencies; production installs omit the full encoding collection.
+
+[[packages/embed/src/remote.ts#createRemoteEmbedder]] retains its token counting, input limits, and tokenizer fingerprint. The generated module is self-contained, includes license notices, and has a 600 KiB gzip build budget. No tokenizer implementation or rank data is maintained in the repository. [[tests/search#Hybrid Retrieval#Bundles only the hosted encoding]] checks equivalence to the complete upstream package outside workspace module resolution.
 
 ## CLI Composition
 

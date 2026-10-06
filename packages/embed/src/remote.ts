@@ -4,10 +4,11 @@
  */
 
 import type { Embedder } from './index.js';
-import { getEncoding } from 'js-tiktoken';
+import { Tiktoken } from 'js-tiktoken/lite';
+import cl100k from 'js-tiktoken/ranks/cl100k_base';
 
-let tokenizer: ReturnType<typeof getEncoding> | undefined;
-const encoding = () => (tokenizer ??= getEncoding('cl100k_base'));
+let tokenizer: Tiktoken | undefined;
+const encoding = () => (tokenizer ??= new Tiktoken(cl100k));
 const MAX_INPUT_TOKENS = 8191;
 const MAX_BATCH_TOKENS = 250000;
 

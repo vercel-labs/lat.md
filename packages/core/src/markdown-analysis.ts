@@ -12,6 +12,7 @@ import type { LatFrontmatter, MdLink, Ref, Section } from './lattice-model.js';
 import { parse } from './parser.js';
 import { toPosix } from './path.js';
 import type { WikiLink } from './extensions/wiki-link/types.js';
+import type { MermaidFence } from './mermaid-readability.js';
 import {
   analyzeLocalMarkdownDiagnostics,
   type LocalMarkdownDiagnostic,
@@ -101,6 +102,7 @@ export type MarkdownFileAnalysis = {
   wikiRefs: Ref[];
   paragraphs: MarkdownParagraph[];
   blocks: MarkdownBlock[];
+  mermaidFences: MermaidFence[];
   markdownLinks: MarkdownDestinationLink[];
   validationLinks: MdLink[];
   indexEntries: string[];
@@ -151,6 +153,16 @@ function extractHeadingTitles(tree: Root): string[] {
     titles.push(inlineText(node));
   });
   return titles;
+}
+
+function extractMermaidFences(tree: Root): MermaidFence[] {
+  const fences: MermaidFence[] = [];
+  visit(tree, 'code', (node) => {
+    if (node.lang?.toLowerCase() === 'mermaid' && node.position) {
+      fences.push({ source: node.value, line: node.position.start.line });
+    }
+  });
+  return fences;
 }
 
 function extractDestinationLinks(tree: Root): MarkdownDestinationLink[] {
@@ -214,12 +226,16 @@ export function analyzeMarkdownFile(
     extractRefs(absolutePath, content, projectRoot, tree, sections),
   );
   const [validationLinks, linksMs] = elapsed(() => extractLinks(content, tree));
-  const [[paragraphs, markdownLinks, headingTitles], paragraphsMs] = elapsed(
+  const [
+    [paragraphs, markdownLinks, headingTitles, mermaidFences],
+    paragraphsMs,
+  ] = elapsed(
     () =>
       [
         extractParagraphs(content, tree),
         extractDestinationLinks(tree),
         extractHeadingTitles(tree),
+        extractMermaidFences(tree),
       ] as const,
   );
   const [frontmatter, frontmatterMs] = elapsed(() => parseFrontmatter(content));
@@ -241,6 +257,7 @@ export function analyzeMarkdownFile(
     wikiRefs,
     paragraphs,
     blocks: extractBlocks(tree),
+    mermaidFences,
     markdownLinks,
     validationLinks,
     indexEntries,

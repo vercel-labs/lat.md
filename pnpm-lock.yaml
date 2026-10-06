@@ -298,15 +298,30 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@types/jsdom':
+        specifier: ^30.0.0
+        version: 30.0.0
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
       '@types/node':
         specifier: ^25.3.0
         version: 25.3.0
+      dagre-d3-es:
+        specifier: 7.0.14
+        version: 7.0.14
+      esbuild:
+        specifier: 0.27.3
+        version: 0.27.3
+      jsdom:
+        specifier: 30.0.1
+        version: 30.0.1
       mdast-util-from-markdown:
         specifier: ^2.0.3
         version: 2.0.3
+      mermaid:
+        specifier: 11.17.2
+        version: 11.17.2
       micromark-util-types:
         specifier: ^2.0.2
         version: 2.0.2
@@ -318,9 +333,12 @@ importers:
         version: 7.0.2
 
   packages/embed:
-    dependencies:
+    devDependencies:
+      esbuild:
+        specifier: 0.27.3
+        version: 0.27.3
       js-tiktoken:
-        specifier: ^1.0.21
+        specifier: 1.0.21
         version: 1.0.21
 
   packages/embed-minilm-fp16:
@@ -1418,6 +1436,9 @@ packages:
   '@types/http-errors@2.0.5':
     resolution: {integrity: sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg==}
 
+  '@types/jsdom@30.0.0':
+    resolution: {integrity: sha512-uAHGxujGE0cDaKGdK28zgDotFtNA7MKq5DXl8LrfdxdCI8VHcg15oJz+amHTChPNI5JpgEPQWc2xFdrw3em/nQ==}
+
   '@types/katex@0.16.8':
     resolution: {integrity: sha512-trgaNyfU+Xh2Tc+ABIb44a5AYUpicB3uwirOioeOkNPPbmgRNtcWyDeeFRzjPZENO9Vq8gvVqfhaaXWLlevVwg==}
 
@@ -1467,6 +1488,9 @@ packages:
 
   '@types/topojson-specification@1.0.5':
     resolution: {integrity: sha512-C7KvcQh+C2nr6Y2Ub4YfgvWvWCgP2nOQMtfhlnwsRL4pYmmwzBS7HclGiS87eQfDOU/DLQpX6GEscviaz4yLIQ==}
+
+  '@types/tough-cookie@4.0.5':
+    resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
@@ -3185,6 +3209,9 @@ packages:
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
+  undici-types@8.11.2:
+    resolution: {integrity: sha512-iMVNmWZ0leK/goS6eXMizSzmm9CDWtyphwbaCms3DNLqRxDL+mMoNVcZMTyyVgXP0N+Z8neAMzDoUOUJL8veKg==}
+
   undici@8.10.0:
     resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}
     engines: {node: '>=22.19.0'}
@@ -4373,6 +4400,13 @@ snapshots:
 
   '@types/http-errors@2.0.5': {}
 
+  '@types/jsdom@30.0.0':
+    dependencies:
+      '@types/node': 25.3.0
+      '@types/tough-cookie': 4.0.5
+      parse5: 8.0.1
+      undici-types: 8.11.2
+
   '@types/katex@0.16.8': {}
 
   '@types/mdast@4.0.4':
@@ -4433,6 +4467,8 @@ snapshots:
   '@types/topojson-specification@1.0.5':
     dependencies:
       '@types/geojson': 7946.0.16
+
+  '@types/tough-cookie@4.0.5': {}
 
   '@types/trusted-types@2.0.7':
     optional: true
@@ -6488,6 +6524,8 @@ snapshots:
   undici-types@6.21.0: {}
 
   undici-types@7.18.2: {}
+
+  undici-types@8.11.2: {}
 
   undici@8.10.0: {}
 

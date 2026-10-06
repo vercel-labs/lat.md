@@ -17,6 +17,12 @@ import type { CmdContext, CmdResult, Styler } from '../context.js';
 import { INIT_VERSION, readInitVersion } from '../init-version.js';
 import { CheckRunContext } from './check-context.js';
 import { parseLocalMarkdownTarget } from '../markdown-validation.js';
+import {
+  analyzeMermaidDiagrams,
+  MERMAID_CONTENT_WIDTH,
+  MERMAID_MAX_BOXES,
+  MERMAID_MIN_READABLE_FONT_SIZE,
+} from '../mermaid-readability.js';
 
 export type CheckError = {
   file: string;
@@ -633,6 +639,57 @@ export async function checkSections(
 
 // --- Formatting helpers (shared by all check commands) ---
 
+/** Validate diagram size and estimated readability without a browser runtime. */
+export async function checkDiagrams(
+  latticeDir: string,
+  projectRoot = dirname(latticeDir),
+  context?: CheckRunContext,
+): Promise<CheckError[]> {
+  const run = context ?? new CheckRunContext(latticeDir, projectRoot);
+  const errors: CheckError[] = [];
+  const fences = [];
+  for (const file of await run.markdownFiles()) {
+    for (const fence of await run.mermaidFences(file))
+      fences.push({ ...fence, file });
+  }
+  const results = await analyzeMermaidDiagrams(
+    fences.map((fence) => fence.source),
+  );
+  for (const [index, fence] of fences.entries()) {
+    const { file } = fence;
+    const { boxes, estimate, error } = results[index];
+    if (error) {
+      errors.push({
+        file: relative(process.cwd(), file),
+        line: fence.line,
+        target: 'mermaid',
+        message: error,
+      });
+      continue;
+    }
+    if (boxes !== null && boxes > MERMAID_MAX_BOXES) {
+      errors.push({
+        file: relative(process.cwd(), file),
+        line: fence.line,
+        target: 'mermaid',
+        message: `Mermaid complexity: this flowchart has ${boxes} distinct boxes (maximum ${MERMAID_MAX_BOXES}). Split it into several smaller diagrams, each focused on one process or concept.`,
+      });
+    }
+    if (
+      !estimate ||
+      estimate.estimatedFontSize >= MERMAID_MIN_READABLE_FONT_SIZE
+    )
+      continue;
+    errors.push({
+      file: relative(process.cwd(), file),
+      line: fence.line,
+      target: 'mermaid',
+      message: `Mermaid readability: ${estimate.direction} flowchart labels are estimated at ${estimate.estimatedFontSize.toFixed(1)}px when fitted to a ${MERMAID_CONTENT_WIDTH}px content area (estimated diagram width ${Math.round(estimate.estimatedWidth)}px; minimum ${MERMAID_MIN_READABLE_FONT_SIZE}px). Consider a vertical layout (flowchart TB or TD), shorter labels, or splitting the diagram. This is a static estimate, not a rendered measurement.`,
+    });
+  }
+  return errors;
+}
+
 function formatCheckErrors(errors: CheckError[], s: Styler): string[] {
   const lines: string[] = [];
   for (const err of errors) {
@@ -678,23 +735,27 @@ export async function checkAllCommand(
   const startTime = performance.now();
   const profile = options.profile ? new TimingProfiler() : undefined;
   const run = new CheckRunContext(ctx.latDir, ctx.projectRoot, profile);
-  const [md, linkErrors, code, indexErrors, sectionErrors] = await Promise.all([
-    profileTime(profile, 'check Markdown wiki links', () =>
-      checkMd(ctx.latDir, ctx.projectRoot, run),
-    ),
-    profileTime(profile, 'check relative Markdown links', () =>
-      checkLinks(ctx.latDir, run),
-    ),
-    profileTime(profile, 'check @lat code references', () =>
-      checkCodeRefs(ctx.latDir, ctx.projectRoot, run),
-    ),
-    profileTime(profile, 'check directory indexes', () =>
-      checkIndex(ctx.latDir, run),
-    ),
-    profileTime(profile, 'check section structure', () =>
-      checkSections(ctx.latDir, ctx.projectRoot, run),
-    ),
-  ]);
+  const [md, linkErrors, code, indexErrors, sectionErrors, diagramErrors] =
+    await Promise.all([
+      profileTime(profile, 'check Markdown wiki links', () =>
+        checkMd(ctx.latDir, ctx.projectRoot, run),
+      ),
+      profileTime(profile, 'check relative Markdown links', () =>
+        checkLinks(ctx.latDir, run),
+      ),
+      profileTime(profile, 'check @lat code references', () =>
+        checkCodeRefs(ctx.latDir, ctx.projectRoot, run),
+      ),
+      profileTime(profile, 'check directory indexes', () =>
+        checkIndex(ctx.latDir, run),
+      ),
+      profileTime(profile, 'check section structure', () =>
+        checkSections(ctx.latDir, ctx.projectRoot, run),
+      ),
+      profileTime(profile, 'check Mermaid readability', () =>
+        checkDiagrams(ctx.latDir, ctx.projectRoot, run),
+      ),
+    ]);
   const elapsed = performance.now() - startTime;
 
   const allErrors = [
@@ -741,9 +802,13 @@ export async function checkAllCommand(
   lines.push(...formatCheckErrors(allErrors, s));
   lines.push(...formatCheckIndexErrors(indexErrors, s));
   lines.push(...formatCheckErrors(sectionErrors, s));
+  lines.push(...formatCheckErrors(diagramErrors, s));
 
   const totalErrors =
-    allErrors.length + indexErrors.length + sectionErrors.length;
+    allErrors.length +
+    indexErrors.length +
+    sectionErrors.length +
+    diagramErrors.length;
   if (totalErrors > 0) {
     lines.push(formatErrorCount(totalErrors, s));
     return { output: lines.join('\n'), isError: true };
@@ -781,6 +846,21 @@ export async function checkMdCommand(ctx: CmdContext): Promise<CmdResult> {
   }
 
   lines.push(s.green('md: All links OK'));
+  return { output: lines.join('\n') };
+}
+
+export async function checkDiagramsCommand(
+  ctx: CmdContext,
+): Promise<CmdResult> {
+  const errors = await checkDiagrams(ctx.latDir, ctx.projectRoot);
+  const lines = formatCheckErrors(errors, ctx.styler);
+  if (errors.length) {
+    lines.push(formatErrorCount(errors.length, ctx.styler));
+    return { output: lines.join('\n'), isError: true };
+  }
+  lines.push(
+    ctx.styler.green('diagrams: No Mermaid readability or complexity errors'),
+  );
   return { output: lines.join('\n') };
 }
 

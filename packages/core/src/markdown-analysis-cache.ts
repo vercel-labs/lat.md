@@ -98,6 +98,7 @@ function cachedAnalysis(
       !isRecord(analysis.frontmatter) ||
       !Array.isArray(analysis.sections) ||
       !Array.isArray(analysis.headingTitles) ||
+      !Array.isArray(analysis.mermaidFences) ||
       !Array.isArray(analysis.wikiRefs) ||
       !Array.isArray(analysis.paragraphs) ||
       !Array.isArray(analysis.markdownLinks) ||

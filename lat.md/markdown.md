@@ -52,7 +52,27 @@ GitHub-style inline dollar delimiters, display dollar blocks, and `math` fences 
 
 GitHub-style `mermaid` fences render as React-owned SVG trees in the browser through Mermaid's strict security mode, with the escaped source retained as a readable fallback when loading or rendering fails.
 
+Flowchart and sequence diagrams use theme-aware neutral surfaces, subdued outlines and arrowheads, and contrasting labels instead of Mermaid's white node fills. Flowchart connectors use smooth curves; solid and dashed message arrows retain their meaning. The same palette applies inline and in fullscreen and follows the system color scheme.
+
 The viewer parses Mermaid's SVG as inert HTML so multiline HTML labels retain their line breaks, then filters elements and properties before creating React nodes. [[tests/markdown-rich-fence.test.ts]] exercises rendering multiline labels.
+
+Rendered diagrams offer a full-screen expand icon in [[view/src/MarkdownRichFence.tsx#MermaidFence]]. It overlays the top-right corner without reserving layout space. It appears on diagram hover or keyboard focus on non-touch devices and stays visible on touch devices, at 70% opacity until directly hovered or keyboard-focused. It opens a viewport-sized modal and fits the SVG to the available space. Close or Escape returns to the inline diagram; native dialog behavior confines keyboard focus and restores it to the opener. [[tests/markdown-rich-fence.test.ts]] checks opening and closing the modal without duplicating SVG IDs or rendering Mermaid again.
+
+The same overlay places **View raw** before the fullscreen control. It replaces the chart with its original Mermaid source as escaped, selectable code directly inside the existing panel, without a nested border. **View chart** restores the existing SVG without another render. The toggle also works in fullscreen and preserves its state when opening or closing the modal; changing the source resets to the chart.
+
+### Readability checks
+
+[[packages/core/src/mermaid-readability.ts#analyzeMermaidDiagrams]] uses imported Mermaid parsing and Dagre layout to enforce flowchart size and estimate fitted label readability in [[cli#check#diagrams]].
+
+[[packages/core/src/mermaid-worker.ts#analyze]] runs Mermaid's parser, configuration preprocessing, and flowchart database API. Distinct node ids count toward [[packages/core/src/mermaid-readability.ts#MERMAID_MAX_BOXES|the maximum box count]]; repeated references and subgraph containers do not add boxes. Counts above the limit fail the check and tell agents to split the chart into smaller diagrams focused on individual processes or concepts. Such charts skip layout work because the size error already requires restructuring.
+
+[[packages/core/src/mermaid-worker.ts#estimateReadability]] passes Mermaid's normalized nodes, edges, link lengths, and configured spacing to the imported `dagre-d3-es` layout engine used by Mermaid. Dagre owns ranking, branching, cycles, and edge-label placement; Lat does not maintain a Mermaid grammar or a graph-layout algorithm. Lat supplies approximate label and node dimensions, then scales the configured font by the ratio of [[packages/core/src/mermaid-readability.ts#MERMAID_CONTENT_WIDTH|available diagram width]] to estimated layout width. Estimates below [[packages/core/src/mermaid-readability.ts#MERMAID_MIN_READABLE_FONT_SIZE|the readability threshold]] fail with a located size estimate and suggestions to use `TB`/`TD`, shorten labels, or split the chart.
+
+Font sizing remains an estimate, not a browser measurement or a guarantee at every viewport. It applies to flat horizontal flowcharts with ordinary labels and default Dagre layout. Subgraphs, Markdown auto-wrapping, custom styling, image/icon nodes, non-pixel font units, and other layout engines retain box counting but skip font estimates. Other Mermaid diagram types are parsed but not size-checked. Upstream syntax errors and source exceeding [[packages/core/src/mermaid-readability.ts#MERMAID_MAX_SOURCE_LENGTH|the input bound]] are errors, not silent passes.
+
+The command batches fences into a lazy, bounded worker. JSDOM supplies the DOM required by Mermaid's sanitizer without browser execution, script execution, or remote resource loading. Mermaid configuration resets between diagrams; the worker terminates after each command and leaves host globals untouched. [[packages/core/package.json]] pins build-time Mermaid and Dagre versions because the graph-data adapter uses Mermaid's lower-level database API. The [[package-distribution#Dependency Boundary#Mermaid validation bundle|generated worker bundle]] ships their required code without installing their dependency trees; no upstream source is vendored into the repository; [[tests/check-diagrams]] and [[tests/distribution-tests#Core ships parser and worker assets]] cover compatibility and production installation.
+
+[[packages/core/src/markdown-analysis.ts#extractMermaidFences]] retains only source and line facts from actual Mermaid code nodes, including nested Markdown containers, in the shared versioned parser cache. Commands without Mermaid fences do not start the diagram worker.
 
 ## GeoJSON and TopoJSON Maps
 

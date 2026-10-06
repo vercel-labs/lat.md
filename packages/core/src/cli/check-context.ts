@@ -24,6 +24,7 @@ import {
   type MarkdownProjectAnalysis,
 } from '../project-analysis.js';
 import type { MarkdownFileAnalysis } from '../markdown-analysis.js';
+import type { MermaidFence } from '../mermaid-readability.js';
 import { analyzeMarkdownPath } from '../markdown-analysis-cache.js';
 import type { LocalMarkdownDiagnostic } from '../markdown-validation.js';
 import type { ExternalDocumentFileAnalysis } from '../external-documents.js';
@@ -271,6 +272,10 @@ export class CheckRunContext {
 
   async diagnostics(file: string): Promise<LocalMarkdownDiagnostic[]> {
     return (await this.file(file)).diagnostics;
+  }
+
+  async mermaidFences(file: string): Promise<MermaidFence[]> {
+    return (await this.file(file)).mermaidFences;
   }
 
   async allSections(): Promise<Section[]> {

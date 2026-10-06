@@ -203,13 +203,17 @@
     "./project-write": {
       "types": "./dist/project-write.d.ts",
       "import": "./dist/project-write.js"
+    },
+    "./mermaid-readability": {
+      "types": "./dist/mermaid-readability.d.ts",
+      "import": "./dist/mermaid-readability.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/build-mermaid.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -242,11 +246,16 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/jsdom": "^30.0.0",
     "@types/mdast": "^4.0.4",
     "@types/node": "^25.3.0",
+    "dagre-d3-es": "7.0.14",
+    "esbuild": "0.27.3",
+    "jsdom": "30.0.1",
     "mdast-util-from-markdown": "^2.0.3",
+    "mermaid": "11.17.2",
     "micromark-util-types": "^2.0.2",
-    "typescript": "7.0.2",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "typescript": "7.0.2"
   }
 }

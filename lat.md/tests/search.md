@@ -235,3 +235,7 @@ A reader killed with an open database connection releases access. Incremental in
 ### Rebuilds an unreadable published database
 
 A fresh rebuild can replace invalid cached database bytes when no pending WAL requires recovery, without opening the invalid database first.
+
+### Bundles only the hosted encoding
+
+The standalone hosted backend matches upstream token counts for ordinary text, Unicode, code, special-token literals, and oversized inputs without installed tokenizer dependencies. Oversized inputs still fail before network access.

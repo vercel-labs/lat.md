@@ -71,7 +71,7 @@ Validation command group. Without a subcommand it runs every check against the
 discovered `lat.md/`; an explicit `-- <directory>` suffix validates any
 Markdown directory instead.
 
-Usage: `lat check [md|links|code-refs|index|sections] [-- <directory>]`; use
+Usage: `lat check [md|links|code-refs|index|sections|diagrams] [-- <directory>]`; use
 `lat check --profile [-- <directory>]` to profile the full validation run.
 
 The separator is required. It keeps directory names distinct from subcommands:
@@ -96,6 +96,12 @@ Implementation: [[packages/core/src/cli/check.ts]], with check-specific inputs i
 ### md
 
 Validate that every [[parser#Wiki Links|wiki link]] points to an existing section, an in-project file or directory, or a symbol in a supported source file.
+
+### diagrams
+
+Validate Mermaid flowchart box count and estimated horizontal readability using [[markdown#Mermaid Diagrams#Readability checks]]. Both this subcommand and the full check fail on violations and provide corrective guidance.
+
+[[packages/core/src/cli/check.ts#checkDiagrams]] consumes shared Markdown fence facts. Output identifies each fence, reports upstream syntax errors, excessive box counts, or small estimated label sizes, and suggests vertical layout, shorter labels, or splitting the diagram. `lat check diagrams -- docs` supports explicit directories. Flowcharts without reliable font estimates still receive box-count validation; absence of an error is not a rendered readability guarantee.
 
 ### links
 

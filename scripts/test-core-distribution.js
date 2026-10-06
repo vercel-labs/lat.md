@@ -109,6 +109,10 @@ test('packed core exposes only core commands without heavy dependencies', () => 
     'fs-native-extensions',
     'express',
     '@modelcontextprotocol/sdk',
+    'mermaid',
+    'dagre-d3-es',
+    'jsdom',
+    'esbuild',
   ])
     assert.equal(existsSync(join(consumer, 'node_modules', name)), false, name);
   assert.ok(
@@ -146,17 +150,30 @@ test('packed core exposes only core commands without heavy dependencies', () => 
 
 // @lat: [[tests/distribution-tests#Core ships parser and worker assets]]
 test('packed core runs worker analysis, all source grammars, and external parsers', () => {
+  const bundle = join(
+    consumer,
+    'node_modules/@lat.md/core/dist/mermaid-runtime',
+  );
+  const size = JSON.parse(
+    readFileSync(join(bundle, 'bundle-size.json'), 'utf8'),
+  );
+  assert.ok(size.gzipBytes > 0 && size.gzipBytes <= 3 * 1024 * 1024);
+  assert.ok(existsSync(join(bundle, 'THIRD_PARTY_NOTICES.txt')));
   const check = `
 import assert from 'node:assert/strict';
 import { analyzeMarkdownProject } from '@lat.md/core/project-analysis';
 import { SOURCE_FILE_EXTENSIONS } from '@lat.md/core/source-formats';
 import { resolveSourceSymbol } from '@lat.md/core/source-parser';
 import { analyzeExternalDocument } from '@lat.md/core/external-documents';
+import { analyzeMermaidDiagrams } from '@lat.md/core/mermaid-readability';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const dir = ${JSON.stringify(fixture)};
 const result = await analyzeMarkdownProject(join(dir, 'lat.md'), dir, { executor: 'workers', cache: false });
 assert.ok(result);
+const [diagram] = await analyzeMermaidDiagrams(['flowchart LR; A[Start] --> B[Finish]']);
+assert.equal(diagram.boxes, 2);
+assert.equal(diagram.estimate.estimatedFontSize, 16);
 for (const extension of SOURCE_FILE_EXTENSIONS) {
  const path = join(dir, 'empty' + extension);
  writeFileSync(path, '');
