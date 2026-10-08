@@ -79,6 +79,8 @@ its output includes the pinned commit and safe checkout suggestions.
 
 Cross-reference other sections or source code with `[[target]]` or `[[target|alias]]`.
 
+When documenting implemented behavior, prefer the narrowest relevant source-symbol link over a whole-file link. Use whole-file or directory links when discussing the module or resource as a whole, or when no supported symbol represents the target. If prose names a symbol, link that symbol directly.
+
 ### Section links
 
 Section links connect related concepts while keeping their stable graph identities explicit.

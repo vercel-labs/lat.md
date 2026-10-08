@@ -85,7 +85,7 @@ relative to the containing project root and code references are scanned from
 that root. The full check skips the `lat init` version warning because the
 directory is not required to have lat setup metadata.
 
-Emits a stale-init warning before any errors so the user sees setup issues first. The init version check compares `INIT_VERSION` in [[packages/core/src/init-version.ts]] against the version in `lat.md/.cache/lat_init.json` written by [[cli#init]]. If the total check took longer than one second and ripgrep is not installed, shows a tip suggesting the user install it for faster scanning. A successful full check ends with its total elapsed time, such as `All checks passed in 250ms`; file-extension counts are omitted because the validators perform different kinds of work.
+Emits a stale-init warning before any errors so the user sees setup issues first. The init version check compares [[packages/core/src/init-version.ts#INIT_VERSION]] against the version in `lat.md/.cache/lat_init.json` written by [[cli#init]]. If the total check took longer than one second and ripgrep is not installed, shows a tip suggesting the user install it for faster scanning. A successful full check ends with its total elapsed time, such as `All checks passed in 250ms`; file-extension counts are omitted because the validators perform different kinds of work.
 
 `--profile` adds a nested timing report for every validator and its major operations. Markdown and external-document timing explicitly report parser-module import durations on misses and zero-duration skipped-import events on hits; worker runs report one Markdown analyzer import per worker. Markdown and source timing also distinguish file reads, hashing, persistent parser-cache hits or misses, cache publication, and actual parser work. Repeated work is aggregated with call counts, average and maximum duration, and the slowest file or target so large-repository bottlenecks remain visible without one output line per file. Concurrent timings remain attributed to their initiating validator and may overlap within the total wall time.
 
@@ -276,7 +276,7 @@ Generated agent instructions and `lat-md` skills direct project-specific documen
 
 The `AGENTS.md` and `lat-md` `SKILL.md` templates state that these generated files are owned by lat tooling and may be replaced by a later `lat init`. Agents must record project guidance in `lat.md/` rather than changing generated copies.
 
-The [shared authoring guidance](../../templates/skill/SKILL.md) directs agents to bind implementation-owned symbols and defaults to validated source links instead of copying bare identifiers or literal values.
+The [shared authoring guidance](../../templates/skill/SKILL.md) directs agents to bind implementation-owned symbols and defaults to validated source links instead of copying bare identifiers or literal values. It prefers the narrowest relevant symbol over a whole-file link, reserving file and directory links for module-level explanations or targets without a supported symbol.
 
 Generated Markdown instructions obey Lat's local validation rules, so symlinked or shared instruction files remain valid even when they also live inside the project's graph directory.
 
