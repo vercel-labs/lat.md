@@ -8,6 +8,7 @@ import {
   externalDocumentAnalysisCachePath,
   type ExternalDocumentAnalysis,
 } from '@lat.md/core/external-documents';
+import type { MarkdownFileAnalysis } from '@lat.md/core/markdown-analysis';
 import { markdownAnalysisCachePath } from '@lat.md/core/markdown-analysis-cache';
 import { hashParserContent, writeParsedCache } from '@lat.md/core/parser-cache';
 import { analyzeMarkdownProject } from '@lat.md/core/project-analysis';
@@ -87,12 +88,14 @@ describe('lazy parser imports', () => {
         headingTitles: ['Cached'],
         wikiRefs: [],
         paragraphs: [],
+        blocks: [],
+        mermaidFences: [],
         markdownLinks: [],
         validationLinks: [],
         indexEntries: [],
         diagnostics: [],
         timings: zeroTimings(),
-      },
+      } satisfies MarkdownFileAnalysis,
     );
 
     const project = await analyzeMarkdownProject(latDir, root, {

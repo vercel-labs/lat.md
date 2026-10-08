@@ -27,6 +27,8 @@ An unchanged Markdown file reloads the complete serializable analysis from its c
 
 Warm local and external document cache hits hydrate serializable facts without importing the Markdown, reStructuredText, or AsciiDoc parser modules.
 
+The seeded local cache fixture satisfies [[packages/core/src/markdown-analysis.ts#MarkdownFileAnalysis]], including block and Mermaid fence facts, so schema additions cannot silently turn the warm-path test into a cache miss.
+
 ## Invalidates changed content and cache schemas
 
 Changed Markdown bytes or an unsupported analysis-cache schema force a fresh parse and atomically replace the stale entry with current facts.
