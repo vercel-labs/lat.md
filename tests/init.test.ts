@@ -340,10 +340,40 @@ describe('lat init embedding setup', () => {
     expect(checklistMenu).not.toHaveBeenCalled();
   });
 
+  // @lat: [[init#Generated instructions#Claude Code shares AGENTS.md]]
+  it('sets up Claude-only projects through AGENTS.md and preserves existing CLAUDE.md', async () => {
+    createLatDir();
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValue(['claude']);
+    selectMenu.mockResolvedValue('global');
+    await initCmd(root);
+
+    const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
+    expect(agents).toContain(readAgentsTemplate().trim());
+    expect(existsSync(join(root, 'CLAUDE.md'))).toBe(false);
+    expect(existsSync(join(root, '.claude/skills/lat-md/SKILL.md'))).toBe(true);
+    const settings = JSON.parse(
+      readFileSync(join(root, '.claude/settings.json'), 'utf8'),
+    );
+    expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
+    expect(settings.hooks.Stop).toHaveLength(1);
+
+    const legacy =
+      'User instructions\n\n%% lat:begin %%\nLegacy guidance\n%% lat:end %%\n';
+    writeFileSync(join(root, 'CLAUDE.md'), legacy);
+    await initCmd(root);
+    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).toBe(legacy);
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toBe(agents);
+    const meta = JSON.parse(
+      readFileSync(join(latDir(), '.cache/lat_init.json'), 'utf8'),
+    );
+    expect(meta.file_hashes['AGENTS.md']).toBeTruthy();
+    expect(meta.file_hashes['CLAUDE.md']).toBeUndefined();
+  });
+
   // @lat: [[tests/init#Initialization confines every write]]
   it.each([
     'AGENTS.md',
-    'CLAUDE.md',
     '.github/copilot-instructions.md',
     '.cursor/rules/lat.md',
     '.cursor/hooks.json',

@@ -10,7 +10,7 @@ Follow [[quick-start]] to connect your agent or create the initial graph for an 
 
 The integration combines instructions, tools, and lifecycle hooks according to what each agent supports:
 
-- **Project instructions:** `AGENTS.md`, `CLAUDE.md`, or agent-specific rules tell the agent to search for relevant knowledge before changing code, update it when meaningful behavior changes, and run `lat check` before finishing.
+- **Project instructions:** `AGENTS.md` or agent-specific rules tell the agent to search for relevant knowledge before changing code, update it when meaningful behavior changes, and run `lat check` before finishing.
 - **Authoring skill:** The installed `lat-md` skill teaches the agent how to write sections, connect them to code, and maintain test specifications.
 - **Tool access:** CLI commands, Model Context Protocol (MCP) tools, or native agent tools let the agent search, read, and validate the graph.
 - **Lifecycle hooks:** Supported integrations reinforce the workflow at task boundaries. Prompt hooks can supply relevant knowledge from an existing search index; end-of-task hooks run validation and flag changes that may need documentation updates.

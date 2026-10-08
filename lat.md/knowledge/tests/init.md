@@ -85,6 +85,10 @@ Generated agent guidance must remain valid Markdown wherever project layouts exp
 
 Every generated Markdown instruction template passes local graph validation and omits default prompt-expansion guidance, so setup neither breaks graph checks nor directs agents to expand prompts.
 
+### Claude Code shares AGENTS.md
+
+Claude-only setup creates shared instructions and Claude hooks and skills without generating CLAUDE.md. Re-running setup preserves existing CLAUDE.md content and keeps AGENTS.md unchanged when already current.
+
 ## Lat-owned build output ignore
 
 Initialization adds `.lat-build` to a Git project's root `.gitignore` while leaving platform-specific output to project configuration.
