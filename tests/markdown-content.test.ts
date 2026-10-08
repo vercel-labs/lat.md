@@ -86,7 +86,7 @@ describe('MarkdownContent', () => {
     ],
   };
 
-  // @lat: [[lat.md/view/specs#View Tests#Copies code blocks#Copies plain and highlighted text]]
+  // @lat: [[lat.md/knowledge/view/specs#View Tests#Copies code blocks#Copies plain and highlighted text]]
   it('copies exact code text independently of highlighting and UI labels', async () => {
     vi.useFakeTimers();
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -123,7 +123,7 @@ describe('MarkdownContent', () => {
     expect(container.querySelector('pre')?.textContent).toBe(codeText);
   });
 
-  // @lat: [[lat.md/view/specs#View Tests#Copies code blocks#Reports clipboard failures]]
+  // @lat: [[lat.md/knowledge/view/specs#View Tests#Copies code blocks#Reports clipboard failures]]
   it('reports unavailable or rejected clipboard access and allows retry', async () => {
     vi.stubGlobal('navigator', {});
     await act(async () =>
@@ -148,7 +148,7 @@ describe('MarkdownContent', () => {
     expect(writeText).toHaveBeenLastCalledWith(codeText);
   });
 
-  // @lat: [[lat.md/view/specs#View Tests#Stabilizes fragment navigation immediately#Preserves rich renderers]]
+  // @lat: [[lat.md/knowledge/view/specs#View Tests#Stabilizes fragment navigation immediately#Preserves rich renderers]]
   it('keeps rich fences React-owned across navigation and tree updates', async () => {
     const tree: ViewDocumentTree = {
       version: 1,
@@ -274,7 +274,7 @@ describe('MarkdownContent', () => {
     },
   );
 
-  // @lat: [[lat.md/view/specs#View Tests#Renders canonical document trees]]
+  // @lat: [[lat.md/knowledge/view/specs#View Tests#Renders canonical document trees]]
   it('renders safe document nodes and section interactions through React', async () => {
     const onCopySectionLink = vi.fn();
     const onShowSectionOutput = vi.fn();

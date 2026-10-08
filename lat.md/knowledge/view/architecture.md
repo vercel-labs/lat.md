@@ -160,6 +160,8 @@ An unreferenced two-second timer also refreshes Git through the store's serializ
 
 The client toggle controls both [[src/view/git-diff.ts#buildGitDiffTree|rendered diffs]] and sidebar state. Changed blocks use inline word diffs only with at least 60% ordered word-token overlap; otherwise the old and new blocks render separately.
 
+When a list item's own paragraph changes as a whole block, the whole item renders separately as removed and added. This preserves boundaries and diff styling when tight-list rendering unwraps paragraphs; small inline edits and nested-list changes remain inside their matched items.
+
 Modified files are yellow, new files are green, and validation errors split the same marker red without hiding its Git state.
 
 Whenever cached changes exist, the toggle keeps an orange notification dot whether Git rendering is enabled or hidden.
