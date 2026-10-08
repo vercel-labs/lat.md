@@ -2,7 +2,7 @@
 node_modules
 dist
 .lat-build
-lat.md/.cache
+**/lat.md/.cache/
 .pnpm-debug.log
 .mcp.json
 .cursor/mcp.json
