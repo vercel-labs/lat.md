@@ -2,7 +2,7 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
-## 0.13.0 — Unreleased
+## 0.13.0
 
 Lat adds a browser and publishing tools, pinned upstream references, hybrid search, and a lightweight checker for CI.
 
@@ -20,7 +20,6 @@ Lat adds a browser and publishing tools, pinned upstream references, hybrid sear
 - Added extensionless document URLs at the site root, with raw Markdown served separately. [#119](https://github.com/vercel-labs/lat.md/pull/119) [#146](https://github.com/vercel-labs/lat.md/pull/146)
 - Refined graph styling and reduced wheel-zoom speed for finer camera control. [#145](https://github.com/vercel-labs/lat.md/pull/145) [#148](https://github.com/vercel-labs/lat.md/pull/148) [#158](https://github.com/vercel-labs/lat.md/pull/158)
 - Added linked vault resources and hosted documentation badges to rendered pages. [#124](https://github.com/vercel-labs/lat.md/pull/124) [#137](https://github.com/vercel-labs/lat.md/pull/137)
-
 - Added TOC navigation that prioritizes explicit section choices over search-passage positioning, including repeated clicks on the current fragment. [#182](https://github.com/vercel-labs/lat.md/pull/182)
 - Added live updates with background stream cleanup and external previews that ignore their own cache writes. [#114](https://github.com/vercel-labs/lat.md/pull/114) [#160](https://github.com/vercel-labs/lat.md/pull/160)
 - Added source previews for ordinary Markdown links to repository text files. [#161](https://github.com/vercel-labs/lat.md/pull/161)
@@ -35,8 +34,8 @@ Publish the same graph as a static site or a portable server with search, using 
 
 - Added static export with documents, source previews, backlinks, graph navigation, and resources, exposed as `lat ui build static`. [#94](https://github.com/vercel-labs/lat.md/pull/94) [#124](https://github.com/vercel-labs/lat.md/pull/124) [#132](https://github.com/vercel-labs/lat.md/pull/132)
 - Added `lat ui build server` with static pages, a build-time search index, and a portable Express app using the shared `@lat.md/server` runtime. [#127](https://github.com/vercel-labs/lat.md/pull/127) [#132](https://github.com/vercel-labs/lat.md/pull/132)
+- Made model asset paths discoverable by deployment tracing. [#134](https://github.com/vercel-labs/lat.md/pull/134)
 - Added `--target vercel` to package static content and the search runtime as Vercel Build Output API artifacts. [#135](https://github.com/vercel-labs/lat.md/pull/135)
-
 - Enforced export boundaries so published artifacts include intended content and referenced resources without exposing unrelated project files. [#181](https://github.com/vercel-labs/lat.md/pull/181)
 - Deployed server search opens its bundled database directly and requires a writable database directory. [#174](https://github.com/vercel-labs/lat.md/pull/174)
 
@@ -67,13 +66,16 @@ Validation gains broader coverage and reusable caches, while setup supports ligh
 
 - Added `lat check links` for ordinary Markdown links, images, and missing reference-link definitions; accepted GitHub-style heading fragments and explicit check directories via `-- <directory>`. [#88](https://github.com/vercel-labs/lat.md/pull/88)
 - Accelerated checks with persistent parsed-file caches, concurrent discovery, and lazy parser loading, with cache and import diagnostics in profiles. [#106](https://github.com/vercel-labs/lat.md/pull/106) [#107](https://github.com/vercel-labs/lat.md/pull/107)
+- Added Mermaid syntax and flowchart readability checks through `lat check diagrams` and the full validator. [#189](https://github.com/vercel-labs/lat.md/pull/189)
 - Added `lat check --profile` for nested timings and slow-input reporting. [865a932](https://github.com/vercel-labs/lat.md/commit/865a932ba9215d66a41e2866d0c2a8cdc64bdeaf)
 - Simplified check output and used the tracked-file inventory for source discovery. [#111](https://github.com/vercel-labs/lat.md/pull/111) [#126](https://github.com/vercel-labs/lat.md/pull/126)
+- Bundled the Mermaid validation runtime and hosted-embedding tokenizer to reduce runtime dependency downloads. [#189](https://github.com/vercel-labs/lat.md/pull/189)
 - Added `@lat.md/core` and `lat-core` for checks without search or UI dependencies, plus a portable GitHub check action; the full package still exposes `lat`. [#171](https://github.com/vercel-labs/lat.md/pull/171)
 - Added `lat paths` for storage and configuration paths, with `--config` for configuration-only output; `lat config` remains a hidden compatibility alias. [#175](https://github.com/vercel-labs/lat.md/pull/175)
 - Made fresh initialization prefer local embeddings without hosted credentials.
 - Remembered interactive agent selections in ignored local configuration. [#142](https://github.com/vercel-labs/lat.md/pull/142)
 - Added Codex lifecycle hooks for context retrieval and end-of-task checks.
+- Made prompt expansion optional: hooks retrieve indexed context without automatically expanding wiki links, and generated instructions no longer require `lat expand`. The command remains available. [#187](https://github.com/vercel-labs/lat.md/pull/187)
 - Included untracked source and documentation files in stop-hook change analysis. [#115](https://github.com/vercel-labs/lat.md/pull/115)
 - Switched CLI, library, and UI builds to the native Go-based TypeScript compiler, using prebuilt binaries without requiring Go. [#176](https://github.com/vercel-labs/lat.md/pull/176)
 

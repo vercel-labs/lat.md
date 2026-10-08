@@ -1,6 +1,6 @@
 {
   "name": "@lat.md/embed-minilm-fp16",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "all-MiniLM-L6-v2 weights (fp16 safetensors) + tokenizer, packaged as a model manifest for @lat.md/embed",
   "type": "module",
   "license": "Apache-2.0",
