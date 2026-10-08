@@ -30,4 +30,4 @@ Vercel's Git integration runs the sole site build and creates previews in a sepa
 
 The portable artifact passes its generated manifest and index URLs directly to the server runtime and injects the local search engine through ordinary package imports. Its runtime infers the static fallback from the artifact layout, leaving `public/` available for CDN promotion. Content-addressed JSON and Vite assets remain stable across deployments.
 
-The index is built once with Lat's local WASM model. The server opens `server-data/search.db` directly under the shared search access lock; its directory must be writable. Document, source, external, and graph requests stay on immutable files. See [[lat.md/knowledge/view/architecture]] for runtime constraints.
+The index is built once with Lat's local WASM model. The server opens `server-data/search.db` under the shared search access lock. On read-only hosts it uses a private temporary copy, keeping runtime locks and sidecars outside the deployment. Document, source, external, and graph requests stay on immutable files. See [[lat.md/knowledge/view/architecture]] for runtime constraints.

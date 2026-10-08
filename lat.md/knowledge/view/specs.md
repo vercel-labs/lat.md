@@ -61,7 +61,7 @@ Root and nested builds preserve encoded filenames, relative links, fragments, ra
 
 `lat ui build server [output]` emits immutable public routes plus a portable Express application whose only dynamic feature is semantic search.
 
-The build creates its vector index once and stores flat section metadata beside it. Runtime search opens the bundled database directly, resolves results without Markdown parsing, and never rebuilds the index. A warm server reuses its embedder while each query opens and closes the database under the CLI access-lock protocol. The database and its directory must be writable.
+The build creates its vector index once and stores flat section metadata beside it. Runtime search opens the bundled database directly, resolves results without Markdown parsing, and never rebuilds the index. A warm server reuses its embedder while each query opens and closes the database under the CLI access-lock protocol. Read-only hosts copy the finished index to a private temporary directory for locks and database sidecars; shutdown removes the copy.
 
 The generated package directly imports and constructs its pinned Express version for framework detection, then passes that app to the shared runtime and delegates `npm start`, security headers, static caching, listening, and shutdown to `@lat.md/server`. No generated listener implementation is serialized into the artifact.
 
@@ -77,7 +77,7 @@ The Node-target regression test builds a complete portable artifact, loads its g
 
 Indexing runs in a child process that exits before staging is renamed, releasing native SQLite handles on Windows. The existing analyzed snapshot crosses the process boundary intact, and indexing errors reject the build before publication.
 
-Search creates access locks beside the bundled database, proving it uses the build output directly. Shutdown closes search and preserves that database; no private runtime copy is created.
+The test searches both writable and read-only bundles. Writable bundles use adjacent locks; read-only bundles search through a temporary copy without writing into the deployment. Shutdown preserves the original database.
 
 It verifies the document shell, immutable JavaScript and CSS assets, and semantic results from the real local embedding model and built SQLite index. The test therefore covers the generated application contract rather than substituting a fake search handler.
 

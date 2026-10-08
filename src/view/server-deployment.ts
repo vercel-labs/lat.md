@@ -1,7 +1,8 @@
 import { INDEX_FILE } from '../search/db.js';
-import { readFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import type { ServerResponse } from 'node:http';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLatServerApp, type LatServerApp } from '@lat.md/server';
 import type { Express } from 'express';
@@ -88,6 +89,7 @@ async function prepareServerView(
   const manifest = await readManifest(manifestFile);
   let search = options.search;
   let ownedSearch: PreindexedViewSearch | undefined;
+  let runtimeDir: string | undefined;
   if (!search) {
     if (basename(indexFile) !== INDEX_FILE) {
       throw new Error(
@@ -102,14 +104,31 @@ async function prepareServerView(
         return { ...section, children: [] };
       },
     );
-    ownedSearch = await createPreindexedViewSearch(
-      dirname(indexFile),
-      dirname(indexFile),
-      sections,
-      documentPaths,
-      undefined,
-      options.createSearchEngine,
-    );
+    const openSearch = (cacheDir: string) =>
+      createPreindexedViewSearch(
+        dirname(indexFile),
+        cacheDir,
+        sections,
+        documentPaths,
+        undefined,
+        options.createSearchEngine,
+      );
+    try {
+      ownedSearch = await openSearch(dirname(indexFile));
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'EROFS' && code !== 'EACCES') throw error;
+      // Serverless bundles are immutable; locks and database sidecars need writes.
+      runtimeDir = await mkdtemp(join(tmpdir(), 'lat-server-search-'));
+      try {
+        await copyFile(indexFile, join(runtimeDir, INDEX_FILE));
+        await chmod(join(runtimeDir, INDEX_FILE), 0o600);
+        ownedSearch = await openSearch(runtimeDir);
+      } catch (copyError) {
+        await rm(runtimeDir, { recursive: true, force: true });
+        throw copyError;
+      }
+    }
     search = ownedSearch;
   }
 
@@ -117,7 +136,11 @@ async function prepareServerView(
     manifest,
     search,
     close: async () => {
-      await ownedSearch?.close();
+      try {
+        await ownedSearch?.close();
+      } finally {
+        if (runtimeDir) await rm(runtimeDir, { recursive: true, force: true });
+      }
     },
   };
 }
@@ -137,6 +160,8 @@ export function createServerViewApp(
     manifestFile,
     localPath(options.indexFile),
   );
+  // Preparation starts before the first request; requests still receive its error.
+  void prepared.catch(() => {});
   const app = createLatServerApp(
     {
       publicDir,

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -1064,192 +1065,212 @@ describe('lat ui', () => {
   });
 
   // @lat: [[lat.md/knowledge/view/specs#View Tests#Builds a portable server deployment#Runs the generated Node artifact end to end]]
-  it('runs the generated Node artifact with static assets and semantic search', async () => {
-    const buildRoot = mkdtempSync(join(tmpdir(), 'lat-ui-node-e2e-'));
-    const serverProjectRoot = join(buildRoot, 'project');
-    const outputDir = join(serverProjectRoot, 'server-site');
-    const repositoryRoot = join(import.meta.dirname, '..');
-    const previousXdgConfig = process.env.XDG_CONFIG_HOME;
-    cpSync(projectRoot, serverProjectRoot, { recursive: true });
-    process.env.XDG_CONFIG_HOME = join(buildRoot, 'xdg');
-    setRepoEmbedding(join(serverProjectRoot, 'lat.md'), 'local');
+  it.each(process.platform === 'win32' ? [false] : [false, true])(
+    'runs the generated Node artifact with read-only bundle: %s',
+    async (readOnly) => {
+      const buildRoot = mkdtempSync(join(tmpdir(), 'lat-ui-node-e2e-'));
+      const serverProjectRoot = join(buildRoot, 'project');
+      const outputDir = join(serverProjectRoot, 'server-site');
+      const repositoryRoot = join(import.meta.dirname, '..');
+      const previousXdgConfig = process.env.XDG_CONFIG_HOME;
+      cpSync(projectRoot, serverProjectRoot, { recursive: true });
+      process.env.XDG_CONFIG_HOME = join(buildRoot, 'xdg');
+      setRepoEmbedding(join(serverProjectRoot, 'lat.md'), 'local');
 
-    let closeGeneratedApp: (() => Promise<void>) | undefined;
-    let server: ReturnType<typeof createServer> | undefined;
-    try {
-      await buildServerView(
-        {
-          ...testContext(),
-          projectRoot: serverProjectRoot,
-          latDir: join(serverProjectRoot, 'lat.md'),
-        },
-        outputDir,
-        { basePath: '/project', clientDir },
-        {
-          analyzeMarkdownProject,
-          buildStaticView,
-          getLocalVersion: () =>
-            JSON.parse(
-              readFileSync(join(repositoryRoot, 'package.json'), 'utf8'),
-            ).version as string,
-          getLatServerVersion: () =>
-            JSON.parse(
-              readFileSync(
-                join(repositoryRoot, 'packages', 'server', 'package.json'),
-                'utf8',
-              ),
-            ).version as string,
-          getPackageVersion(name) {
-            const packageDirectories: Record<string, string[]> = {
-              '@lat.md/embed': ['packages', 'embed'],
-              '@lat.md/embed-minilm-fp16': ['packages', 'embed-minilm-fp16'],
-              express: ['node_modules', 'express'],
-            };
-            return JSON.parse(
-              readFileSync(
-                join(
-                  repositoryRoot,
-                  ...packageDirectories[name]!,
-                  'package.json',
-                ),
-                'utf8',
-              ),
-            ).version as string;
-          },
-          buildSearchIndex: buildServerSearchIndex,
-        },
-      );
-
-      const nodeModules = join(outputDir, 'node_modules');
-      mkdirSync(join(nodeModules, '@lat.md'), { recursive: true });
-      const linkPackage = (name: string, source: string) => {
-        symlinkSync(
-          realpathSync(source),
-          join(nodeModules, ...name.split('/')),
-          process.platform === 'win32' ? 'junction' : 'dir',
-        );
-      };
-      linkPackage('@lat.md/embed', join(repositoryRoot, 'packages', 'embed'));
-      linkPackage(
-        '@lat.md/embed-minilm-fp16',
-        join(repositoryRoot, 'packages', 'embed-minilm-fp16'),
-      );
-      linkPackage('@lat.md/server', join(repositoryRoot, 'packages', 'server'));
-      linkPackage('express', join(repositoryRoot, 'node_modules', 'express'));
-      linkPackage('lat.md', repositoryRoot);
-
-      // Remove the builder's released lock so runtime access must recreate it.
-      rmSync(join(outputDir, 'server-data', 'search-access.lock'), {
-        force: true,
-      });
-
-      const generated = (await import(
-        pathToFileURL(join(outputDir, 'app.mjs')).href
-      )) as {
-        default: Parameters<typeof createServer>[0];
-        close: () => Promise<void>;
-      };
-      closeGeneratedApp = generated.close;
-      server = createServer(generated.default);
-      await new Promise<void>((resolveListen) =>
-        server!.listen(0, '127.0.0.1', resolveListen),
-      );
-      const address = server.address();
-      expect(address && typeof address !== 'string').toBe(true);
-      const origin = `http://127.0.0.1:${typeof address === 'string' || !address ? 0 : address.port}`;
-
-      const document = await fetch(`${origin}/project/`);
-      expect(document.status).toBe(200);
-      const shell = await document.text();
-      expect(shell).toContain('lat ui shell');
-
-      const staticConfig = shell.match(
-        /<meta name="lat-static-view" content="([^"]+)"/,
-      )?.[1];
-      expect(staticConfig).toBeDefined();
-      vi.stubGlobal('document', {
-        querySelector: () => ({ content: staticConfig }),
-      });
+      let closeGeneratedApp: (() => Promise<void>) | undefined;
+      let server: ReturnType<typeof createServer> | undefined;
       try {
-        const manifest = (await (
-          await fetch(`${origin}/project/data/manifest.json`)
-        ).json()) as ViewStaticManifest;
-        for (const path of ['lat.md', 'guide.md']) {
-          const model = (await (
-            await fetch(`${origin}/project/${manifest.documents[path]}`)
-          ).json()) as ViewDocument;
-          const rendered = renderToStaticMarkup(
-            createElement(MarkdownContent, {
-              backReferences: model.backReferences,
-              tree: model.tree,
-              sectionOutputEnabled: false,
-              viewMarkdownUrl: rawDocumentUrl(model.path),
-            }),
+        await buildServerView(
+          {
+            ...testContext(),
+            projectRoot: serverProjectRoot,
+            latDir: join(serverProjectRoot, 'lat.md'),
+          },
+          outputDir,
+          { basePath: '/project', clientDir },
+          {
+            analyzeMarkdownProject,
+            buildStaticView,
+            getLocalVersion: () =>
+              JSON.parse(
+                readFileSync(join(repositoryRoot, 'package.json'), 'utf8'),
+              ).version as string,
+            getLatServerVersion: () =>
+              JSON.parse(
+                readFileSync(
+                  join(repositoryRoot, 'packages', 'server', 'package.json'),
+                  'utf8',
+                ),
+              ).version as string,
+            getPackageVersion(name) {
+              const packageDirectories: Record<string, string[]> = {
+                '@lat.md/embed': ['packages', 'embed'],
+                '@lat.md/embed-minilm-fp16': ['packages', 'embed-minilm-fp16'],
+                express: ['node_modules', 'express'],
+              };
+              return JSON.parse(
+                readFileSync(
+                  join(
+                    repositoryRoot,
+                    ...packageDirectories[name]!,
+                    'package.json',
+                  ),
+                  'utf8',
+                ),
+              ).version as string;
+            },
+            buildSearchIndex: buildServerSearchIndex,
+          },
+        );
+
+        const nodeModules = join(outputDir, 'node_modules');
+        mkdirSync(join(nodeModules, '@lat.md'), { recursive: true });
+        const linkPackage = (name: string, source: string) => {
+          symlinkSync(
+            realpathSync(source),
+            join(nodeModules, ...name.split('/')),
+            process.platform === 'win32' ? 'junction' : 'dir',
           );
-          const links = [
-            ...rendered.matchAll(
-              /<a class="section-back-reference-action" href="([^"]+)">View Markdown File<\/a>/g,
-            ),
-          ];
-          expect(links).toHaveLength(1);
-          const href = links[0][1];
-          expect(href).toBe(`/project/${path}`);
-          expect(documentPath(new URL(href, origin).pathname)).toBeNull();
-          const raw = await fetch(new URL(href, origin));
-          expect(raw.status).toBe(200);
-          expect(raw.headers.get('content-type')).toContain('text/markdown');
-          expect(await raw.text()).toBe(
-            readFileSync(join(serverProjectRoot, 'lat.md', path), 'utf8'),
+        };
+        linkPackage('@lat.md/embed', join(repositoryRoot, 'packages', 'embed'));
+        linkPackage(
+          '@lat.md/embed-minilm-fp16',
+          join(repositoryRoot, 'packages', 'embed-minilm-fp16'),
+        );
+        linkPackage(
+          '@lat.md/server',
+          join(repositoryRoot, 'packages', 'server'),
+        );
+        linkPackage('express', join(repositoryRoot, 'node_modules', 'express'));
+        linkPackage('lat.md', repositoryRoot);
+
+        // Remove the builder's released lock so runtime access must recreate it.
+        rmSync(join(outputDir, 'server-data', 'search-access.lock'), {
+          force: true,
+        });
+
+        if (readOnly) {
+          for (const name of readdirSync(join(outputDir, 'server-data'))) {
+            chmodSync(join(outputDir, 'server-data', name), 0o444);
+          }
+          chmodSync(join(outputDir, 'server-data'), 0o555);
+        }
+
+        const generated = (await import(
+          pathToFileURL(join(outputDir, 'app.mjs')).href
+        )) as {
+          default: Parameters<typeof createServer>[0];
+          close: () => Promise<void>;
+        };
+        closeGeneratedApp = generated.close;
+        server = createServer(generated.default);
+        await new Promise<void>((resolveListen) =>
+          server!.listen(0, '127.0.0.1', resolveListen),
+        );
+        const address = server.address();
+        expect(address && typeof address !== 'string').toBe(true);
+        const origin = `http://127.0.0.1:${typeof address === 'string' || !address ? 0 : address.port}`;
+
+        const document = await fetch(`${origin}/project/`);
+        expect(document.status).toBe(200);
+        const shell = await document.text();
+        expect(shell).toContain('lat ui shell');
+
+        const staticConfig = shell.match(
+          /<meta name="lat-static-view" content="([^"]+)"/,
+        )?.[1];
+        expect(staticConfig).toBeDefined();
+        vi.stubGlobal('document', {
+          querySelector: () => ({ content: staticConfig }),
+        });
+        try {
+          const manifest = (await (
+            await fetch(`${origin}/project/data/manifest.json`)
+          ).json()) as ViewStaticManifest;
+          for (const path of ['lat.md', 'guide.md']) {
+            const model = (await (
+              await fetch(`${origin}/project/${manifest.documents[path]}`)
+            ).json()) as ViewDocument;
+            const rendered = renderToStaticMarkup(
+              createElement(MarkdownContent, {
+                backReferences: model.backReferences,
+                tree: model.tree,
+                sectionOutputEnabled: false,
+                viewMarkdownUrl: rawDocumentUrl(model.path),
+              }),
+            );
+            const links = [
+              ...rendered.matchAll(
+                /<a class="section-back-reference-action" href="([^"]+)">View Markdown File<\/a>/g,
+              ),
+            ];
+            expect(links).toHaveLength(1);
+            const href = links[0][1];
+            expect(href).toBe(`/project/${path}`);
+            expect(documentPath(new URL(href, origin).pathname)).toBeNull();
+            const raw = await fetch(new URL(href, origin));
+            expect(raw.status).toBe(200);
+            expect(raw.headers.get('content-type')).toContain('text/markdown');
+            expect(await raw.text()).toBe(
+              readFileSync(join(serverProjectRoot, 'lat.md', path), 'utf8'),
+            );
+          }
+        } finally {
+          vi.unstubAllGlobals();
+        }
+
+        for (const asset of ['app.js', 'app.css']) {
+          const response = await fetch(`${origin}/project/assets/${asset}`);
+          expect(response.status).toBe(200);
+          expect(response.headers.get('cache-control')).toBe(
+            'public, max-age=31536000, immutable',
+          );
+          expect((await response.text()).length).toBeGreaterThan(0);
+        }
+
+        const search = await fetch(
+          `${origin}/project/api/search?query=${encodeURIComponent('relative Markdown heading fragments')}`,
+        );
+        expect(search.status).toBe(200);
+        expect(search.headers.get('cache-control')).toBe('no-store');
+        const payload = (await search.json()) as ViewSearchResponse;
+        expect(payload.query).toBe('relative Markdown heading fragments');
+        expect(payload.results.length).toBeGreaterThan(0);
+        expect(payload.results).toContainEqual(
+          expect.objectContaining({ path: 'guide.md' }),
+        );
+        // Read-only deployments keep runtime locks out of the bundled directory.
+        expect(
+          existsSync(join(outputDir, 'server-data', 'search-access.lock')),
+        ).toBe(!readOnly);
+        await closeGeneratedApp();
+        closeGeneratedApp = undefined;
+        expect(existsSync(join(outputDir, 'server-data', 'search.db'))).toBe(
+          true,
+        );
+      } finally {
+        if (server) {
+          await new Promise<void>((resolveClose, reject) =>
+            server!.close((error) => (error ? reject(error) : resolveClose())),
           );
         }
-      } finally {
-        vi.unstubAllGlobals();
+        await closeGeneratedApp?.();
+        if (readOnly && existsSync(join(outputDir, 'server-data'))) {
+          chmodSync(join(outputDir, 'server-data'), 0o755);
+          for (const name of readdirSync(join(outputDir, 'server-data'))) {
+            chmodSync(join(outputDir, 'server-data', name), 0o644);
+          }
+        }
+        if (previousXdgConfig === undefined) {
+          delete process.env.XDG_CONFIG_HOME;
+        } else {
+          process.env.XDG_CONFIG_HOME = previousXdgConfig;
+        }
+        rmSync(buildRoot, { recursive: true, force: true });
       }
-
-      for (const asset of ['app.js', 'app.css']) {
-        const response = await fetch(`${origin}/project/assets/${asset}`);
-        expect(response.status).toBe(200);
-        expect(response.headers.get('cache-control')).toBe(
-          'public, max-age=31536000, immutable',
-        );
-        expect((await response.text()).length).toBeGreaterThan(0);
-      }
-
-      const search = await fetch(
-        `${origin}/project/api/search?query=${encodeURIComponent('relative Markdown heading fragments')}`,
-      );
-      expect(search.status).toBe(200);
-      expect(search.headers.get('cache-control')).toBe('no-store');
-      const payload = (await search.json()) as ViewSearchResponse;
-      expect(payload.query).toBe('relative Markdown heading fragments');
-      expect(payload.results.length).toBeGreaterThan(0);
-      expect(payload.results).toContainEqual(
-        expect.objectContaining({ path: 'guide.md' }),
-      );
-      // Queries lock the bundled database, not a private runtime copy.
-      expect(
-        existsSync(join(outputDir, 'server-data', 'search-access.lock')),
-      ).toBe(true);
-      await closeGeneratedApp();
-      closeGeneratedApp = undefined;
-      expect(existsSync(join(outputDir, 'server-data', 'search.db'))).toBe(
-        true,
-      );
-    } finally {
-      if (server) {
-        await new Promise<void>((resolveClose, reject) =>
-          server!.close((error) => (error ? reject(error) : resolveClose())),
-        );
-      }
-      await closeGeneratedApp?.();
-      if (previousXdgConfig === undefined) {
-        delete process.env.XDG_CONFIG_HOME;
-      } else {
-        process.env.XDG_CONFIG_HOME = previousXdgConfig;
-      }
-      rmSync(buildRoot, { recursive: true, force: true });
-    }
-  }, 60_000);
+    },
+    60_000,
+  );
 
   // @lat: [[lat.md/knowledge/view/specs#View Tests#Keeps build-only packages out of runtime dependencies]]
   it('keeps build-only packages out of runtime dependencies', () => {

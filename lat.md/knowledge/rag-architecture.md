@@ -203,7 +203,7 @@ Search returns sections with fused rank scores, available channel scores and ran
 
 ## Exported site search
 
-A site export packages a finished index and a search server. Runtime search opens the bundled `server-data/search.db` directly under the same access locks as CLI search.
+A site export packages a finished index and a search server. Runtime search uses CLI access locks and opens the bundled index directly when writable, or a temporary copy on read-only hosts.
 
 [[src/view/server-build.ts]] exports sections and generates the server entrypoint; [[src/view/server-index-worker.ts]] builds the index in a child process. [[src/view/server-deployment.ts]] reads the manifest, opens the bundled database, and serves the search route through [[src/view/preindexed-search.ts]].
 
