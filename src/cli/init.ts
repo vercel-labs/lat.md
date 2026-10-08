@@ -665,23 +665,10 @@ async function setupAgentsMd(
 async function setupClaudeCode(
   root: string,
   latDir: string,
-  template: string,
   hashes: Record<string, string>,
   ask: (message: string) => Promise<boolean>,
   style: LatCommandStyle,
 ): Promise<void> {
-  // CLAUDE.md — append-mode with markers (preserves user content)
-  const hash = await appendTemplateSection(
-    root,
-    latDir,
-    'CLAUDE.md',
-    template,
-    'CLAUDE.md',
-    '  ',
-    ask,
-  );
-  if (hash) hashes['CLAUDE.md'] = hash;
-
   // Hooks — UserPromptSubmit (lat.md reminders + [[ref]] expansion) and Stop (update reminder)
   console.log('');
   console.log(
@@ -1518,25 +1505,14 @@ export async function initCmd(targetDir?: string): Promise<void> {
     const template = readAgentsTemplate();
     const fileHashes: Record<string, string> = {};
 
-    // Step 5: AGENTS.md (shared by non-Claude agents)
-    const needsAgentsMd =
-      usePi || useCursor || useCopilot || useOpenCode || useCodex;
-    if (needsAgentsMd) {
-      await setupAgentsMd(root, latDir, template, fileHashes, ask);
-    }
+    // Step 5: AGENTS.md (shared by all selected agents)
+    await setupAgentsMd(root, latDir, template, fileHashes, ask);
 
     // Step 6: Per-agent setup
     if (useClaudeCode) {
       console.log('');
       console.log(styleText('bold', 'Setting up Claude Code...'));
-      await setupClaudeCode(
-        root,
-        latDir,
-        template,
-        fileHashes,
-        ask,
-        commandStyle,
-      );
+      await setupClaudeCode(root, latDir, fileHashes, ask, commandStyle);
     }
 
     if (usePi) {

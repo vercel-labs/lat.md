@@ -61,6 +61,14 @@ This is invalid — "Bad Section" has no leading paragraph.
 
 `lat check` enforces this rule.
 
+## Diagrams
+
+Default to prose. Reserve Mermaid diagrams for concepts involving more than seven interacting subjects (such as components, states, or stages) with complex sequencing, branching, or dependencies that prose alone makes hard to follow.
+
+The subject count alone does not justify a diagram; omit diagrams for simple sequences or relationships that a short paragraph or list explains clearly. A diagram should give users and later agents an overview of the interactions.
+
+Keep each diagram focused on one process, use readable labels, and explain the important decisions in surrounding prose with precise source-symbol links. Prefer a small overview or several focused diagrams over one dense diagram. Use fenced `mermaid` blocks and run `lat check` to validate syntax and readability.
+
 ## Section IDs
 
 Sections are addressed by file path and heading chain:
@@ -78,6 +86,8 @@ its output includes the pinned commit and safe checkout suggestions.
 ## Wiki links
 
 Cross-reference other sections or source code with `[[target]]` or `[[target|alias]]`.
+
+When documenting implemented behavior, prefer the narrowest relevant source-symbol link over a whole-file link. Use whole-file or directory links when discussing the module or resource as a whole, or when no supported symbol represents the target. If prose names a symbol, link that symbol directly.
 
 ### Section links
 
