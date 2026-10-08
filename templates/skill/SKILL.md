@@ -61,6 +61,12 @@ This is invalid — "Bad Section" has no leading paragraph.
 
 `lat check` enforces this rule.
 
+## Diagrams
+
+Use Mermaid diagrams to give users and later agents a shared overview of complex algorithms and data flows.
+
+Keep each diagram focused on one process, use readable labels, and explain the important decisions in surrounding prose with precise source-symbol links. Prefer a small overview or several focused diagrams over one dense diagram. Use fenced `mermaid` blocks and run `lat check` to validate syntax and readability.
+
 ## Section IDs
 
 Sections are addressed by file path and heading chain:

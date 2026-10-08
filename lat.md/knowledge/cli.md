@@ -278,6 +278,8 @@ The `AGENTS.md` and `lat-md` `SKILL.md` templates state that these generated fil
 
 The [shared authoring guidance](../../templates/skill/SKILL.md) directs agents to bind implementation-owned symbols and defaults to validated source links instead of copying bare identifiers or literal values. It prefers the narrowest relevant symbol over a whole-file link, reserving file and directory links for module-level explanations or targets without a supported symbol.
 
+The shared authoring guidance also recommends focused Mermaid diagrams for complex algorithms and data flows, helping users and later agents understand the overall design. Diagrams complement behavioral prose and precise source links, and must pass syntax and readability checks.
+
 Generated Markdown instructions obey Lat's local validation rules, so symlinked or shared instruction files remain valid even when they also live inside the project's graph directory.
 
 ### Marker-based append mode
