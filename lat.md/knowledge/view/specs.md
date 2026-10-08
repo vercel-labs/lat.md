@@ -95,6 +95,8 @@ The public Vercel target and repository preview convert an installed portable se
 
 The Vercel packager explicitly includes `server-data/search.db` so the completed index is shipped with the function. Missing database files fail the build before replacing an existing output. Other runtime assets are reachable through a static import or `new URL(relativePath, import.meta.url)`. The embedding loader owns WASM initialization rather than relying on generated CommonJS glue to perform an opaque filesystem read.
 
+The function includes dynamically loaded native filesystem-lock bindings even when dependency tracing omits them.
+
 The generated configuration applies the shared security policy, gives content-addressed JSON and Vite assets immutable caching, resolves functions and exact static files first, and maps extensionless routes to their physical `index.html` files.
 
 ## Builds this repository's site directly
