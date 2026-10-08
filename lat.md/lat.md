@@ -26,7 +26,7 @@ Lat gives people and agents one reviewable source of truth for what a system doe
 - **Review meaning before mechanics.** Read the knowledge diff to understand a change, then inspect its implementation.
 - **Connect knowledge to code.** Link documents to source symbols and require important test specifications to have code backlinks.
 - **Detect drift.** Validate wiki links, source symbols, Markdown links, section structure, and test-spec coverage in one command.
-- **Explore, do not grep.** Search semantically, follow references, or browse the same graph in [[browser|Lat UI]].
+- **Explore, do not grep.** Search semantically, follow references, or browse the same graph in [[ui|Lat UI]].
 
 ## Explore
 

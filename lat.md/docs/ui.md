@@ -14,7 +14,7 @@ lat ui
 
 Use the sidebar and table of contents to navigate, or follow references between explanations, source definitions, and tests. Validation errors and Git diffs appear beside the affected content.
 
-You can edit local Markdown and save explicitly; conflicting changes are reported instead of silently overwritten. Source files and [[upstream|external sources]] are read-only. Code highlighting, math, diagrams, maps, and 3D models render within documents.
+You can edit local Markdown and save explicitly; conflicting changes are reported instead of silently overwritten. Source files and [[external_sources|external sources]] are read-only. Code highlighting, math, diagrams, maps, and 3D models render within documents.
 
 ## Publish
 

@@ -41,4 +41,4 @@ lat section 'node:api/assert#Strict assertion mode'
 
 `lat section` retrieves the referenced content; `lat external show node` inspects configuration and cache status. The first retrieval may require network access, and later reads reuse cached content.
 
-Browse the same links in [[browser|Lat UI]] or include them in published sites. External content is read-only and is not included in semantic search; use exact links to retrieve it.
+Browse the same links in [[ui|Lat UI]] or include them in published sites. External content is read-only and is not included in semantic search; use exact links to retrieve it.

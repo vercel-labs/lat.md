@@ -8,7 +8,7 @@ Lat adds a browser and publishing tools, pinned upstream references, hybrid sear
 
 ### Features: browser and editing
 
-[[browser|Lat UI]] makes the knowledge graph navigable alongside source code, validation results, and local changes.
+[[ui|Lat UI]] makes the knowledge graph navigable alongside source code, validation results, and local changes.
 
 - Added a live browser with file navigation, section TOC, source previews, and graph exploration; `lat ui` and `lat ui run` open it. [#92](https://github.com/vercel-labs/lat.md/pull/92) [#94](https://github.com/vercel-labs/lat.md/pull/94) [#132](https://github.com/vercel-labs/lat.md/pull/132)
 - Added mobile navigation, a collapsible TOC, active-section and subtree indicators, and sidebar ordering from directory index documents. [#95](https://github.com/vercel-labs/lat.md/pull/95) [#141](https://github.com/vercel-labs/lat.md/pull/141) [#147](https://github.com/vercel-labs/lat.md/pull/147)
@@ -31,7 +31,7 @@ Lat adds a browser and publishing tools, pinned upstream references, hybrid sear
 
 ### Features: publishing
 
-Publish the same graph as a static site or a portable server with search, using [[browser#Publish|Lat UI build commands]].
+Publish the same graph as a static site or a portable server with search, using [[ui#Publish|Lat UI build commands]].
 
 - Added static export with documents, source previews, backlinks, graph navigation, and resources, exposed as `lat ui build static`. [#94](https://github.com/vercel-labs/lat.md/pull/94) [#124](https://github.com/vercel-labs/lat.md/pull/124) [#132](https://github.com/vercel-labs/lat.md/pull/132)
 - Added `lat ui build server` with static pages, a build-time search index, and a portable Express app using the shared `@lat.md/server` runtime. [#127](https://github.com/vercel-labs/lat.md/pull/127) [#132](https://github.com/vercel-labs/lat.md/pull/132)
@@ -42,7 +42,7 @@ Publish the same graph as a static site or a portable server with search, using 
 
 ### Features: external sources and source links
 
-[[upstream|External sources]] extend the graph to pinned upstream documentation and code.
+[[external_sources|External sources]] extend the graph to pinned upstream documentation and code.
 
 - Added `lat external add`, `list`, and `show` for commit-pinned upstream sources, with individual-file retrieval, managed Git checkouts, and verified local overrides.
 - Added external Markdown, reStructuredText, AsciiDoc, and source-symbol targets to validation, lookup, backlinks, previews, and exports. [865a932](https://github.com/vercel-labs/lat.md/commit/865a932ba9215d66a41e2866d0c2a8cdc64bdeaf)

@@ -43,7 +43,7 @@ These examples show the kinds of targets you can reference in a project:
 | External section | `[[sdk:docs/auth.md#Tokens]]` | A section in the configured `sdk` external source |
 | Section referenced from code | `// @lat: [[auth#Tokens#Rotation]]` | A source comment connecting code to its documented intent |
 
-[[upstream|External sources]] extend links to documentation and code in other repositories.
+[[external_sources|External sources]] extend links to documentation and code in other repositories.
 
 Ordinary Markdown links also work; Lat checks local file and image destinations, Markdown heading fragments, and reference-style link definitions.
 
@@ -131,7 +131,7 @@ Use `lat locate` to find a section by name, `lat section` to read it, and `lat r
 Use Lat through the CLI, your coding agent, or the browser, depending on whether you want to automate a task, work with project context, or explore the graph visually.
 
 - **CLI:** Search, read, and validate knowledge from your terminal or scripts. The [[commands]] reference lists the commands and their purposes.
-- **Agent integrations:** Let coding agents retrieve context and maintain the graph through CLI commands or Model Context Protocol (MCP) tools. Start with [[quick-start]], then follow [[agent-workflows]] for everyday use.
-- **Lat UI:** Browse documents, follow links into source code, and explore the graph. The [[browser]] guide covers local browsing and publishing a static or searchable site.
+- **Agent integrations:** Let coding agents retrieve context and maintain the graph through CLI commands or Model Context Protocol (MCP) tools. Start with [[quick-start]], then follow [[lat-workflow]] for everyday use.
+- **Lat UI:** Browse documents, follow links into source code, and explore the graph. The [[ui]] guide covers local browsing and publishing a static or searchable site.
 
 Continue to [[commands]] to choose a command for your next task.

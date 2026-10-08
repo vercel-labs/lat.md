@@ -50,7 +50,7 @@ Then use this loop:
 2. Focus your review on the knowledge diff: intent, behavior, constraints, and test expectations. Use that context to guide code review.
 3. Run `lat ui` to visualize the graph, follow links, and explore the project's knowledge together.
 
-See [[browser]] for the UI and [[commands]] for the CLI reference.
+See [[ui]] for the UI and [[commands]] for the CLI reference.
 
 ## For agents
 
@@ -62,4 +62,4 @@ Keep a concise knowledge graph of intent that evolves with the code, helping hum
 - Be selective. Do not dump code, file inventories, session logs, or trivia into Lat; link to implementation details instead of duplicating them.
 - Update the graph as meaningful behavior or decisions change. Always run `lat check` before finishing and fix any errors.
 
-See [[agent-workflows]] for more guidance and [[concepts]] for the knowledge model.
+See [[lat-workflow]] for more guidance and [[concepts]] for the knowledge model.
