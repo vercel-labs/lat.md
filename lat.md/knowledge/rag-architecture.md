@@ -203,13 +203,13 @@ Search returns sections with fused rank scores, available channel scores and ran
 
 ## Exported site search
 
-A site export packages a finished index and a search server. Runtime search opens the bundled `server-data/search.db` directly under the same access locks as CLI search.
+A site export packages a finished index and a search server. Runtime search uses CLI access locks and opens the bundled index directly when writable, or a temporary copy on read-only hosts.
 
 [[src/view/server-build.ts]] exports sections and generates the server entrypoint; [[src/view/server-index-worker.ts]] builds the index in a child process. [[src/view/server-deployment.ts]] reads the manifest, opens the bundled database, and serves the search route through [[src/view/preindexed-search.ts]].
 
 [[scripts/prepare-site-packages.mjs]] hydrates published artifacts matching workspace package versions. The embedding JavaScript and WASM must be released together: `@lat.md/embed@0.2.1` supplies the token-counting API, and `@lat.md/stemmer@0.1.0` supplies lexical stemming. [[scripts/vendor-site-packages.mjs]] packages branch-local runtime code for the repository preview.
 
-[[src/view/vercel-build.ts#buildVercelOutput]] explicitly includes the search manifest and the database named inside it. Static tracing cannot discover that dynamically selected filename. Missing files fail packaging before replacing an existing output; other runtime dependencies are traced into the function separately from CDN assets.
+[[src/view/vercel-build.ts#buildVercelOutput]] explicitly includes the search manifest and the database named inside it. Static tracing cannot discover that dynamically selected filename. Missing files fail packaging before replacing an existing output; native filesystem-lock bindings are included explicitly because their loader selects them dynamically. Other runtime dependencies are traced into the function separately from CDN assets.
 
 Tests: [[view/specs#Builds Vercel output directly]] in [[tests/vercel-build.test.ts]] and [[tests/search#Hybrid Retrieval#Packages stemmer runtime assets]] in [[tests/embed-assets.test.ts]].
 

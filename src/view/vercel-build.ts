@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rename,
   rm,
   writeFile,
@@ -163,6 +164,17 @@ export async function buildVercelOutput(
   }
   trace.fileList.add('server-data/server.json');
   trace.fileList.add(`server-data/${INDEX_FILE}`);
+
+  // bare-addon resolves native lock bindings dynamically, beyond file tracing.
+  for (const file of [...trace.fileList]) {
+    if (!file.endsWith('fs-native-extensions/binding.js')) continue;
+    const prebuilds = join(dirname(file), 'prebuilds');
+    for (const asset of await readdir(join(artifactDir, prebuilds), {
+      recursive: true,
+    })) {
+      if (asset.endsWith('.node')) trace.fileList.add(join(prebuilds, asset));
+    }
+  }
 
   await mkdir(dirname(outputDir), { recursive: true });
   const stagingDir = await mkdtemp(

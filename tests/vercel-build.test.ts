@@ -98,7 +98,18 @@ describe('Vercel UI builds', () => {
     writeFileSync(join(dataDir, 'search.db'), 'vectors');
     writeFileSync(dependencyFile, 'export default true');
 
+    const nativeRoot = join(
+      artifactDir,
+      'node_modules',
+      'fs-native-extensions',
+    );
+    const nativeAsset = 'prebuilds/linux-x64/fs-native-extensions.node';
+    mkdirSync(join(nativeRoot, 'prebuilds/linux-x64'), { recursive: true });
+    writeFileSync(join(nativeRoot, 'binding.js'), 'export default true');
+    writeFileSync(join(nativeRoot, nativeAsset), 'native lock binding');
+
     const traced = [
+      'node_modules/fs-native-extensions/binding.js',
       'app.mjs',
       'server-data/server.json',
       'node_modules/example/index.js',
@@ -121,7 +132,7 @@ describe('Vercel UI builds', () => {
           },
         },
       );
-      expect(result.files).toBe(traced.length + 1);
+      expect(result.files).toBe(traced.length + 2);
       expect(result.functionPath).toBe(
         join('functions', 'project', 'api', 'search.func'),
       );
@@ -134,6 +145,12 @@ describe('Vercel UI builds', () => {
       expect(existsSync(join(outputDir, 'static', 'index.html'))).toBe(true);
 
       const functionDir = join(outputDir, result.functionPath);
+      expect(
+        readFileSync(
+          join(functionDir, 'node_modules/fs-native-extensions', nativeAsset),
+          'utf8',
+        ),
+      ).toBe('native lock binding');
       expect(readFileSync(join(functionDir, 'app.mjs'), 'utf8')).toContain(
         'export default',
       );

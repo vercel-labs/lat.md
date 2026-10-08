@@ -126,7 +126,7 @@ pnpm build:site
 
 The separate Vercel site project uses `pnpm build:site:vercel` as its only build command. It vendors the current workspace packages, installs the generated artifact, and emits Vercel Build Output API v3 in `.vercel/output`; Vercel's Git integration owns preview deployments without a duplicate GitHub Actions build.
 
-Hosted previews intentionally hydrate the published embedding engine and model matching the checkout's package versions. Changes to those packages require local validation with `pnpm build:site:source` and appear in hosted previews only after publication.
+Hosted previews intentionally hydrate the published embedding engine and model matching the checkout's package versions. After compiling workspace JavaScript, site preparation rebuilds the self-contained hosted tokenizer bundle so deployments do not require development-only tokenizer packages. Changes to those packages require local validation with `pnpm build:site:source` and appear in hosted previews only after publication.
 
 The legacy production project and domain remain outside this deployment path until the generated site is ready to replace them. The legacy `website/` workspace remains in the checkout but is not built by the new project.
 
