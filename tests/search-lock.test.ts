@@ -224,3 +224,68 @@ it('recovers database access after a reader dies with its connection open', asyn
   next.child.send('release');
   await next.exited;
 });
+
+// @lat: [[tests/search#Hybrid Retrieval#Reads FTS concurrently while publication waits]]
+it('shares read-only FTS access and waits for all readers before publication', async () => {
+  const dir = fixture();
+  const populate = async (db: SearchDb, id: number) => {
+    await db.execute(
+      'CREATE TABLE lexical_chunks(id INTEGER PRIMARY KEY,body TEXT,heading TEXT,path TEXT)',
+    );
+    await db.execute(
+      "CREATE INDEX chunks_fts ON lexical_chunks USING fts(body,heading,path) WITH (tokenizer='whitespace')",
+    );
+    await db.execute({
+      sql: 'INSERT INTO lexical_chunks VALUES (?,?,?,?)',
+      args: [id, 'alpha beta', 'alpha', 'docs'],
+    });
+  };
+  await writeIndex(dir, dir, true, (db) => populate(db, 1));
+  const a = writer(dir, 'fts-reader');
+  await a.wait('acquired');
+  const b = writer(dir, 'fts-reader');
+  await b.wait('acquired');
+  const before = readFileSync(join(dir, 'search.db'));
+  const local = new SearchDb(join(dir, 'search.db'), true);
+  const checkpoint = vi.spyOn(local, 'checkpoint');
+  try {
+    await expect(
+      local.execute("INSERT INTO lexical_chunks VALUES (2,'alpha','','')"),
+    ).rejects.toThrow(/read.?only/i);
+  } finally {
+    await local.close();
+  }
+  expect(checkpoint).not.toHaveBeenCalled();
+  expect(readFileSync(join(dir, 'search.db'))).toEqual(before);
+  let staged = false;
+  let published = false;
+  const replacement = writeIndex(dir, dir, true, async (db) => {
+    await populate(db, 2);
+    staged = true;
+  }).then(() => {
+    published = true;
+  });
+  await vi.waitFor(() => expect(staged).toBe(true));
+  // Both processes have executed FTS and remain open throughout staging.
+  expect(published).toBe(false);
+  a.child.send('release');
+  await a.exited;
+  expect(published).toBe(false);
+  expect(readFileSync(join(dir, 'search.db'))).toEqual(before);
+  b.child.send('release');
+  await b.exited;
+  await replacement;
+  for (const reader of [a, b]) {
+    const first = reader.messages.find((m: any) => m?.rows) as any;
+    const last = reader.messages.find((m: any) => m?.finalRows) as any;
+    expect(first.rows).toEqual([{ id: 1, score: expect.any(Number) }]);
+    expect(first.rows[0].score).toBeGreaterThan(0);
+    expect(last.finalRows).toEqual(first.rows);
+  }
+  const next = writer(dir, 'fts-reader');
+  await next.wait('acquired');
+  const result = next.messages.find((m: any) => m?.rows) as any;
+  expect(result.rows).toEqual([{ id: 2, score: expect.any(Number) }]);
+  next.child.send('release');
+  await next.exited;
+});

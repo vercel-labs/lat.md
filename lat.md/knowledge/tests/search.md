@@ -222,7 +222,7 @@ Shared lock holders coexist across processes, exclusive access waits for every h
 
 ### Releases database access after failed queries
 
-A failed database query closes and releases exclusive access so subsequent processes and database connections can proceed.
+A failed database query closes and releases shared access so subsequent processes and database connections can proceed.
 
 ### Embeds outside database access
 
@@ -239,3 +239,7 @@ A fresh rebuild can replace invalid cached database bytes when no pending WAL re
 ### Bundles only the hosted encoding
 
 The standalone hosted backend matches upstream token counts for ordinary text, Unicode, code, special-token literals, and oversized inputs without installed tokenizer dependencies. Oversized inputs still fail before network access.
+
+### Reads FTS concurrently while publication waits
+
+Independent processes hold read-only FTS connections concurrently. Publication waits for every reader to close, existing readers retain their results, and new readers see the replacement. Queries reject writes and close without checkpointing.

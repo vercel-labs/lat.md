@@ -104,7 +104,7 @@ The build creates the semantic index once and serializes the flat section metada
 
 [[src/view/server-deployment.ts#createServerViewApp]] consumes the explicit manifest and index paths, derives static fallback content from the artifact layout, and opens the bundled `server-data/search.db` directly. Each query opens and closes the database under the same access lock as CLI search. The instance reuses its injected embedder; hosted keys do not alter the prebuilt index's model. Git, editing, events, and repository reads remain absent.
 
-The database and its directory must be writable for Turso 0.7.2 connections, database sidecars, and access-lock files. The runtime does not copy the database or provide a temporary-storage fallback for read-only deployments.
+Search opens the database read-only. Its directory still needs write access for access-lock files and any database sidecars. The runtime does not copy the database or provide a temporary-storage fallback for read-only deployments.
 
 Static client configuration treats search as an independent capability: pure static builds omit the control and route, while server builds point the same client at their configured search endpoint. Documents, source views, externals, and the graph remain static in both targets.
 
