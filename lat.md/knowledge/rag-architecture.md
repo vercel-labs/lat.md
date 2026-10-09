@@ -187,7 +187,7 @@ Missing lock files are recreated on acquisition. Lock files must not be removed 
 
 Reusable search sessions retain their embedder but open and close database access per query. Changed index metadata invalidates the session rather than mixing replacement evidence with stale documents or model configuration; callers must reopen it. Closing a session rejects new requests and waits for its active queries.
 
-Legacy `vectors.db`, UUID databases, sidecars, and search manifests are ignored. No legacy database client ships with the CLI. Without `search.db`, indexing builds a fresh cache using the selected backend; hooks do not rebuild it. Embedding-policy changes require explicit reindexing, while lexical-policy upgrades reuse stored vectors.
+Legacy `vectors.db`, UUID databases, sidecars, and search manifests are ignored. No legacy database client ships with the CLI. Without `search.db`, indexing builds a fresh cache using the selected backend; hooks do not rebuild it. Embedding-policy changes require explicit reindexing, while lexical-policy upgrades reuse stored vectors. The lexical version also identifies the Turso 0.8 FTS storage format, so indexes from older engines rebuild their lexical rows and FTS index without regenerating embeddings.
 
 Initial indexing, batches with more than 512 changed passages, and every replacement or deletion rebuild FTS transactionally after row changes. This removes historical document statistics from BM25; small addition-only batches maintain the index incrementally. The live-statistics lexical version repairs older indexes without regenerating embeddings. [[src/search/lexical.ts#synchronizeLexical]] rebuilds normalized rows and FTS when the lexical version changes.
 

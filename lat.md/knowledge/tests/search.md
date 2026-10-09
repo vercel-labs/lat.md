@@ -142,7 +142,7 @@ Section replacements, deletions, and deleting all sections produce the same lexi
 
 ### Repairs historical FTS statistics once without embedding
 
-An unchanged project repairs old lexical statistics without embedding calls. Failed maintenance rolls back scores and version metadata; subsequent no-op indexing does not rebuild FTS.
+An unchanged project repairs old lexical statistics or a pre-0.8 Turso FTS version without embedding calls. Failed maintenance rolls back scores and version metadata; subsequent no-op indexing does not rebuild FTS.
 
 ### Rolls back failed FTS rebuilds
 
