@@ -18,6 +18,20 @@ try {
     } finally {
       await release();
     }
+  } else if (mode === 'fts-reader') {
+    const db = new SearchDb(join(dir, 'search.db'), true);
+    const query = () =>
+      db.execute(
+        "SELECT id,fts_score(body,heading,path,'alpha') AS score FROM lexical_chunks ORDER BY score DESC LIMIT 5",
+      );
+    try {
+      process.send({ rows: (await query()).rows });
+      process.send('acquired');
+      await once(process, 'message');
+      process.send({ finalRows: (await query()).rows });
+    } finally {
+      await db.close();
+    }
   } else if (mode === 'reader') {
     const db = new SearchDb(join(dir, 'search.db'), true);
     try {

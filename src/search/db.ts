@@ -22,12 +22,13 @@ export class SearchDb {
     return (this.connection ??= this.connect());
   }
   private async connect() {
-    // Serialize published database access with checkpointing and replacement.
+    // Published readers share access; copying and publication require exclusive access.
     if (this.published)
-      this.release = await acquireSearchAccess(dirname(this.path), 'exclusive');
+      this.release = await acquireSearchAccess(dirname(this.path), 'shared');
     try {
       return await connect(this.path, {
         experimental: ['index_method'],
+        readonly: this.published,
         timeout: 10000,
       });
     } catch (error) {
@@ -53,12 +54,7 @@ export class SearchDb {
     try {
       if (this.connection) {
         const db = await this.connection;
-        try {
-          // Leave a self-contained file for incremental copies and publication.
-          if (this.published) await this.checkpoint();
-        } finally {
-          await db.close();
-        }
+        await db.close();
       }
     } finally {
       this.connection = undefined;

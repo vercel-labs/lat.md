@@ -297,61 +297,67 @@ describe('hybrid search', () => {
   });
 
   // @lat: [[tests/search#Hybrid Retrieval#Repairs historical FTS statistics once without embedding]]
-  it('repairs old FTS statistics on unchanged content and leaves later no-ops alone', async () => {
-    const f = await indexed('# One\n\napple banana\n\n# Two\n\napple apple\n');
-    const scores = () => searchSections(f.db, 'apple banana', simple, 10);
-    try {
-      const expected = await scores();
-      const embeddings = (await f.db.execute('SELECT * FROM embeddings')).rows;
-      await f.db.execute('UPDATE lexical_chunks SET body=body');
-      await f.db.execute({
-        sql: "UPDATE meta SET value=? WHERE key='lexical_version'",
-        args: [LEXICAL_VERSION.replace(':live-statistics-v1', '')],
-      });
-      const engine = { ...simple, embed: vi.fn(simple.embed) };
-      const drifted = await scores();
-      const run = f.db.execute.bind(f.db);
-      const failure = vi
-        .spyOn(f.db, 'execute')
-        .mockImplementation(async (statement) => {
-          if (
-            (typeof statement === 'string'
-              ? statement
-              : statement.sql
-            ).startsWith('CREATE INDEX IF NOT EXISTS chunks_fts')
-          )
-            throw new Error('repair failed');
-          return run(statement);
+  it.each([':live-statistics-v1', ':turso-fts-v2'])(
+    'repairs a lexical version missing %s without embedding and leaves later no-ops alone',
+    async (missingVersion) => {
+      const f = await indexed(
+        '# One\n\napple banana\n\n# Two\n\napple apple\n',
+      );
+      const scores = () => searchSections(f.db, 'apple banana', simple, 10);
+      try {
+        const expected = await scores();
+        const embeddings = (await f.db.execute('SELECT * FROM embeddings'))
+          .rows;
+        await f.db.execute('UPDATE lexical_chunks SET body=body');
+        await f.db.execute({
+          sql: "UPDATE meta SET value=? WHERE key='lexical_version'",
+          args: [LEXICAL_VERSION.replace(missingVersion, '')],
         });
-      await expect(indexSections(f.lat, f.db, engine)).rejects.toThrow(
-        'repair failed',
-      );
-      failure.mockRestore();
-      expect(await scores()).toEqual(drifted);
-      expect(
-        (
-          await f.db.execute(
-            "SELECT value FROM meta WHERE key='lexical_version'",
-          )
-        ).rows[0].value,
-      ).not.toBe(LEXICAL_VERSION);
-      await indexSections(f.lat, f.db, engine);
-      expect(await scores()).toEqual(expected);
-      expect((await f.db.execute('SELECT * FROM embeddings')).rows).toEqual(
-        embeddings,
-      );
-      expect(engine.embed).not.toHaveBeenCalled();
-      const execute = vi.spyOn(f.db, 'execute');
-      await indexSections(f.lat, f.db, engine);
-      expect(
-        execute.mock.calls.some(([s]) =>
-          /DROP INDEX|CREATE INDEX/.test(typeof s === 'string' ? s : s.sql),
-        ),
-      ).toBe(false);
-    } finally {
-      await f.db.close();
-    }
-  });
+        const engine = { ...simple, embed: vi.fn(simple.embed) };
+        const drifted = await scores();
+        const run = f.db.execute.bind(f.db);
+        const failure = vi
+          .spyOn(f.db, 'execute')
+          .mockImplementation(async (statement) => {
+            if (
+              (typeof statement === 'string'
+                ? statement
+                : statement.sql
+              ).startsWith('CREATE INDEX IF NOT EXISTS chunks_fts')
+            )
+              throw new Error('repair failed');
+            return run(statement);
+          });
+        await expect(indexSections(f.lat, f.db, engine)).rejects.toThrow(
+          'repair failed',
+        );
+        failure.mockRestore();
+        expect(await scores()).toEqual(drifted);
+        expect(
+          (
+            await f.db.execute(
+              "SELECT value FROM meta WHERE key='lexical_version'",
+            )
+          ).rows[0].value,
+        ).not.toBe(LEXICAL_VERSION);
+        await indexSections(f.lat, f.db, engine);
+        expect(await scores()).toEqual(expected);
+        expect((await f.db.execute('SELECT * FROM embeddings')).rows).toEqual(
+          embeddings,
+        );
+        expect(engine.embed).not.toHaveBeenCalled();
+        const execute = vi.spyOn(f.db, 'execute');
+        await indexSections(f.lat, f.db, engine);
+        expect(
+          execute.mock.calls.some(([s]) =>
+            /DROP INDEX|CREATE INDEX/.test(typeof s === 'string' ? s : s.sql),
+          ),
+        ).toBe(false);
+      } finally {
+        await f.db.close();
+      }
+    },
+  );
 
   // @lat: [[tests/search#Hybrid Retrieval#Rolls back failed FTS rebuilds]]
   it('keeps searchable rows and scores when FTS rebuilding fails', async () => {
