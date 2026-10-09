@@ -22,7 +22,7 @@ export class SearchDb {
     return (this.connection ??= this.connect());
   }
   private async connect() {
-    // Turso 0.7.2 FTS needs writable connections and exclusive process access.
+    // Serialize published database access with checkpointing and replacement.
     if (this.published)
       this.release = await acquireSearchAccess(dirname(this.path), 'exclusive');
     try {

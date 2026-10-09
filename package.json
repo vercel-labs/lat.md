@@ -108,7 +108,7 @@
     "@lat.md/server": "workspace:*",
     "@lat.md/stemmer": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "@tursodatabase/database": "0.7.2",
+    "@tursodatabase/database": "0.8.2",
     "@vercel/nft": "^1.10.0",
     "commander": "^14.0.3",
     "diff": "^8.0.4",
