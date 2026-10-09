@@ -171,7 +171,7 @@ Tests: [[tests/search#Hybrid Retrieval#Collapses before rank fusion]] and [[test
 
 ## Search database storage
 
-The index uses embedded `@tursodatabase/database` 0.7.2 and one published file, `.cache/search.db`. Writers finish `.cache/_search.db` before replacing it, so unsuccessful indexing leaves the usable database intact.
+The index uses embedded `@tursodatabase/database` 0.8.2 and one published file, `.cache/search.db`. Writers finish `.cache/_search.db` before replacing it, so unsuccessful indexing leaves the usable database intact.
 
 [[src/search/db.ts#SearchDb]] adapts SQL access. The schema separates `sections`, `chunks`, `embeddings`, `lexical_chunks`, `identifiers`, and `meta`. Vectors are stored as `vector32`; retrieval uses an exact scan rather than an approximate vector index. FTS uses the exact indexed columns in a score-only query with ORDER BY and LIMIT; fusion and result hydration happen in application code.
 
@@ -179,7 +179,7 @@ The index uses embedded `@tursodatabase/database` 0.7.2 and one published file, 
 
 The persistent `search-write.lock` file is never removed or interpreted as PID metadata. `fs-native-extensions` locks its open descriptor; closing it or terminating the process releases ownership automatically. Acquisition polls for up to two minutes and never steals a live lock. Ownership covers staging cleanup, building, publication, and final cleanup. A subsequent writer discards staging data abandoned by a killed process. All cooperating writers must use this protocol; older PID-lock binaries must not run concurrently with it.
 
-Searches open `search.db` directly under the OS-backed read/write lock in [[src/search/lock.ts#acquireSearchAccess]]. Turso 0.7.2 requires writable FTS connections and single-process access, so queries take the exclusive mode. No reader database copies are created. Connections checkpoint and close before releasing access. Query embeddings are prepared outside the access lock; CLI searches revalidate metadata before retrieval.
+Searches open `search.db` directly under the OS-backed read/write lock in [[src/search/lock.ts#acquireSearchAccess]]. Lat retains writable FTS connections and exclusive access for queries, serializing database use with checkpointing and file replacement. No reader database copies are created. Connections checkpoint and close before releasing access. Query embeddings are prepared outside the access lock; CLI searches revalidate metadata before retrieval.
 
 The access lock uses persistent `search-access.lock` and `search-access-gate.lock` files. The gate prevents new shared readers bypassing an exclusive accessor waiting for active readers to drain. Lock acquisition has a bounded timeout, and process death releases kernel ownership. All concurrent Lat processes must use this access-lock protocol. Index builders acquire the writer lock before access locks; queries release access before requesting indexing. Incremental copying and publication take exclusive access, while staging builds run independently of readers. Publication recovers/checkpoints a nonempty old WAL and removes sidecars before replacement; an unreadable database without a pending WAL can still be rebuilt.
 
