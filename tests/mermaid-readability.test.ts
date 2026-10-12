@@ -185,8 +185,8 @@ describe('Mermaid readability', () => {
     ]);
   });
 
-  // @lat: [[tests/check-diagrams#Reports CLI errors]]
-  it('fails full and explicit-directory checks for readability or complexity violations', async () => {
+  // @lat: [[tests/check-diagrams#Reports CLI warnings]]
+  it('warns in full and explicit-directory checks for readability or complexity concerns', async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), 'lat-diagrams-'));
     temporaryRoots.push(projectRoot);
     const latDir = join(projectRoot, 'docs');
@@ -204,25 +204,31 @@ describe('Mermaid readability', () => {
     };
     const errors = await checkDiagrams(latDir, projectRoot);
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatchObject({ line: 5, target: 'mermaid' });
+    expect(errors[0]).toMatchObject({
+      line: 5,
+      target: 'mermaid',
+      severity: 'warning',
+    });
     expect(errors[0].message).toContain('722px');
     expect(errors[0].message).toContain('flowchart TB or TD');
     const only = await checkDiagramsCommand(ctx);
-    expect(only.isError).toBe(true);
+    expect(only.isError).not.toBe(true);
     expect(only.output).toContain('Mermaid readability');
     // Also exercises the cached Markdown facts from the first run.
     const all = await checkAllCommand(ctx, { profile: true });
-    expect(all.isError).toBe(true);
-    expect(all.output).toContain('1 error found');
+    expect(all.isError).not.toBe(true);
+    expect(all.output).not.toContain('error found');
+    expect(all.output).toContain('Warning: Mermaid readability');
+    expect(all.output).toContain('%% lat-lint: ignore');
     expect(all.output).toContain('check Mermaid readability');
     const output = spawnSync(
       process.execPath,
       ['packages/core/dist/cli/index.js', 'check', 'diagrams', '--', latDir],
       { encoding: 'utf8' },
     );
-    expect(output.status).toBe(1);
-    expect(output.stderr).toContain('Mermaid readability');
-    expect(output.stderr).not.toContain('Warning:');
+    expect(output.status).toBe(0);
+    expect(output.stdout).toContain('Mermaid readability');
+    expect(output.stdout).toContain('Warning:');
     const boxes = Array.from({ length: 16 }, (_, index) => `N${index}`).join(
       '-->',
     );
@@ -237,20 +243,51 @@ describe('Mermaid readability', () => {
     expect((await checkDiagramsCommand(ctx)).isError).not.toBe(true);
     await writeFile(file, boxContent('TB', boxes));
     const complexity = await checkDiagramsCommand(ctx);
-    expect(complexity.isError).toBe(true);
-    expect(complexity.output).toContain('16 distinct boxes (maximum 15)');
+    expect(complexity.isError).not.toBe(true);
     expect(complexity.output).toContain(
-      'Split it into several smaller diagrams',
+      '16 distinct boxes (recommended maximum 15)',
     );
+    expect(complexity.output).toContain(
+      'Consider re-aligning the diagram or splitting it into several smaller diagrams',
+    );
+    expect(complexity.output).toContain('These are optional suggestions.');
+    expect(complexity.output).toContain('%% lat-lint: ignore');
     expect(complexity.output).not.toContain('flowchart TB or TD');
     await writeFile(file, boxContent('LR', boxes));
     const combined = await checkDiagramsCommand(ctx);
     expect(combined.output).toContain('Mermaid complexity');
-    expect(combined.isError).toBe(true);
+    expect(combined.isError).not.toBe(true);
+    for (const source of [`flowchart LR; ${wider}`, `flowchart TB; ${boxes}`]) {
+      await writeFile(
+        file,
+        '# Diagrams\n\nSummary.\n\n```mermaid\n' +
+          source +
+          '\n  %% lat-lint: ignore  \n```\n',
+      );
+      expect(await checkDiagrams(latDir, projectRoot)).toEqual([]);
+      expect((await checkAllCommand(ctx)).output).not.toContain('Warning:');
+    }
+    await writeFile(
+      file,
+      content + '\n```mermaid\n%% lat-lint: ignore\nflowchart LR; A -->\n```\n',
+    );
+    const malformed = await checkDiagramsCommand(ctx);
+    expect(malformed.isError).toBe(true);
+    expect(malformed.output).toContain('1 error found');
+    expect(malformed.output).toContain('Warning: Mermaid readability');
+    await writeFile(
+      file,
+      content.replace(
+        'flowchart LR;',
+        '%% lat-lint: ignore-extra\nflowchart LR;',
+      ),
+    );
+    expect((await checkDiagramsCommand(ctx)).output).toContain('Warning:');
     await writeFile(file, content + '\n[missing](missing.md)\n');
     const invalid = await checkAllCommand(ctx);
     expect(invalid.isError).toBe(true);
     expect(invalid.output).toContain('Mermaid readability');
     expect(invalid.output).toContain('missing.md');
+    expect(invalid.output).toContain('1 error found');
   });
 });

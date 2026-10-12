@@ -29,6 +29,7 @@ export type CheckError = {
   line: number;
   target: string;
   message: string;
+  severity?: 'warning';
 };
 
 function filePart(id: string): string {
@@ -667,12 +668,17 @@ export async function checkDiagrams(
       });
       continue;
     }
+    if (/^[ \t]*%%[ \t]+lat-lint: ignore[ \t]*\r?$/m.test(fence.source))
+      continue;
+    const suppression =
+      '\nSuppress this warning by adding "%% lat-lint: ignore" on its own line inside this Mermaid fence.';
     if (boxes !== null && boxes > MERMAID_MAX_BOXES) {
       errors.push({
         file: relative(process.cwd(), file),
         line: fence.line,
         target: 'mermaid',
-        message: `Mermaid complexity: this flowchart has ${boxes} distinct boxes (maximum ${MERMAID_MAX_BOXES}). Split it into several smaller diagrams, each focused on one process or concept.`,
+        severity: 'warning',
+        message: `Mermaid complexity: this flowchart has ${boxes} distinct boxes (recommended maximum ${MERMAID_MAX_BOXES}). Consider re-aligning the diagram or splitting it into several smaller diagrams, each focused on one process or concept. These are optional suggestions.${suppression}`,
       });
     }
     if (
@@ -684,7 +690,8 @@ export async function checkDiagrams(
       file: relative(process.cwd(), file),
       line: fence.line,
       target: 'mermaid',
-      message: `Mermaid readability: ${estimate.direction} flowchart labels are estimated at ${estimate.estimatedFontSize.toFixed(1)}px when fitted to a ${MERMAID_CONTENT_WIDTH}px content area (estimated diagram width ${Math.round(estimate.estimatedWidth)}px; minimum ${MERMAID_MIN_READABLE_FONT_SIZE}px). Consider a vertical layout (flowchart TB or TD), shorter labels, or splitting the diagram. This is a static estimate, not a rendered measurement.`,
+      severity: 'warning',
+      message: `Mermaid readability: ${estimate.direction} flowchart labels are estimated at ${estimate.estimatedFontSize.toFixed(1)}px when fitted to a ${MERMAID_CONTENT_WIDTH}px content area (estimated diagram width ${Math.round(estimate.estimatedWidth)}px; minimum ${MERMAID_MIN_READABLE_FONT_SIZE}px). Consider re-aligning the diagram vertically (flowchart TB or TD), shortening labels, or splitting it into multiple diagrams. These are optional suggestions. This is a static estimate, not a rendered measurement.${suppression}`,
     });
   }
   return errors;
@@ -696,9 +703,11 @@ function formatCheckErrors(errors: CheckError[], s: Styler): string[] {
     lines.push('');
     const loc = s.cyan(err.file + ':' + err.line);
     const [first, ...rest] = err.message.split('\n');
-    lines.push(`- ${loc}: ${s.red(first)}`);
+    const color = err.severity === 'warning' ? s.yellow : s.red;
+    const prefix = err.severity === 'warning' ? 'Warning: ' : '';
+    lines.push(`- ${loc}: ${color(prefix + first)}`);
     for (const line of rest) {
-      lines.push(`  ${s.red(line)}`);
+      lines.push(`  ${color(line)}`);
     }
   }
   return lines;
@@ -808,7 +817,7 @@ export async function checkAllCommand(
     allErrors.length +
     indexErrors.length +
     sectionErrors.length +
-    diagramErrors.length;
+    diagramErrors.filter((error) => error.severity !== 'warning').length;
   if (totalErrors > 0) {
     lines.push(formatErrorCount(totalErrors, s));
     return { output: lines.join('\n'), isError: true };
@@ -854,13 +863,14 @@ export async function checkDiagramsCommand(
 ): Promise<CmdResult> {
   const errors = await checkDiagrams(ctx.latDir, ctx.projectRoot);
   const lines = formatCheckErrors(errors, ctx.styler);
-  if (errors.length) {
-    lines.push(formatErrorCount(errors.length, ctx.styler));
+  const errorCount = errors.filter(
+    (error) => error.severity !== 'warning',
+  ).length;
+  if (errorCount) {
+    lines.push(formatErrorCount(errorCount, ctx.styler));
     return { output: lines.join('\n'), isError: true };
   }
-  lines.push(
-    ctx.styler.green('diagrams: No Mermaid readability or complexity errors'),
-  );
+  lines.push(ctx.styler.green('diagrams: No Mermaid errors'));
   return { output: lines.join('\n') };
 }
 

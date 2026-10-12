@@ -112,7 +112,7 @@ test('rejects a reused refresh token', async () => {
 - **Links still lead somewhere.** References between documents, into source symbols, and to external sources resolve. Local file and image links have valid destinations.
 - **Knowledge stays connected to implementation.** References from code point to existing sections, and test specs or requirements marked as requiring code references have them.
 - **Documents remain easy to navigate.** Sections start with concise explanations, and directory indexes keep up with added, moved, or removed pages.
-- **Diagrams stay manageable.** Mermaid diagrams are checked for syntax errors, overly large flowcharts, and labels estimated to become too small to read.
+- **Diagrams stay manageable.** Mermaid syntax errors fail validation. Large flowcharts and labels estimated to become too small produce warnings; a standalone `%% lat-lint: ignore` comment inside a diagram suppresses those warnings.
 
 Run `lat check` after editing knowledge or changing the code it references. It catches issues such as a link to a renamed function or a test spec that lost its code reference. People and agents still need to review whether the explanations and tests accurately describe the intended behavior.
 

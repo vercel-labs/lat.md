@@ -210,7 +210,9 @@ Label a code fence `mermaid`, `geojson`, `topojson`, or `stl` to render a diagra
 
 ### Mermaid
 
-Use a `mermaid` fence to describe a flowchart in text. Keep each diagram focused on one process; `lat check` checks its syntax, size, and estimated readability.
+Use a `mermaid` fence to describe a flowchart in text. Keep each diagram focused on one process; `lat check` validates syntax and warns about size and estimated readability.
+
+To suppress size and readability warnings for a diagram, add `%% lat-lint: ignore` on its own line inside the Mermaid fence. Syntax errors still fail validation.
 
 ````md
 ```mermaid

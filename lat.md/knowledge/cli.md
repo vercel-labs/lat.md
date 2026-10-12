@@ -99,9 +99,9 @@ Validate that every [[parser#Wiki Links|wiki link]] points to an existing sectio
 
 ### diagrams
 
-Validate Mermaid flowchart box count and estimated horizontal readability using [[markdown#Mermaid Diagrams#Readability checks]]. Both this subcommand and the full check fail on violations and provide corrective guidance.
+Validate Mermaid flowchart box count and estimated horizontal readability using [[markdown#Mermaid Diagrams#Readability checks]]. Both this subcommand and the full check report size and readability warnings without failing.
 
-[[packages/core/src/cli/check.ts#checkDiagrams]] consumes shared Markdown fence facts. Output identifies each fence, reports upstream syntax errors, excessive box counts, or small estimated label sizes, and suggests vertical layout, shorter labels, or splitting the diagram. `lat check diagrams -- docs` supports explicit directories. Flowcharts without reliable font estimates still receive box-count validation; absence of an error is not a rendered readability guarantee.
+[[packages/core/src/cli/check.ts#checkDiagrams]] consumes shared Markdown fence facts. Output identifies each fence, reports upstream syntax errors, excessive box counts, or small estimated label sizes, and offers optional suggestions to re-align the diagram, shorten labels, or split it into multiple diagrams. `lat check diagrams -- docs` supports explicit directories. Flowcharts without reliable font estimates still receive box-count validation; absence of a warning is not a rendered readability guarantee. Warnings include a suppression hint: add `%% lat-lint: ignore` on its own line inside the diagram. Parse errors still fail, even with the marker.
 
 ### links
 

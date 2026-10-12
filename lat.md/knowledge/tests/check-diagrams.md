@@ -13,7 +13,7 @@ Box counts deduplicate repeated references and include vertical layouts, cycles,
 
 ## Detects shrinking horizontal labels
 
-Adding a sequential box to a near-threshold chart lowers estimated fitted font size enough to fail. Both horizontal directions are handled, while compact charts retain their nominal font size.
+Adding a sequential box to a near-threshold chart lowers estimated fitted font size enough to trigger a warning. Both horizontal directions are handled, while compact charts retain their nominal font size.
 
 ## Estimates graph columns and label widths
 
@@ -27,9 +27,11 @@ Vertical charts, other diagram types, subgraphs, custom styles, alternate layout
 
 Markdown analysis records source and opening line only for actual Mermaid code nodes, including blockquotes, without interpreting examples inside other code fences as diagrams.
 
-## Reports CLI errors
+## Reports CLI warnings
 
-Full and diagrams-only checks fail on small estimated fonts or more than fifteen boxes. Errors retain locations and corrective suggestions through cached facts and explicit directories; valid charts pass and ordinary errors remain visible.
+Full and diagrams-only checks warn without failing on small estimated fonts or excessive boxes. Warnings retain locations, suggestions, and suppression hints through cached facts and explicit directories.
+
+A standalone `%% lat-lint: ignore` comment suppresses size and readability warnings only for its fence, including with surrounding whitespace. Near-matching markers do not suppress advice. Parse errors remain failures even with the marker, and ordinary errors still count independently of warnings.
 
 ## Isolates the upstream runtime
 
