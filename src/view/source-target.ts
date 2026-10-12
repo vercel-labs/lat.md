@@ -19,8 +19,12 @@ export function rewriteLocalFileLink(
         url.pathname.startsWith('/project/')
       ) {
         const path = decodeURIComponent(url.pathname.slice('/project/'.length));
+        // Markdown files are documents, not code views: the backend rejects
+        // a symbol target on a .md file, so a vault link to a repository
+        // root markdown document must take the document route instead.
         if (
           normalizeRepositoryPath(path) &&
+          extname(path) !== '.md' &&
           (!path.startsWith('lat.md/') || isSourceFileExtension(extname(path)))
         ) {
           return `/code/${path.split('/').map(encodeURIComponent).join('/')}${url.search}${url.hash}`;

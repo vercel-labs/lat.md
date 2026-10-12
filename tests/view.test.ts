@@ -2408,6 +2408,11 @@ describe('lat ui', () => {
     expect(rewriteLocalFileLink('../guide.md#details', 'nested/guide.md')).toBe(
       '/guide#details',
     );
+    // A vault page linking a repository-root markdown document takes the
+    // document route: the source route cannot carry a symbol on a .md file.
+    expect(
+      rewriteLocalFileLink('../README.md#details', 'lat.md/guide.md'),
+    ).toBe('/README#details');
     for (const url of [
       'https://example.com/app.ts',
       '/code/src/app.ts',
