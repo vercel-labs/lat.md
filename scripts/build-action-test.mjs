@@ -27,14 +27,17 @@ try {
   lock.importers = { '.': lock.importers['packages/core'] };
   await writeFile(join(runtime, 'pnpm-lock.yaml'), stringify(lock));
   const runner = process.env.npm_execpath;
+  const scriptRunner = runner && /\.[cm]?js$/.test(runner);
   const result = spawnSync(
     runner
-      ? process.execPath
+      ? scriptRunner
+        ? process.execPath
+        : runner
       : process.platform === 'win32'
         ? 'pnpm.cmd'
         : 'pnpm',
     [
-      ...(runner ? [runner] : []),
+      ...(scriptRunner ? [runner] : []),
       'install',
       '--prod',
       '--frozen-lockfile',
@@ -81,7 +84,7 @@ try {
   }
   await rm(output, { recursive: true, force: true });
   await cp(stage, output, { recursive: true });
-  console.log(`Built portable check action: ${output}`);
+  console.log(`Built action test fixture: ${output}`);
 } finally {
   await rm(stage, { recursive: true, force: true });
 }

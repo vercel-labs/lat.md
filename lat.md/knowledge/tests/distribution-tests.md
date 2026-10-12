@@ -4,7 +4,7 @@ lat:
 ---
 # Package Distribution
 
-Distribution tests exercise packed installations and the relocated check action outside the development workspace, ensuring dependencies and assets are sufficient without workspace fallbacks.
+Distribution tests exercise packed installations and the npm-installing check action outside the development workspace, ensuring dependencies and assets are sufficient without workspace fallbacks.
 
 ## Core installs independently
 
@@ -20,9 +20,11 @@ The Mermaid bundle includes license notices and a size manifest within its 3 MiB
 
 Full-only and combined packed installs retain the full command surface, expose distinct executables, and produce the same validation result as core. Local package overrides exercise unpublished workspace changes.
 
-## Action runs without installation
+## Action installs selected core
 
-The generated action works after relocation, checks a workspace subdirectory containing spaces, reports its core version, and runs without installing project dependencies or embedding assets.
+The action selects latest or an explicit core version, rejects unsafe package selectors, stops on installation failure, and cleans up its temporary installation. It checks paths with spaces without installing project dependencies.
+
+A simulated npm installer exposes the real isolated core runtime so tests need neither registry access nor a published candidate. The release workflow additionally exercises a live npm installation on every supported runner OS.
 
 ## Action preserves validation failures
 
@@ -30,7 +32,7 @@ Broken references fail the action with their original diagnostics. Invalid profi
 
 ## Action rejects cache symlinks
 
-The prebuilt checker rejects symlinks at the documentation directory, cache roots, parser shards, source directories, metadata, and locks. Outside files remain unchanged, including removed-source JSON and adjacent directories.
+The installed checker rejects symlinks at the documentation directory, cache roots, parser shards, source directories, metadata, and locks. Outside files remain unchanged, including removed-source JSON and adjacent directories.
 
 ## Action ignores planted Git caches
 

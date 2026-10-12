@@ -21,5 +21,5 @@ jobs:
       - run: pnpm build:core
       - run: node packages/core/dist/cli/index.js check
       - run: pnpm test:core
-      - run: pnpm build:action
+      - run: pnpm build:action-test
       - run: pnpm test:action

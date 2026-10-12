@@ -12,8 +12,11 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  verify:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,45 +26,19 @@ jobs:
           cache: pnpm
       - run: node scripts/prepare-core-install.mjs
       - run: pnpm --dir packages/core install --ignore-workspace --frozen-lockfile --ignore-scripts
-      - run: pnpm build:action
-      - run: pnpm test:core
+      - run: pnpm build:action-test
       - run: pnpm test:action
-      - uses: actions/upload-artifact@v4
-        with:
-          name: check-action
-          path: .lat-build/check-action
-          include-hidden-files: true
-  verify:
-    needs: build
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - uses: actions/download-artifact@v4
-        with:
-          name: check-action
-          path: .lat-build/check-action
-      - run: node --test scripts/test-check-action.js
+      - uses: ./
   publish:
-    needs: [build, verify]
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: check-action
-          path: ${{ runner.temp }}/check-action
       - name: Publish minimal action snapshot and tags
         env:
           ACTION_VERSION: ${{ inputs.version }}
-          ACTION_ARTIFACT: ${{ runner.temp }}/check-action
         run: |
           [[ "$ACTION_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected version X.Y.Z'; exit 1; }
           immutable="action-v$ACTION_VERSION"
@@ -70,10 +47,13 @@ jobs:
             echo "Tag $immutable already exists"; exit 1
           fi
           source_commit="$(git rev-parse HEAD)"
+          artifact="$(mktemp -d)"
+          cp -R action.yml action LICENSE "$artifact/"
+          echo '{"private":true,"type":"module"}' > "$artifact/package.json"
           git checkout --orphan action-release
           git rm -rf .
-          cp -a "$ACTION_ARTIFACT/." .
-          git add --force action.yml action runtime package.json LICENSE .lat-check-action.json
+          cp -a "$artifact/." .
+          git add --force action.yml action package.json LICENSE
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "Check action $ACTION_VERSION from $source_commit"

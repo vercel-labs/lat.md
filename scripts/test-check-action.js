@@ -13,7 +13,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:https';
-import { dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
 
@@ -21,6 +21,28 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch = mkdtempSync(join(tmpdir(), 'lat-action-test-'));
 const artifact = join(scratch, 'action');
 cpSync(join(root, '.lat-build/check-action'), artifact, { recursive: true });
+// Model npm's install boundary without requiring a published core or network.
+// The checker and dependency tree are the real isolated build under test.
+const npmBin = join(scratch, 'npm-bin');
+mkdirSync(join(npmBin, 'node_modules/npm/bin'), { recursive: true });
+writeFileSync(
+  join(npmBin, process.platform === 'win32' ? 'npm.cmd' : 'npm'),
+  '',
+);
+const installLog = join(scratch, 'install.json');
+writeFileSync(
+  join(npmBin, 'node_modules/npm/bin/npm-cli.js'),
+  `
+const { mkdirSync, symlinkSync, writeFileSync } = require('node:fs');
+const { join } = require('node:path');
+writeFileSync(${JSON.stringify(installLog)}, JSON.stringify(process.argv.slice(2)));
+if (process.env.TEST_INSTALL_FAIL) process.exit(42);
+const target = process.argv[process.argv.indexOf('--prefix') + 1];
+mkdirSync(join(target, 'node_modules/@lat.md'), { recursive: true });
+symlinkSync(${JSON.stringify(join(artifact, 'runtime'))}, join(target, 'node_modules/@lat.md/core'), process.platform === 'win32' ? 'junction' : 'dir');
+`,
+);
+const testPath = npmBin + delimiter + process.env.PATH;
 const workspace = join(scratch, 'workspace');
 const project = join(workspace, 'project with spaces');
 mkdirSync(join(project, 'lat.md'), { recursive: true });
@@ -39,6 +61,8 @@ function action(extra = {}) {
     env: {
       ...process.env,
       NODE_PATH: '',
+      PATH: testPath,
+      INPUT_VERSION: 'latest',
       XDG_CACHE_HOME: join(scratch, 'user-cache'),
       GITHUB_WORKSPACE: workspace,
       'INPUT_WORKING-DIRECTORY': 'project with spaces',
@@ -47,8 +71,8 @@ function action(extra = {}) {
     },
   });
 }
-// @lat: [[tests/distribution-tests#Action runs without installation]]
-test('relocated action validates a subdirectory without project dependencies', () => {
+// @lat: [[tests/distribution-tests#Action installs selected core]]
+test('action installs latest or an explicit version outside the project', () => {
   writeFileSync(
     join(project, 'lat.md/lat.md'),
     '# Project\n\nWorking documentation.\n',
@@ -56,11 +80,40 @@ test('relocated action validates a subdirectory without project dependencies', (
   const result = action({ INPUT_PROFILE: 'true' });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /Lat core/);
+  let args = JSON.parse(readFileSync(installLog, 'utf8'));
+  assert.equal(args.at(-1), '@lat.md/core@latest');
+  assert.ok(args.includes('--ignore-scripts'));
+  assert.ok(args.includes('--prefer-online'));
+  assert.equal(existsSync(args[args.indexOf('--prefix') + 1]), false);
+  const pinned = action({ INPUT_VERSION: '0.1.0' });
+  assert.equal(pinned.status, 0, pinned.stdout + pinned.stderr);
+  args = JSON.parse(readFileSync(installLog, 'utf8'));
+  assert.equal(args.at(-1), '@lat.md/core@0.1.0');
+  const failed = action({ TEST_INSTALL_FAIL: '1' });
+  assert.equal(failed.status, 1);
+  assert.match(failed.stderr, /Core installation failed/);
+  const failedArgs = JSON.parse(readFileSync(installLog, 'utf8'));
+  assert.equal(
+    existsSync(failedArgs[failedArgs.indexOf('--prefix') + 1]),
+    false,
+  );
+  assert.doesNotMatch(failed.stdout, /Lat core/);
+  for (const version of [
+    'file:../core',
+    'npm:other',
+    '1.0.0; echo bad',
+    '--help',
+  ]) {
+    rmSync(installLog);
+    assert.equal(action({ INPUT_VERSION: version }).status, 1);
+    assert.equal(existsSync(installLog), false);
+    writeFileSync(installLog, '[]');
+  }
   assert.match(result.stdout, /All checks passed/);
   assert.equal(existsSync(join(workspace, 'node_modules')), false);
   const runtime = join(artifact, 'runtime');
   assert.equal(existsSync(join(runtime, 'node_modules/@lat.md/embed')), false);
-  // Exercise binary assets and dynamic worker/module paths in the actual released runtime.
+  // Exercise binary assets and dynamic worker/module paths in the isolated core runtime.
   const probe = join(scratch, 'probe.mjs');
   writeFileSync(
     probe,
@@ -256,6 +309,8 @@ test('action never opens Git configuration planted in the checkout', async () =>
       [join(artifact, 'action/index.js')],
       {
         ...env,
+        PATH: testPath,
+        INPUT_VERSION: 'latest',
         XDG_CACHE_HOME: join(scratch, 'user-cache'),
         GITHUB_WORKSPACE: workspace,
         'INPUT_WORKING-DIRECTORY': 'planted-git',

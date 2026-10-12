@@ -4,6 +4,9 @@ branding:
   icon: check-circle
   color: purple
 inputs:
+  version:
+    description: Core npm version or distribution tag to install.
+    default: latest
   working-directory:
     description: Project directory, relative to the checked-out workspace.
     default: '.'

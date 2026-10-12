@@ -10,3 +10,4 @@ New to Lat? Start with [[quick-start]].
 - [[external_sources]] — Reference documentation and code from other repositories
 - [[ui]] — Browse, edit, and publish your project knowledge
 - [[syntax-primer]] — Write Markdown, links, code, math, and diagrams
+- [[ci]] — Validate documentation in continuous integration

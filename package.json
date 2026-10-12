@@ -52,7 +52,7 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"packages/core/src/**/*.ts\" \"packages/server/src/**/*.ts\" \"view/**/*.{ts,tsx,css,html}\"",
     "cook-test-rag": "tsx scripts/cook-test-rag.ts",
     "build:core": "pnpm --filter @lat.md/core build",
-    "build:action": "pnpm build:core && node scripts/build-check-action.mjs",
+    "build:action-test": "pnpm build:core && node scripts/build-action-test.mjs",
     "test:core": "node --test scripts/test-core-distribution.js",
     "test:action": "node --test scripts/test-check-action.js"
   },

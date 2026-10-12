@@ -39,4 +39,4 @@ Shared patterns for writing and organizing tests in this project.
 - [[php-source-parser]] — PHP source parsing and code-reference scanning
 - [[external-tests|external sources]] — Pinned external configuration, retrieval strategies, cache reconciliation, commands, MCP, and browser export
 
-- [[distribution-tests]] — Packed core/full installations and portable check action behavior
+- [[distribution-tests]] — Packed core/full installations and npm-installing check action behavior

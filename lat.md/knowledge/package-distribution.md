@@ -1,6 +1,6 @@
 # Package Distribution
 
-Lat separates core validation and navigation from the full CLI. The same core checker also powers a portable GitHub Action artifact, built and released from this repository.
+Lat separates core validation and navigation from the full CLI. The same core checker also powers a GitHub Action that installs the published core package.
 
 ## Package Contract
 
@@ -45,15 +45,15 @@ The build rejects unexpected external package imports, includes third-party lice
 
 ## GitHub Action
 
-[[action.yml]] declares a Node 24 JavaScript action. [[scripts/build-check-action.mjs]] creates its portable distribution with compiled core and the exact production dependency versions from the workspace lockfile.
+[[action.yml]] declares a Node 24 JavaScript action that installs the published core package before checking the consumer's checkout. [[lat.md/docs/ci]] documents consumer setup and version selection.
 
-The builder installs into an isolated temporary directory using a hoisted dependency layout and no lifecycle scripts. It includes workers, dynamic modules, parser data, and WASM assets. The default output is `.lat-build/check-action`, outside source control. Consumers run the prebuilt release artifact without package installation, project builds, setup-node, or embedding credentials.
+[[action/index.js]] installs `@lat.md/core` from the public npm registry in a fresh runner temporary directory, with lifecycle scripts disabled. The `version` input defaults to `latest` and accepts exact versions or distribution tags. Each invocation resolves the requested version anew; no installed runtime is cached across runs. Invalid inputs fail before installation, and installation failures prevent validation.
 
-[[action/index.js]] runs the full core check in `working-directory`, relative to the checked-out workspace by default. The `profile` input enables timing output. Paths are passed without shell interpolation; diagnostics and failure status are preserved, and the bundled core version is logged. External references retain normal fetch/cache behavior, so uncached external content can still require network access.
+The launcher finds npm on PATH and invokes its JavaScript entry point without a shell, including on Windows. It logs the installed core version and runs its full check in `working-directory`, relative to the checked-out workspace. The `profile` input enables timing output. Diagnostics and failure status are preserved, and the temporary installation is removed afterward. Consumers need npm on PATH but do not install project dependencies or provide embedding credentials.
 
-[[.github/workflows/publish-action.yml]] publishes a minimal repository snapshot through manually dispatched `action-vX.Y.Z` tags and a maintained `action-vX` tag. It tests the exact generated artifact on Linux, Windows, and macOS before atomically pushing the immutable and major tags. The source commit is recorded in the distribution commit. Action tags are independent of npm versions; each artifact fixes its included core version.
+[[.github/workflows/publish-action.yml]] tests on Linux, Windows, and macOS, including a live install through the local action. It publishes only the launcher and metadata through manually dispatched `action-vX.Y.Z` tags and a maintained `action-vX` tag. Core releases need no action release; action versions govern installation and execution logic. Floating core versions can change validation results for unchanged consumer commits, even when the action is pinned.
 
-The consumer form is `uses: vercel-labs/lat.md@action-v1` after the first action release. Source branches do not contain the generated runtime and are not directly runnable action releases. The repository remains the single home for source, tests, npm packages, and action release automation.
+The consumer form is `uses: vercel-labs/lat.md@action-v1` after the first action release. Source branches also contain the runnable launcher. [[scripts/build-action-test.mjs]] builds an isolated core runtime only for tests; it is never included in action releases.
 
 ## Publishing and Validation
 
@@ -61,6 +61,6 @@ Core is published before the full package, and pnpm rewrites workspace dependenc
 
 [[.github/workflows/publish.yml]] includes core in dependency order. The new npm package requires its trusted-publishing configuration before its first release, just like the other workspace packages. Publishing the dependency first prevents the full package from referencing an unpublished core version; the separate npm publications are not atomic.
 
-[[.github/workflows/lat-check.yaml]] uses [[scripts/prepare-core-install.mjs]] to derive a standalone lockfile and installs only core's dependency closure, validates current source, and exercises packed core and relocated action artifacts on three platforms. The full CI also tests full-only and combined packed installations using local workspace tarballs, including unpublished changes.
+[[.github/workflows/lat-check.yaml]] uses [[scripts/prepare-core-install.mjs]] to derive a standalone lockfile and installs only core's dependency closure, validates current source, and exercises packed core and action installation and execution on three platforms. The full CI also tests full-only and combined packed installations using local workspace tarballs, including unpublished changes.
 
-[[scripts/test-core-distribution.js]] covers package isolation, help, exit codes, source grammars, external parsers, worker assets, and full/core parity. [[scripts/test-check-action.js]] covers relocation, paths containing spaces, profiling, missing directories, and validation failures without project dependencies. Their contracts are recorded in [[tests/distribution-tests]].
+[[scripts/test-core-distribution.js]] covers package isolation, help, exit codes, source grammars, external parsers, worker assets, and full/core parity. [[scripts/test-check-action.js]] covers selected package versions, installation failure, invalid inputs, paths containing spaces, profiling, validation failures, and cache safety using a simulated npm installer and a real isolated core runtime. Their contracts are recorded in [[tests/distribution-tests]].
