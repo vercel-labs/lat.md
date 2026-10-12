@@ -2,6 +2,17 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
+## 0.13.1
+
+This patch fixes repository Markdown previews, validation false positives, and deployed and concurrent search.
+
+- Render linked repository Markdown files with working headings, relative links, and images in the live UI and static exports. [#200](https://github.com/vercel-labs/lat.md/pull/200)
+- Report Mermaid readability concerns as warnings, suggest realigning or splitting diagrams, and allow suppression with `%% lat-lint: ignore`. Syntax errors still fail validation. [#198](https://github.com/vercel-labs/lat.md/pull/198)
+- Accept task-list checkboxes before inline code and formatting without requiring escaped brackets. [#199](https://github.com/vercel-labs/lat.md/pull/199)
+- Allow concurrent read-only search connections and upgrade the embedded Turso database to 0.8.2. [#194](https://github.com/vercel-labs/lat.md/pull/194) [#193](https://github.com/vercel-labs/lat.md/pull/193)
+- Include required search runtime dependencies in deployments and support search indexes on read-only serverless filesystems. [#191](https://github.com/vercel-labs/lat.md/pull/191)
+- Share generated AGENTS.md instructions with Claude Code and improve source-link and diagram authoring guidance. [#192](https://github.com/vercel-labs/lat.md/pull/192)
+
 ## 0.13.0
 
 Lat adds a browser and publishing tools, pinned upstream references, hybrid search, and a lightweight checker for CI.
