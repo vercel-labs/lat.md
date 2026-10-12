@@ -24,7 +24,7 @@ Full-only and combined packed installs retain the full command surface, expose d
 
 The action selects latest or an explicit core version, rejects unsafe package selectors, stops on installation failure, and cleans up its temporary installation. It checks paths with spaces without installing project dependencies.
 
-A simulated npm installer exposes the real isolated core runtime so tests need neither registry access nor a published candidate. The release workflow additionally exercises a live npm installation on every supported runner OS.
+A simulated npm installer exposes the real isolated core runtime so tests need neither registry access nor a published candidate. CI also invokes the composite action with only checkout beforehand on every supported runner OS, exercising its own Node setup and a live npm installation.
 
 ## Action preserves validation failures
 

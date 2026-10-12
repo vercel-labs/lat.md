@@ -18,15 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
       - uses: vercel-labs/lat.md@action-v1
 ```
 
-The action installs `@lat.md/core` from npm and runs `lat-core check` at the repository root. It does not require your project's dependencies or an API key. Installation requires access to the npm registry; configured external sources may also require network access.
+The action sets up Node.js 24, installs `@lat.md/core` from npm and runs `lat-core check` at the repository root. It does not require your project's dependencies or an API key. Installation requires access to the npm registry; configured external sources may also require network access.
 
-Node setup ensures npm is available on the runner. The action supports Linux, Windows, and macOS. See [[concepts#What Lat checks]] for validation coverage.
+Checkout makes your documentation and source files available to validate. If the job already checks out the repository, use that existing step. The action supports Linux, Windows, and macOS. See [[concepts#What Lat checks]] for validation coverage.
 
 ## Choose a version
 

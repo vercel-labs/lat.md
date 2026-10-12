@@ -14,5 +14,16 @@ inputs:
     description: Print detailed validation timings.
     default: 'false'
 runs:
-  using: node24
-  main: action/index.js
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Install core and check documentation
+      shell: bash
+      env:
+        LAT_ACTION_PATH: ${{ github.action_path }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_WORKING-DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_PROFILE: ${{ inputs.profile }}
+      run: node "$LAT_ACTION_PATH/action/index.js"
