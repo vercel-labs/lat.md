@@ -2462,10 +2462,117 @@ a.wiki-link-active {
   overflow: auto;
 }
 
-.markdown .markdown-mermaid-fullscreen-canvas > svg {
+.markdown .markdown-mermaid-zoom-stage > svg,
+.markdown .markdown-mermaid-minimap-chart > svg {
   width: 100%;
   height: 100%;
   max-width: none !important;
+}
+
+.markdown-mermaid-viewer {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.markdown-mermaid-viewer > .markdown-mermaid-fullscreen-canvas {
+  width: 100%;
+  height: 100%;
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+
+.markdown-mermaid-fullscreen-canvas[data-zoomed='true'] {
+  cursor: grab;
+  touch-action: none;
+}
+
+.markdown-mermaid-fullscreen-canvas[data-zoomed='true']:active {
+  cursor: grabbing;
+}
+
+.markdown-mermaid-raw-canvas {
+  box-sizing: border-box;
+  padding-bottom: 80px;
+}
+
+.markdown-mermaid-zoom-controls {
+  position: absolute;
+  box-sizing: border-box;
+  max-width: calc(100% - 24px);
+  width: max-content;
+  flex-wrap: wrap;
+  justify-content: center;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  white-space: nowrap;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  box-shadow: 0 2px 12px #0001;
+}
+
+.markdown-mermaid-zoom-controls span {
+  min-width: 4ch;
+  text-align: center;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-mermaid-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.markdown-mermaid-minimap {
+  touch-action: none;
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--mermaid-surface);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  cursor: crosshair;
+}
+
+@media (max-width: 1000px) {
+  .markdown-mermaid-minimap {
+    bottom: 120px;
+  }
+}
+
+.markdown-mermaid-minimap-chart {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.markdown-mermaid-minimap-frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--link);
+  background: color-mix(in srgb, var(--link) 12%, transparent);
+  cursor: grab;
+}
+
+.markdown-mermaid-minimap-frame:active {
+  cursor: grabbing;
+}
+
+.markdown-mermaid-fullscreen-canvas:focus {
+  outline: none;
+}
+
+.markdown-mermaid-minimap:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
 }
 
 .markdown .markdown-map {

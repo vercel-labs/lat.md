@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -213,9 +214,581 @@ function FenceError({
   );
 }
 
+// The overview shares the parsed SVG, but gets its own IDs and local references.
+function overviewSvg(root: SvgNode): SvgNode {
+  const ids = new Map<string, string>();
+  const collect = (node: SvgNode) => {
+    if (node.type === 'text') return;
+    if (typeof node.properties.id === 'string')
+      ids.set(node.properties.id, `${node.properties.id}-overview`);
+    node.children.forEach(collect);
+  };
+  collect(root);
+  const rewrite = (value: unknown): unknown => {
+    if (typeof value === 'string')
+      return value.replace(/#([\w:.-]+)/g, (match, id: string) =>
+        ids.has(id) ? `#${ids.get(id)}` : match,
+      );
+    if (value && typeof value === 'object')
+      return Object.fromEntries(
+        Object.entries(value).map(([key, entry]) => [key, rewrite(entry)]),
+      );
+    return value;
+  };
+  const copy = (node: SvgNode): SvgNode => {
+    if (node.type === 'text') return node;
+    const properties = Object.fromEntries(
+      Object.entries(node.properties).map(([key, value]) => {
+        if (key === 'id') return [key, ids.get(String(value))];
+        if (key === 'aria-labelledby' || key === 'aria-describedby')
+          return [
+            key,
+            String(value)
+              .split(/\s+/)
+              .map((id) => ids.get(id) || id)
+              .join(' '),
+          ];
+        return [key, rewrite(value)];
+      }),
+    );
+    return {
+      ...node,
+      properties,
+      children: node.children.map((child) =>
+        node.tagName === 'style' && child.type === 'text'
+          ? { ...child, value: rewrite(child.value) as string }
+          : copy(child),
+      ),
+    };
+  };
+  return copy(root);
+}
+
+type MermaidViewState = { zoom: number; left: number; top: number };
+
+function mermaidViewKey(source: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index++) {
+    hash = Math.imul(hash ^ source.charCodeAt(index), 16777619);
+  }
+  return `lat:mermaid-view:v1:${location.pathname}:${source.length}:${hash >>> 0}`;
+}
+
+function readMermaidView(key: string): MermaidViewState {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || 'null');
+    if (
+      value &&
+      [value.zoom, value.left, value.top].every(Number.isFinite) &&
+      value.left >= 0 &&
+      value.top >= 0
+    )
+      return {
+        zoom: Math.max(0.3, Math.min(10, value.zoom)),
+        left: value.left,
+        top: value.top,
+      };
+  } catch {
+    /* Storage may be unavailable or contain invalid data. */
+  }
+  return { zoom: 1, left: 0, top: 0 };
+}
+
+function MermaidViewport({
+  root,
+  actions,
+  viewState,
+  storageKey,
+}: {
+  root: SvgNode;
+  actions: ReactNode;
+  viewState: MermaidViewState;
+  storageKey: string;
+}) {
+  const viewport = useRef<HTMLDivElement>(null);
+  const previousZoom = useRef(viewState.zoom);
+  const zoomAnchor = useRef<{ x: number; y: number } | null>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ distance: number; zoom: number } | null>(null);
+  const safariGesture = useRef<{ scale: number; zoom: number } | null>(null);
+  const drag = useRef<{
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+  } | null>(null);
+  const [zoom, setZoom] = useState(viewState.zoom);
+  const overviewDrag = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+  } | null>(null);
+  const suppressOverviewClick = useRef(false);
+  const [frame, setFrame] = useState({ width: 1, height: 1, left: 0, top: 0 });
+  const chart = useMemo(() => renderSvgNode(root, 'fullscreen-svg'), [root]);
+  const overview = useMemo(
+    () => renderSvgNode(overviewSvg(root), 'overview-svg'),
+    [root],
+  );
+  const measure = useCallback(() => {
+    const element = viewport.current;
+    if (element)
+      setFrame({
+        width: Math.max(element.clientWidth, 1),
+        height: Math.max(element.clientHeight, 1),
+        left: element.scrollLeft,
+        top: element.scrollTop,
+      });
+  }, []);
+  useLayoutEffect(() => {
+    const element = viewport.current!;
+    let restored = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const save = () => {
+      Object.assign(viewState, {
+        zoom: previousZoom.current,
+        left: element.scrollLeft,
+        top: element.scrollTop,
+      });
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(viewState));
+      } catch {
+        /* Keep navigation usable when storage is disabled or full. */
+      }
+    };
+    const restore = () => {
+      if (!restored && element.clientWidth > 0 && element.clientHeight > 0) {
+        element.scrollLeft = viewState.left;
+        element.scrollTop = viewState.top;
+        restored = true;
+      }
+      measure();
+    };
+    const scheduleSave = () => {
+      clearTimeout(timer);
+      timer = setTimeout(save, 200);
+    };
+    // Restore again after showModal gives the viewport its actual dimensions.
+    element.scrollLeft = viewState.left;
+    element.scrollTop = viewState.top;
+    restore();
+    const observer = new ResizeObserver(restore);
+    observer.observe(element);
+    element.addEventListener('scroll', scheduleSave);
+    window.addEventListener('pagehide', save);
+    return () => {
+      clearTimeout(timer);
+      save();
+      observer.disconnect();
+      element.removeEventListener('scroll', scheduleSave);
+      window.removeEventListener('pagehide', save);
+    };
+  }, [measure, viewState, storageKey]);
+  useLayoutEffect(() => {
+    const element = viewport.current!;
+    const ratio = zoom / previousZoom.current;
+    const anchor = zoomAnchor.current ?? {
+      x: element.clientWidth / 2,
+      y: element.clientHeight / 2,
+    };
+    if (zoom !== previousZoom.current) {
+      element.scrollLeft = Math.max(
+        0,
+        Math.min(
+          element.clientWidth * (zoom - 1),
+          (element.scrollLeft +
+            anchor.x -
+            (element.clientWidth * Math.max(0, 1 - previousZoom.current)) / 2) *
+            ratio +
+            (element.clientWidth * Math.max(0, 1 - zoom)) / 2 -
+            anchor.x,
+        ),
+      );
+      element.scrollTop = Math.max(
+        0,
+        Math.min(
+          element.clientHeight * (zoom - 1),
+          (element.scrollTop +
+            anchor.y -
+            (element.clientHeight * Math.max(0, 1 - previousZoom.current)) /
+              2) *
+            ratio +
+            (element.clientHeight * Math.max(0, 1 - zoom)) / 2 -
+            anchor.y,
+        ),
+      );
+    }
+    zoomAnchor.current = null;
+    previousZoom.current = zoom;
+    measure();
+    if (element.clientWidth > 0) {
+      Object.assign(viewState, {
+        zoom,
+        left: element.scrollLeft,
+        top: element.scrollTop,
+      });
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(viewState));
+      } catch {
+        /* Optional persistence. */
+      }
+    }
+  }, [zoom, measure, viewState, storageKey]);
+  const changeZoom = (delta: number) => {
+    zoomAnchor.current = null;
+    setZoom((value) => Math.max(0.3, Math.min(10, value + delta)));
+  };
+  const gestureZoom = useCallback(
+    (
+      value: number | ((current: number) => number),
+      clientX: number,
+      clientY: number,
+    ) => {
+      const bounds = viewport.current!.getBoundingClientRect();
+      zoomAnchor.current = {
+        x: clientX - bounds.left,
+        y: clientY - bounds.top,
+      };
+      setZoom((current) =>
+        Math.max(
+          0.3,
+          Math.min(10, typeof value === 'function' ? value(current) : value),
+        ),
+      );
+    },
+    [],
+  );
+  useEffect(() => {
+    const element = viewport.current!;
+    const wheel = (event: WheelEvent) => {
+      // Ordinary wheel/two-finger scrolling stays native panning.
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      if (safariGesture.current) return;
+      const delta =
+        event.deltaY *
+        (event.deltaMode === 1
+          ? 16
+          : event.deltaMode === 2
+            ? element.clientHeight
+            : 1);
+      gestureZoom(
+        (value) => value * Math.exp(-delta * 0.01),
+        event.clientX,
+        event.clientY,
+      );
+    };
+    // Safari exposes trackpad pinches through GestureEvent instead of wheel.
+    const start = (event: Event) => {
+      if (pointers.current.size >= 2) return;
+      event.preventDefault();
+      const gesture = event as Event & { scale: number };
+      safariGesture.current = {
+        scale: gesture.scale || 1,
+        zoom: previousZoom.current,
+      };
+    };
+    const change = (event: Event) => {
+      if (!safariGesture.current) return;
+      event.preventDefault();
+      const gesture = event as Event & {
+        scale: number;
+        clientX: number;
+        clientY: number;
+      };
+      gestureZoom(
+        (safariGesture.current.zoom * gesture.scale) /
+          safariGesture.current.scale,
+        gesture.clientX,
+        gesture.clientY,
+      );
+    };
+    const end = () => {
+      safariGesture.current = null;
+    };
+    element.addEventListener('wheel', wheel, { passive: false });
+    element.addEventListener('gesturestart', start, { passive: false });
+    element.addEventListener('gesturechange', change, { passive: false });
+    element.addEventListener('gestureend', end);
+    return () => {
+      element.removeEventListener('wheel', wheel);
+      element.removeEventListener('gesturestart', start);
+      element.removeEventListener('gesturechange', change);
+      element.removeEventListener('gestureend', end);
+    };
+  }, [gestureZoom]);
+  const endPointer = (id: number) => {
+    pointers.current.delete(id);
+    pinch.current = null;
+    drag.current = null;
+    const remaining = [...pointers.current.values()][0];
+    if (remaining && viewport.current)
+      drag.current = {
+        ...remaining,
+        left: viewport.current.scrollLeft,
+        top: viewport.current.scrollTop,
+      };
+  };
+  const overviewWidth = Math.min(180, (120 * frame.width) / frame.height);
+  const overviewHeight = (overviewWidth * frame.height) / frame.width;
+  return (
+    <div className="markdown-mermaid-viewer">
+      <div
+        className="markdown-mermaid-fullscreen-canvas"
+        ref={viewport}
+        tabIndex={0}
+        role="region"
+        aria-label="Diagram viewport. Pinch or use plus and minus to zoom; scroll or drag to pan."
+        data-zoomed={zoom > 1}
+        onScroll={measure}
+        onDoubleClick={(event) => {
+          if ((event.target as Element).closest('a')) return;
+          event.preventDefault();
+          zoomAnchor.current = null;
+          setZoom(1);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === '+' || event.key === '=') {
+            event.preventDefault();
+            changeZoom(0.25);
+          } else if (event.key === '-') {
+            event.preventDefault();
+            changeZoom(-0.25);
+          } else if (event.key === '0') {
+            event.preventDefault();
+            setZoom(1);
+          }
+        }}
+        onPointerDown={(event) => {
+          if (
+            (zoom <= 1 && event.pointerType !== 'touch') ||
+            event.button !== 0 ||
+            (event.target as Element).closest('a')
+          )
+            return;
+          const element = event.currentTarget;
+          if (event.pointerType === 'touch') {
+            pointers.current.set(event.pointerId, {
+              x: event.clientX,
+              y: event.clientY,
+            });
+            if (pointers.current.size === 2) {
+              const [a, b] = [...pointers.current.values()];
+              pinch.current = {
+                distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+                zoom,
+              };
+            }
+          }
+          drag.current = {
+            x: event.clientX,
+            y: event.clientY,
+            left: element.scrollLeft,
+            top: element.scrollTop,
+          };
+          element.setPointerCapture(event.pointerId);
+          event.preventDefault();
+          element.focus();
+        }}
+        onPointerMove={(event) => {
+          if (pointers.current.has(event.pointerId)) {
+            pointers.current.set(event.pointerId, {
+              x: event.clientX,
+              y: event.clientY,
+            });
+            if (pointers.current.size >= 2 && pinch.current) {
+              const [a, b] = [...pointers.current.values()];
+              gestureZoom(
+                (pinch.current.zoom * Math.hypot(a.x - b.x, a.y - b.y)) /
+                  pinch.current.distance,
+                (a.x + b.x) / 2,
+                (a.y + b.y) / 2,
+              );
+              return;
+            }
+          }
+          if (!drag.current) return;
+          event.currentTarget.scrollLeft =
+            drag.current.left + drag.current.x - event.clientX;
+          event.currentTarget.scrollTop =
+            drag.current.top + drag.current.y - event.clientY;
+        }}
+        onPointerUp={(event) => {
+          endPointer(event.pointerId);
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onPointerCancel={(event) => endPointer(event.pointerId)}
+        onLostPointerCapture={(event) => endPointer(event.pointerId)}
+      >
+        <div
+          className="markdown-mermaid-zoom-stage"
+          style={{
+            width: `${zoom * 100}%`,
+            height: `${zoom * 100}%`,
+            position: 'relative',
+            left: `${Math.max(0, 1 - zoom) * 50}%`,
+            top: `${Math.max(0, 1 - zoom) * 50}%`,
+          }}
+        >
+          {chart}
+        </div>
+      </div>
+      <div
+        className="markdown-mermaid-zoom-controls"
+        role="group"
+        aria-label="Diagram zoom"
+      >
+        <button
+          className="markdown-mermaid-button"
+          type="button"
+          aria-label="Zoom out"
+          disabled={zoom === 0.3}
+          onClick={() => changeZoom(-0.25)}
+        >
+          −
+        </button>
+        <span aria-live="polite">{Math.round(zoom * 100)}%</span>
+        <button
+          className="markdown-mermaid-button"
+          type="button"
+          aria-label="Zoom in"
+          disabled={zoom === 10}
+          onClick={() => changeZoom(0.25)}
+        >
+          +
+        </button>
+        <button
+          className="markdown-mermaid-button"
+          type="button"
+          onClick={() => setZoom(1)}
+        >
+          Fit to screen
+        </button>
+        {actions}
+      </div>
+      {zoom > 1 && (
+        <button
+          className="markdown-mermaid-minimap"
+          type="button"
+          aria-label="Diagram overview. Drag the viewport box or click to navigate; press Enter to center."
+          style={{ width: overviewWidth, height: overviewHeight }}
+          onPointerDown={(event) => {
+            suppressOverviewClick.current = false;
+            if (event.button !== 0 || overviewDrag.current) return;
+            if (
+              !(event.target as Element).closest(
+                '.markdown-mermaid-minimap-frame',
+              )
+            )
+              return;
+            const element = viewport.current!;
+            overviewDrag.current = {
+              pointerId: event.pointerId,
+              x: event.clientX,
+              y: event.clientY,
+              left: element.scrollLeft,
+              top: element.scrollTop,
+            };
+            suppressOverviewClick.current = true;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            event.currentTarget.focus();
+            event.preventDefault();
+          }}
+          onPointerMove={(event) => {
+            const start = overviewDrag.current;
+            if (!start || start.pointerId !== event.pointerId) return;
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const element = viewport.current!;
+            element.scrollLeft = Math.max(
+              0,
+              Math.min(
+                element.clientWidth * (zoom - 1),
+                start.left +
+                  ((event.clientX - start.x) / bounds.width) *
+                    element.clientWidth *
+                    zoom,
+              ),
+            );
+            element.scrollTop = Math.max(
+              0,
+              Math.min(
+                element.clientHeight * (zoom - 1),
+                start.top +
+                  ((event.clientY - start.y) / bounds.height) *
+                    element.clientHeight *
+                    zoom,
+              ),
+            );
+            measure();
+          }}
+          onPointerUp={(event) => {
+            if (overviewDrag.current?.pointerId !== event.pointerId) return;
+            overviewDrag.current = null;
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onPointerCancel={() => {
+            overviewDrag.current = null;
+          }}
+          onLostPointerCapture={() => {
+            overviewDrag.current = null;
+          }}
+          onClick={(event) => {
+            if (suppressOverviewClick.current && event.detail !== 0) {
+              suppressOverviewClick.current = false;
+              return;
+            }
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const x =
+              event.detail === 0
+                ? 0.5
+                : Math.max(
+                    0,
+                    Math.min(1, (event.clientX - bounds.left) / bounds.width),
+                  );
+            const y =
+              event.detail === 0
+                ? 0.5
+                : Math.max(
+                    0,
+                    Math.min(1, (event.clientY - bounds.top) / bounds.height),
+                  );
+            const element = viewport.current!;
+            element.scrollLeft = x * frame.width * zoom - frame.width / 2;
+            element.scrollTop = y * frame.height * zoom - frame.height / 2;
+            measure();
+          }}
+        >
+          <div
+            className="markdown-mermaid-minimap-chart"
+            aria-hidden="true"
+            inert
+          >
+            {overview}
+          </div>
+          <span
+            className="markdown-mermaid-minimap-frame"
+            style={{
+              width: `${100 / zoom}%`,
+              height: `${100 / zoom}%`,
+              left: `${(frame.left / (frame.width * zoom)) * 100}%`,
+              top: `${(frame.top / (frame.height * zoom)) * 100}%`,
+            }}
+          />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function MermaidFence({ fallback, source }: Omit<RichFenceProps, 'kind'>) {
   const container = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const viewState = useRef({ zoom: 1, left: 0, top: 0 });
+  const storageKey = useRef('');
   const [fullscreen, setFullscreen] = useState(false);
   const [raw, setRaw] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -275,6 +848,19 @@ function MermaidFence({ fallback, source }: Omit<RichFenceProps, 'kind'>) {
       {raw ? 'View chart' : 'View raw'}
     </button>
   );
+  const fullscreenActions = (
+    <>
+      {rawToggle}
+      <button
+        className="markdown-mermaid-button"
+        type="button"
+        autoFocus
+        onClick={() => setFullscreen(false)}
+      >
+        Close full screen
+      </button>
+    </>
+  );
   const content = raw ? (
     <pre className="markdown-mermaid-source">
       <code>{source}</code>
@@ -296,7 +882,11 @@ function MermaidFence({ fallback, source }: Omit<RichFenceProps, 'kind'>) {
           type="button"
           aria-label="View Mermaid diagram full screen"
           title="Full screen"
-          onClick={() => setFullscreen(true)}
+          onClick={() => {
+            storageKey.current = mermaidViewKey(source);
+            viewState.current = readMermaidView(storageKey.current);
+            setFullscreen(true);
+          }}
         >
           <svg
             aria-hidden="true"
@@ -328,20 +918,28 @@ function MermaidFence({ fallback, source }: Omit<RichFenceProps, 'kind'>) {
           if (event.key === 'Escape') event.stopPropagation();
         }}
       >
-        <div className="markdown-mermaid-toolbar">
-          {rawToggle}
-          <button
-            className="markdown-mermaid-button"
-            type="button"
-            autoFocus
-            onClick={() => setFullscreen(false)}
-          >
-            Close full screen
-          </button>
-        </div>
-        <div className="markdown-mermaid-fullscreen-canvas">
-          {fullscreen && content}
-        </div>
+        {fullscreen &&
+          (raw ? (
+            <div className="markdown-mermaid-viewer">
+              <div className="markdown-mermaid-fullscreen-canvas markdown-mermaid-raw-canvas">
+                {content}
+              </div>
+              <div
+                className="markdown-mermaid-zoom-controls"
+                role="group"
+                aria-label="Diagram controls"
+              >
+                {fullscreenActions}
+              </div>
+            </div>
+          ) : (
+            <MermaidViewport
+              root={rendered.root}
+              actions={fullscreenActions}
+              viewState={viewState.current}
+              storageKey={storageKey.current}
+            />
+          ))}
       </dialog>
     </div>
   );

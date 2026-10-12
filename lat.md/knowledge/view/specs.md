@@ -457,3 +457,13 @@ Previews stay outside the vault index and are read-only. Repeated and cyclic lin
 ## Constrains project Markdown previews
 
 Preview routes reserve their internal namespace against authored path collisions. Reads reject traversal and escaping symlinks, and exports apply publication exclusions to project documents and their resources.
+
+## Mermaid fullscreen navigation
+
+Fullscreen diagrams zoom around the viewport center, clamp between 30% and ten times the fitted size, center charts below fit, and reset to fit.
+
+The overview supports click navigation and dragging its viewport rectangle, preserving the grab position and clamping at chart edges without a release-click jump, duplicate SVG IDs, or another Mermaid render. The bottom toolbar combines zoom, source toggle, and close controls. Raw view retains source and close controls while hiding zoom; returning restores the previous chart zoom and scroll position.
+
+Gesture coverage verifies double-click reset to 100%, Ctrl-wheel anchoring and bounds, native scrolling, Safari trackpad scaling, touchscreen pinching from fit, and pointer cancellation.
+
+Storage coverage verifies saving zoom and position, restoring on reopen, and falling back to fit for malformed data. State is scoped to the page and diagram source.
