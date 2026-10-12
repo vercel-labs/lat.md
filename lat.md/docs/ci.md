@@ -25,7 +25,7 @@ The action sets up the required Node.js version, installs `@lat.md/core` from np
 
 Checkout makes your documentation and source files available to validate. If the job already checks out the repository, use that existing step. The action supports Linux, Windows, and macOS. See [[concepts#What Lat checks]] for validation coverage.
 
-## Choose a version
+### Choose a version
 
 The action uses npm's `latest` version of core by default, so new core releases reach your workflow without updating the action.
 
@@ -41,7 +41,7 @@ Use an exact published core version or a distribution tag such as `latest`. The 
 
 The action version controls the installer and launcher. Pinning the action to a commit does not pin core when `version` is `latest`. An exact core version selects that release, but its dependency ranges still resolve during installation.
 
-## Check a subdirectory
+### Check a subdirectory
 
 Use `working-directory` when your Lat project lives below the repository root, and enable `profile` to investigate slow checks.
 
