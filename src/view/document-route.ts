@@ -2,6 +2,7 @@ const DOCUMENT_PREFIX = '/';
 const RESOURCE_PREFIX = '/resources/';
 const MARKDOWN_EXTENSION = '.md';
 const RESERVED_ROUTES = new Set([
+  '@',
   'api',
   'assets',
   'data',
@@ -40,7 +41,7 @@ function decodeDocumentPath(pathname: string): string | null {
 export function validateDocumentRoutes(paths: readonly string[]): void {
   const files = new Set(paths);
   for (const path of paths) {
-    if (documentPath(documentUrl(path)) !== path) {
+    if (path.includes('@') || documentPath(documentUrl(path)) !== path) {
       throw new Error(
         `Document path conflicts with a reserved UI route: ${path}`,
       );
@@ -57,6 +58,13 @@ export function validateDocumentRoutes(paths: readonly string[]): void {
 
 /** Build the canonical, extensionless browser route for a Markdown file. */
 export function documentUrl(path: string, fragment = ''): string {
+  if (path.startsWith('@/')) {
+    return (
+      '/@/' +
+      encodePath(path.slice(2)) +
+      (fragment ? '#' + encodeURIComponent(fragment) : '')
+    );
+  }
   const routePath = path.endsWith(MARKDOWN_EXTENSION)
     ? path.slice(0, -MARKDOWN_EXTENSION.length)
     : path;
@@ -67,7 +75,14 @@ export function documentUrl(path: string, fragment = ''): string {
 export function documentPath(pathname: string): string | null {
   const path = decodeDocumentPath(pathname);
   if (
+    path?.startsWith('@/') &&
+    !path.slice(2).includes('@') &&
+    path.toLowerCase().endsWith(MARKDOWN_EXTENSION)
+  )
+    return path;
+  if (
     !path ||
+    path.includes('@') ||
     RESERVED_ROUTES.has(path.split('/')[0]!) ||
     path.endsWith('/index.html') ||
     path.toLowerCase().endsWith(MARKDOWN_EXTENSION)

@@ -474,7 +474,70 @@ export class ViewStore {
     return (await renderMarkdown(markdown, requestedPath, resolver)).tree;
   }
 
+  private async projectPreviewFile(path: string): Promise<string> {
+    if (
+      !path ||
+      path.includes('@') ||
+      path.includes('\\') ||
+      path.split('/').some((part) => !part || part === '.' || part === '..')
+    ) {
+      throw new ViewDocumentNotFoundError('Project file not found');
+    }
+    if (this.options.publishable && !(await this.options.publishable(path))) {
+      throw new ViewDocumentNotFoundError(
+        'Project file is excluded from publication',
+      );
+    }
+    const file = await repositoryFilePath(this.projectRoot, path);
+    if (!file) throw new ViewDocumentNotFoundError('Project file not found');
+    return file;
+  }
+
+  private async getProjectDocument(path: string): Promise<ViewDocument> {
+    const file = await this.projectPreviewFile(path);
+    if (!path.toLowerCase().endsWith('.md'))
+      throw new ViewDocumentNotFoundError('Markdown document not found');
+    const analysis = await analyzeMarkdownPath(
+      file,
+      this.latDir,
+      this.projectRoot,
+    );
+    const requestedPath = '@/' + path;
+    const resolver = await createMarkdownWikiLinkResolver(
+      this.latDir,
+      toPosix(relative(this.latDir, file)),
+      this.snapshotValue.allSections,
+      this.snapshotValue.references,
+      this.snapshotValue.external,
+      this.options.publishable,
+    );
+    const rendered = await renderMarkdown(
+      analysis.content,
+      requestedPath,
+      resolver,
+      {
+        rewriteMarkdownLink: (url) => rewriteLocalFileLink(url, requestedPath),
+      },
+    );
+    return {
+      ...rendered,
+      path: requestedPath,
+      gitTree: null,
+      tableOfContents: buildViewTableOfContents(
+        analysis.sections,
+        analysis.headingTitles,
+        { errors: [], gitTree: null },
+      ),
+      graphNodeIds: {},
+      errors: [],
+      backReferences: [],
+      frontmatter: { requireCodeMention: false },
+    };
+  }
+
   async getDocument(requestedPath: string): Promise<ViewDocument> {
+    if (requestedPath.startsWith('@/'))
+      return this.getProjectDocument(requestedPath.slice(2));
     if (
       !requestedPath ||
       requestedPath.includes('\\') ||
@@ -599,6 +662,12 @@ export class ViewStore {
   }
 
   async getDocumentResource(requestedPath: string): Promise<Buffer> {
+    if (requestedPath.startsWith('@/')) {
+      const path = requestedPath.slice(2);
+      if (path.toLowerCase().endsWith('.md'))
+        throw new ViewDocumentNotFoundError('Document resource not found');
+      return readFile(await this.projectPreviewFile(path));
+    }
     if (
       this.options.publishable &&
       !(await this.options.publishable(

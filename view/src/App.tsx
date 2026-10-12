@@ -383,7 +383,10 @@ export function App() {
         );
   const activePath = route?.kind === 'markdown' ? route.path : null;
   const editingDocument =
-    !staticView && route?.kind === 'markdown' && documentMode === 'edit';
+    !staticView &&
+    route?.kind === 'markdown' &&
+    !route.path.startsWith('@/') &&
+    documentMode === 'edit';
   const activeExternalTarget = route?.kind === 'external' ? route.target : null;
   const gitHasChanges =
     Object.keys(index?.git?.files ?? NO_GIT_FILES).length > 0;
@@ -1049,7 +1052,11 @@ export function App() {
               <div className="document-header">
                 <div className="document-header-line">
                   <div className="document-metadata">
-                    <div className="document-path">{page.document.path}</div>
+                    <div className="document-path">
+                      {page.document.path.startsWith('@/')
+                        ? page.document.path.slice(2)
+                        : page.document.path}
+                    </div>
                     {page.document.frontmatter.requireCodeMention && (
                       <div
                         className="document-flag"
@@ -1073,12 +1080,14 @@ export function App() {
                       </button>
                     )}
                   </div>
-                  {!staticView && route?.kind === 'markdown' && (
-                    <DocumentModeSwitch
-                      mode={documentMode}
-                      onChange={onDocumentModeChange}
-                    />
-                  )}
+                  {!staticView &&
+                    route?.kind === 'markdown' &&
+                    !route.path.startsWith('@/') && (
+                      <DocumentModeSwitch
+                        mode={documentMode}
+                        onChange={onDocumentModeChange}
+                      />
+                    )}
                 </div>
                 {errorsOpen && (
                   <DocumentErrorPanel
@@ -1117,10 +1126,13 @@ export function App() {
                     )
                   }
                   onShowSectionOutput={setSectionOutputId}
-                  sectionOutputEnabled={!staticView}
+                  sectionOutputEnabled={
+                    !staticView &&
+                    !(route?.kind === 'markdown' && route.path.startsWith('@/'))
+                  }
                   tree={documentTree}
                   viewMarkdownUrl={
-                    route?.kind === 'markdown'
+                    route?.kind === 'markdown' && !route.path.startsWith('@/')
                       ? rawDocumentUrl(route.path)
                       : undefined
                   }

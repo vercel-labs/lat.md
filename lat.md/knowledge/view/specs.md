@@ -444,3 +444,16 @@ External Markdown and AsciiDoc links never authorize local source exports or liv
 ## Supports the full Highlight.js language registry
 
 Every bundled language and alias is accepted case-insensitively while preserving literal source safely. Source extensions select matching grammars, including languages beyond the common set, and the shell label retains Bash behavior.
+
+
+## Previews project Markdown
+
+Ordinary links to Markdown outside the vault retain project identity, heading anchors, relative links, and images in live and static views, including nested deployment bases and same-named vault files.
+
+Images and links authored as raw HTML receive the same relative-path resolution as Markdown syntax before sanitization.
+
+Previews stay outside the vault index and are read-only. Repeated and cyclic links share one export payload per file.
+
+## Constrains project Markdown previews
+
+Preview routes reserve their internal namespace against authored path collisions. Reads reject traversal and escaping symlinks, and exports apply publication exclusions to project documents and their resources.

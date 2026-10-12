@@ -24,7 +24,7 @@ GitHub-flavored bare HTTP(S), `www.`, and email addresses become links without r
 
 GitHub-compatible HTML elements render through a strict allowlist, enabling constructs such as `details`, `summary`, `sub`, `sup`, and `picture` without allowing scripts or event handlers.
 
-Raw HTML is parsed before sanitization. Unsafe elements, URL protocols, and attributes are removed, while `details` may preserve its boolean `open` state for authored expanded sections.
+Raw HTML is parsed before sanitization. Relative HTML image and link URLs use the same document-relative routing as Markdown images and links. Unsafe elements, URL protocols, and attributes are removed, while `details` may preserve its boolean `open` state for authored expanded sections.
 
 ## Alerts
 
@@ -190,7 +190,7 @@ Ordinary markdown links (`[text](path)`) to local files are validated for existe
 
 Targets resolve against the containing file's directory. A link that leaves `lat.md/` (`../../AGENTS.md`) is checked like any other. Inline links, images, and reference definitions (`[id]: ./path.md`) all participate; code samples and bracket-like text in raw HTML do not.
 
-Ordinary relative links to text files outside the vault open the UI's code viewer, including files not yet added to Git. Paths resolve from the containing Markdown file; source-symbol fragments and query parameters are preserved. Swift, shell scripts, configuration files, and extensionless text can be viewed without symbol-parser support. Binary files are rejected; resources inside the vault retain their existing routes.
+Ordinary relative links to Markdown outside the vault open rendered project previews; other text files open the UI's code viewer, including files not yet added to Git. Paths resolve from the containing Markdown file; source-symbol fragments and query parameters are preserved. Swift, shell scripts, configuration files, and extensionless text can be viewed without symbol-parser support. Binary files are rejected; resources inside the vault retain their existing routes.
 
 Non-Markdown files stored inside `lat.md/` are valid only when ordinary Markdown links or images reference them. The live browser serves these contained resources and static exports copy only those the rendered documents use.
 

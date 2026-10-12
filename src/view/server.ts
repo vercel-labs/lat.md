@@ -578,7 +578,9 @@ export async function createViewApp(
       if (
         url.pathname === '/search' ||
         url.pathname === '/graph' ||
-        (markdownPath !== null && index.files.includes(markdownPath)) ||
+        (markdownPath !== null &&
+          (markdownPath.startsWith('@/') ||
+            index.files.includes(markdownPath))) ||
         url.pathname.startsWith('/code/') ||
         url.pathname.startsWith('/external/')
       ) {

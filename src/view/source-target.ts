@@ -1,7 +1,11 @@
 import { extname } from 'node:path';
 import { normalizeRepositoryPath } from '@lat.md/core/repository-path';
 import { isSourceFileExtension } from '@lat.md/core/source-formats';
-import { rewriteDocumentLink } from './document-route.js';
+import {
+  documentUrl,
+  documentResourceUrl,
+  rewriteDocumentLink,
+} from './document-route.js';
 
 /** Resolve ordinary code links relative to their Markdown file, not the vault root. */
 export function rewriteLocalFileLink(
@@ -12,13 +16,40 @@ export function rewriteLocalFileLink(
     try {
       // Keep a project prefix so URL normalization cannot silently clamp an
       // escaping relative path back into the project.
-      const base = sourcePath.split('/').map(encodeURIComponent).join('/');
-      const url = new URL(value, `http://lat.local/project/lat.md/${base}`);
+      const preview = sourcePath.startsWith('@/');
+      const authoredPath = preview
+        ? sourcePath.slice(2)
+        : 'lat.md/' + sourcePath;
+      const base = authoredPath.split('/').map(encodeURIComponent).join('/');
+      const url = new URL(value, `http://lat.local/project/${base}`);
       if (
         url.origin === 'http://lat.local' &&
         url.pathname.startsWith('/project/')
       ) {
         const path = decodeURIComponent(url.pathname.slice('/project/'.length));
+        if (path.includes('@')) return '#';
+        const suffix = url.search + url.hash;
+        if (
+          normalizeRepositoryPath(path) &&
+          extname(path).toLowerCase() === '.md'
+        ) {
+          return (
+            documentUrl(
+              path.startsWith('lat.md/') ? path.slice(7) : '@/' + path,
+            ) + suffix
+          );
+        }
+        if (
+          preview &&
+          normalizeRepositoryPath(path) &&
+          !isSourceFileExtension(extname(path))
+        ) {
+          return (
+            documentResourceUrl(
+              path.startsWith('lat.md/') ? path.slice(7) : '@/' + path,
+            ) + suffix
+          );
+        }
         if (
           normalizeRepositoryPath(path) &&
           (!path.startsWith('lat.md/') || isSourceFileExtension(extname(path)))
@@ -30,6 +61,12 @@ export function rewriteLocalFileLink(
       // Malformed URLs retain the ordinary document/resource fallback.
     }
   }
+  if (
+    sourcePath.startsWith('@/') &&
+    value &&
+    !/^(?:[#/]|[a-z][a-z\d+.-]*:)/i.test(value)
+  )
+    return '#';
   return rewriteDocumentLink(value, sourcePath);
 }
 

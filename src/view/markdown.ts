@@ -1,4 +1,5 @@
 import { basename, extname } from 'node:path';
+import type { Root as HastRoot } from 'hast';
 import type {
   Blockquote,
   Code,
@@ -263,6 +264,24 @@ const documentTreeProcessor = unified()
     handlers: { code: highlightedCodeHandler },
   })
   .use(rehypeRaw)
+  .use(() => (tree: HastRoot, file: { data: Record<string, unknown> }) => {
+    const rewrite = file.data.rewriteMarkdownLink;
+    if (typeof rewrite !== 'function') return;
+    // HTML attributes only become nodes after rehypeRaw. Resolve remaining
+    // relative URLs here, before the sanitizer enforces allowed protocols.
+    visit(tree, 'element', (node) => {
+      for (const name of ['href', 'src']) {
+        const value = node.properties[name];
+        if (
+          typeof value === 'string' &&
+          value &&
+          !/^(?:[#/]|[a-z][a-z\d+.-]*:)/i.test(value)
+        ) {
+          node.properties[name] = rewrite(value);
+        }
+      }
+    });
+  })
   .use(rehypeSanitize, sanitizeSchema)
   .use(rehypeKatex)
   .use(rehypeSlug);
@@ -683,7 +702,9 @@ export async function renderMarkdown(
         } as RootContent);
   });
 
-  const hast = await documentTreeProcessor.run(tree);
+  const hast = await documentTreeProcessor.run(tree, {
+    data: { rewriteMarkdownLink: options.rewriteMarkdownLink },
+  });
   // Attach source ranges after sanitization, before positions are discarded.
   visit(hast, 'element', (node) => {
     if (!/^(p|pre|li|tr|h[1-6])$/.test(node.tagName) || !node.position) return;

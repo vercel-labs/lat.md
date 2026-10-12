@@ -30,11 +30,15 @@ Map fences lazily request OpenFreeMap's hosted OpenStreetMap vector style throug
 
 The live server's default-self Content Security Policy permits OpenFreeMap tile connections, GitHub-hosted images, Shields badges, and bundled data fonts used by supported content and renderers.
 
-Read APIs accept only walked vault files or supported project source paths and reject traversal and escaping symlinks.
+Read APIs accept walked vault files and contained project previews, rejecting traversal and escaping symlinks.
 
 Local Markdown routes mirror vault-relative paths without a fixed prefix: `guide.md` becomes `/guide`, and the entry document owns `/` in live and exported UIs. Raw Markdown remains at `/<file>.md`, with `text/markdown` from servers and physical files in exports.
 
 Document paths cannot shadow reserved UI namespaces (`api`, `assets`, `data`, `code`, `external`, `resources`, `graph`, and `search`) or generated HTML files. There is no special `docs/` namespace or compatibility alias.
+
+Ordinary relative links to project Markdown outside the vault open rendered, read-only previews through [[src/view/source-target.ts#rewriteLocalFileLink]] and [[src/view/store.ts#ViewStore#getDocument]]. Their project-relative identity is independent of checkout location and distinct from vault documents. Headings, nested links, and linked resources work in live and exported views; previews do not enter the knowledge graph or receive vault structure checks.
+
+[[src/view/document-route.ts#documentPath]] and [[src/view/document-route.ts#documentUrl]] share the internal preview route mapping with the client. [[src/view/document-route.ts#validateDocumentRoutes]] reserves the mapping against authored path collisions.
 
 Relative links to non-Markdown files inside the vault become `/resources/...` routes. The live server reads only real files contained by the vault, while static and server builds copy only resources reached from rendered documents.
 
@@ -67,6 +71,8 @@ Builds snapshot the current vault into CDN-ready HTML, JavaScript, CSS, raw Mark
 The default destination is `.lat-build/static/`; an explicit output overrides it.
 
 The export preserves the file tree, rendered Markdown, wiki and ordinary Markdown navigation, validation state, backlinks, source views, local TOCs, and the graph workspace. Each extensionless document and source path gets a physical `index.html` shell; every local document also has an exact `.md` source sibling, and linked vault resources retain their relative paths. A compatibility shell migrates old graph URLs.
+
+[[src/view/static-build.ts#buildStaticView]] follows linked project Markdown previews with file-level deduplication, including cycles, and bundles their resources. Every file read must pass the same publication policy as source previews.
 
 Each unique source file has one shared raw-text and highlighted-line payload. Manifest entries combine it with small request-specific payloads for focus, context, and references, avoiding code duplication across links into the same file.
 

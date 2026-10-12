@@ -800,7 +800,8 @@ export async function buildStaticView(
       externalRequests.add(file.target);
     }
 
-    for (const path of index.files) {
+    const pendingDocuments = new Set(index.files);
+    for (const path of pendingDocuments) {
       const document = await store.getDocument(path);
       documents.set(path, document);
       for (const url of documentTreeUrls(document.tree)) {
@@ -811,6 +812,8 @@ export async function buildStaticView(
           continue;
         }
         if (parsed.origin !== 'http://lat.local') continue;
+        const previewPath = documentPath(parsed.pathname);
+        if (previewPath?.startsWith('@/')) pendingDocuments.add(previewPath);
         const resourcePath = documentResourcePath(parsed.pathname);
         if (resourcePath) documentResources.add(resourcePath);
       }
@@ -930,11 +933,13 @@ export async function buildStaticView(
         'documents',
         rewritten,
       );
-      const source = await store.getDocumentSource(path);
-      const rawPath = publicationOutputPath(payloadDir, path);
-      await mkdir(dirname(rawPath), { recursive: true });
-      await writeFile(rawPath, source.content);
-      const route = path.slice(0, -'.md'.length);
+      if (!path.startsWith('@/')) {
+        const source = await store.getDocumentSource(path);
+        const rawPath = publicationOutputPath(payloadDir, path);
+        await mkdir(dirname(rawPath), { recursive: true });
+        await writeFile(rawPath, source.content);
+      }
+      const route = path.startsWith('@/') ? path : path.slice(0, -'.md'.length);
       documentBootstraps.set(route, {
         request: viewStaticDocumentRequest(path),
         document: rewritten,
