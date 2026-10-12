@@ -103,7 +103,9 @@ Commands for running the test suite.
 
 ### Typecheck Test
 
-Every test run includes a full native `tsc --noEmit` pass over the root and UI projects after building core and server declarations. The subprocess has a 90-second limit inside a 120-second test budget for Windows CI.
+Every test run checks core, server, root, and UI types without modifying the build artifacts used by parallel tests.
+
+[[tests/parser.test.ts]] runs `pnpm typecheck:no-build` against existing workspace declarations. Run `pnpm buildall` before the suite; standalone `pnpm typecheck` still prepares declarations first. The subprocess has a 90-second limit inside a 120-second test budget for Windows CI.
 
 ### Continuous Integration
 

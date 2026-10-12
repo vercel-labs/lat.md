@@ -3,6 +3,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { extractLinks } from '@lat.md/core/lattice';
+import { checkAllCommand, checkLinksCommand } from '@lat.md/core/cli/check';
+import { plainStyler } from '@lat.md/core/context';
 import { analyzeMarkdownFile } from '@lat.md/core/markdown-analysis';
 import {
   PARSER_CACHE_VERSION,
@@ -243,4 +246,60 @@ See [[other#Details]], [guide](guide.md), and [missing][nowhere].
     expect(shard).toBe('be');
     expect(basename(nested)).toMatch(/^[a-f0-9]{40}_lat_md_alpha_beta_md$/);
   });
+});
+
+// @lat: [[tests/check-links#Accepts task-list markers]]
+it('excludes task markers before inline formatting but validates task body links', async () => {
+  const tasks = [' ', 'x', 'X'].flatMap((marker) =>
+    ['-', '*', '+', '1.', '2)'].flatMap((bullet) =>
+      [
+        'plain text',
+        '`code` item',
+        '**bold** item',
+        '*emphasis* item',
+        '[[target]] item',
+        '[valid](https://example.com) item',
+      ].flatMap((body) =>
+        ['', '> ', '- parent\n\n  '].map(
+          (prefix) => prefix + bullet + ' [' + marker + '] ' + body,
+        ),
+      ),
+    ),
+  );
+  for (const task of tasks) {
+    expect(
+      extractLinks(task).filter((link) => 'identifier' in link),
+      task,
+    ).toEqual([]);
+  }
+  expect(extractLinks('- [x] `code` [missing]')).toMatchObject([
+    { identifier: 'missing', style: 'shortcut', line: 1 },
+  ]);
+  expect(extractLinks('[x] ordinary prose')).toMatchObject([
+    { identifier: 'x', style: 'shortcut' },
+  ]);
+  expect(extractLinks('- [x] `code` [bad](missing.md)')).toMatchObject([
+    { url: 'missing.md', kind: 'link' },
+  ]);
+  const { root, latDir } = await projectWithFiles(1);
+  await writeFile(
+    join(latDir, 'lat.md'),
+    '# Tasks\n\nTask checklist.\n\n' +
+      tasks.filter((task) => !task.includes('[[target]]')).join('\n\n') +
+      '\n',
+  );
+  const ctx = {
+    projectRoot: root,
+    latDir,
+    styler: plainStyler,
+    mode: 'cli' as const,
+    headless: true,
+  };
+  // Repeat to cover persistent parsed facts as well as a cold check.
+  for (let run = 0; run < 2; run++) {
+    const links = await checkLinksCommand(ctx);
+    expect(links.isError, links.output).not.toBe(true);
+    const all = await checkAllCommand(ctx);
+    expect(all.isError, all.output).not.toBe(true);
+  }
 });

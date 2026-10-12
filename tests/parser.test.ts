@@ -8,7 +8,8 @@ import type { WikiLink } from '@lat.md/core/extensions/wiki-link/index';
 
 describe('typecheck', () => {
   it('passes tsc --noEmit on the entire codebase', () => {
-    execSync('pnpm typecheck', {
+    // Runtime bundles are shared with parallel tests; never rebuild them here.
+    execSync('pnpm typecheck:no-build', {
       cwd: import.meta.dirname + '/..',
       timeout: 90_000,
     });

@@ -14,6 +14,8 @@ The shared AST recognizes [[markdown#Strikethrough|GitHub-flavored strikethrough
 
 The shared AST records [[markdown#Task Lists|GitHub task markers]] on list items through focused micromark and mdast extensions so rendering can emit semantic checkbox controls.
 
+[[packages/core/src/lattice.ts#extractLinks]] excludes task markers from shortcut-reference validation using the first inline child position, including when code or formatting starts the task text. Links in task bodies still receive normal validation.
+
 ## Bare Autolinks
 
 The shared AST recognizes [[markdown#Bare Autolinks|GitHub bare autolinks]] through focused micromark and mdast extensions, retaining their authored literal form during serialization.
