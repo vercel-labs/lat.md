@@ -39,3 +39,9 @@ For ordinary Markdown links, `lat check links` rejects heading fragments that ar
 
 Regular Markdown links reject literal or percent-encoded backslashes in local
 paths and direct authors to use `/`, preventing Windows-only false positives.
+
+## Accepts task-list markers
+
+Checked, uppercase checked, and unchecked GFM task markers do not require escaping, including before inline code or formatting in nested, quoted, unordered, and ordered lists. Task body links and ordinary bracketed prose retain validation.
+
+Both full and links-only checks accept these markers with fresh and cached Markdown facts.

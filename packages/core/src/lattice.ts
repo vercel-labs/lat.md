@@ -335,7 +335,13 @@ export function extractLinks(
   visit(tree, 'listItem', (node: ListItem) => {
     if (typeof node.checked !== 'boolean') return;
     const start = node.position?.start.offset;
-    const bodyStart = node.children[0]?.position?.start.offset;
+    const paragraph = node.children[0];
+    if (paragraph?.type !== 'paragraph') return;
+    // With inline formatting first, the paragraph can still start at the
+    // checkbox. Its first inline child starts at the actual task text.
+    const bodyStart =
+      paragraph.children[0]?.position?.start.offset ??
+      paragraph.position?.end.offset;
     if (start === undefined || bodyStart === undefined) return;
     const marker = /\[[ xX]\]/.exec(content.slice(start, bodyStart));
     if (marker) {
