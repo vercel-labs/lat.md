@@ -6,7 +6,7 @@ Run Lat in CI to catch broken documentation links, source references, and struct
 
 Add a workflow to your repository to check documentation on pushes and pull requests.
 
-Save this as `.github/workflows/lat-check.yml` once the `action-v1` release tag is available:
+Save this as `.github/workflows/lat-check.yml` once the `check-v1` release tag is available:
 
 ```yaml
 name: Lat check
@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: vercel-labs/lat.md@action-v1
+      - uses: vercel-labs/lat.md@check-v1
 ```
 
-The action sets up Node.js 24, installs `@lat.md/core` from npm and runs `lat-core check` at the repository root. It does not require your project's dependencies or an API key. Installation requires access to the npm registry; configured external sources may also require network access.
+The action sets up the required Node.js version, installs `@lat.md/core` from npm and runs `lat-core check` at the repository root. It does not require your project's dependencies or an API key. Installation requires access to the npm registry; configured external sources may also require network access.
 
 Checkout makes your documentation and source files available to validate. If the job already checks out the repository, use that existing step. The action supports Linux, Windows, and macOS. See [[concepts#What Lat checks]] for validation coverage.
 
@@ -32,7 +32,7 @@ The action uses npm's `latest` version of core by default, so new core releases 
 A newer checker may report errors in a repository that previously passed. Pin core when you want to control checker upgrades:
 
 ```yaml
-- uses: vercel-labs/lat.md@action-v1
+- uses: vercel-labs/lat.md@check-v1
   with:
     version: '0.1.0'
 ```
@@ -46,7 +46,7 @@ The action version controls the installer and launcher. Pinning the action to a 
 Use `working-directory` when your Lat project lives below the repository root, and enable `profile` to investigate slow checks.
 
 ```yaml
-- uses: vercel-labs/lat.md@action-v1
+- uses: vercel-labs/lat.md@check-v1
   with:
     working-directory: docs/project
     profile: 'true'
@@ -58,7 +58,7 @@ The directory is relative to the checked-out workspace. The action installs core
 
 Install the core package in a Node.js environment and invoke its checker from your project root.
 
-With Node.js 24 and pnpm available:
+With a supported Node.js version and pnpm available:
 
 ```bash
 pnpm dlx @lat.md/core@latest check

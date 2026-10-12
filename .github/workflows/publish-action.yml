@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Immutable action version, e.g. 1.0.0 (publishes action-v1.0.0 and action-v1)'
+        description: 'Immutable action version, e.g. 1.0.0 (publishes check-v1.0.0 and check-v1)'
         required: true
         type: string
 concurrency:
@@ -41,8 +41,8 @@ jobs:
           ACTION_VERSION: ${{ inputs.version }}
         run: |
           [[ "$ACTION_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected version X.Y.Z'; exit 1; }
-          immutable="action-v$ACTION_VERSION"
-          major="action-v${ACTION_VERSION%%.*}"
+          immutable="check-v$ACTION_VERSION"
+          major="check-v${ACTION_VERSION%%.*}"
           if git ls-remote --exit-code --tags origin "refs/tags/$immutable"; then
             echo "Tag $immutable already exists"; exit 1
           fi

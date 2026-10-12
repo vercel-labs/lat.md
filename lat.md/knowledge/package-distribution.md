@@ -45,15 +45,15 @@ The build rejects unexpected external package imports, includes third-party lice
 
 ## GitHub Action
 
-[[action.yml]] declares a composite action that sets up Node 24 and installs the published core package before checking the consumer's checkout. [[lat.md/docs/ci]] documents consumer setup and version selection.
+[[action.yml]] declares a composite action that sets up the required Node.js version and installs the published core package before checking the consumer's checkout. [[lat.md/docs/ci]] documents consumer setup and version selection.
 
 [[action/index.js]] installs `@lat.md/core` from the public npm registry in a fresh runner temporary directory, with lifecycle scripts disabled. The `version` input defaults to `latest` and accepts exact versions or distribution tags. Each invocation resolves the requested version anew; no installed runtime is cached across runs. Invalid inputs fail before installation, and installation failures prevent validation.
 
 The launcher finds npm on PATH and invokes its JavaScript entry point without a shell, including on Windows. It logs the installed core version and runs its full check in `working-directory`, relative to the checked-out workspace. The `profile` input enables timing output. Diagnostics and failure status are preserved, and the temporary installation is removed afterward. The composite action supplies Node and npm and maps its inputs explicitly into the launcher environment. Consumers only need to check out their project; they do not install project dependencies or provide embedding credentials.
 
-[[.github/workflows/publish-action.yml]] tests on Linux, Windows, and macOS, including a live install through the local action. It publishes only the launcher and metadata through manually dispatched `action-vX.Y.Z` tags and a maintained `action-vX` tag. Core releases need no action release; action versions govern installation and execution logic. Floating core versions can change validation results for unchanged consumer commits, even when the action is pinned.
+[[.github/workflows/publish-action.yml]] tests on Linux, Windows, and macOS, including a live install through the local action. It publishes only the launcher and metadata through manually dispatched `check-vX.Y.Z` tags and a maintained `check-vX` tag. Core releases need no action release; action versions govern installation and execution logic. Floating core versions can change validation results for unchanged consumer commits, even when the action is pinned.
 
-The consumer form is `uses: vercel-labs/lat.md@action-v1` after the first action release. Source branches also contain the runnable launcher. [[scripts/build-action-test.mjs]] builds an isolated core runtime only for tests; it is never included in action releases.
+The consumer form is `uses: vercel-labs/lat.md@check-v1` after the first action release. Source branches also contain the runnable launcher. [[scripts/build-action-test.mjs]] builds an isolated core runtime only for tests; it is never included in action releases.
 
 ## Publishing and Validation
 
