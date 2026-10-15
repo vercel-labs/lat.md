@@ -47,12 +47,21 @@ function re(flags: string) {
     new RegExp(strings.raw[0].replace(/\s+/g, ''), flags);
 }
 
-// Line comment (// or #), then @lat: marker, then [[target]]
+// Line comment (// or #), then @lat: marker, then [[target]] or
+// [[target|alias]]. Like the wiki-link tokenizer, balanced brackets belong to
+// the target, so a section id such as `routes#[region] pages` or
+// `routes#[[...slug]] catch-all` is captured whole; the alias has no nesting.
 export const LAT_REF_RE = re('gv')`
   (?: // | # )
   \s* @lat: \s*
   \[\[
-    ( [^\]]+ )
+    (
+      (?:
+        [^\[\]\|]
+        | \[ (?: [^\[\]\|] | \[ [^\[\]\|]* \] )* \]
+      )+
+      (?: \| [^\]]* )?
+    )
   \]\]
 `;
 

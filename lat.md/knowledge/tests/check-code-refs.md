@@ -25,6 +25,10 @@ Git projects inspect tracked regular files; non-Git projects walk visible, non-i
 
 Dart `// @lat:` references retain their authored line numbers before ordinary declarations and between metadata annotations and declarations, and dangling targets remain normal code-reference errors.
 
+## Scans bracketed section targets
+
+Balanced brackets in a `@lat:` target stay part of it, through ripgrep and the fallback alike, so refs to headings such as `` `[region]` pages `` or `` `[[...slug]]` catch-all `` are neither dropped nor truncated and pass the code-refs check.
+
 ## Unambiguous reference filenames
 
 Ripgrep and the fallback preserve colon and newline filenames exactly, preventing a filename from redirecting backlink snippets to another file.

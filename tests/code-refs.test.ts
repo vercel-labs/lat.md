@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { availableParallelism, tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { checkCodeRefs } from '@lat.md/core/cli/check';
 import {
   createCodeReferenceDiscovery,
   discoverSourceFiles,
@@ -258,6 +259,46 @@ describe('supported source code-reference scanning', () => {
       expect(
         refs.map((ref) => `${ref.file}:${ref.line}:${ref.target}`),
       ).toEqual(expected);
+    } finally {
+      if (original === undefined) delete process.env._LAT_DISABLE_RG;
+      else process.env._LAT_DISABLE_RG = original;
+    }
+  });
+
+  // @lat: [[check-code-refs#Scans bracketed section targets]]
+  it('keeps balanced brackets in code-reference targets', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'lat-bracketed-code-refs-'));
+    roots.push(root);
+    await mkdir(join(root, 'lat.md'));
+    await mkdir(join(root, 'src'));
+    await writeFile(
+      join(root, 'lat.md', 'routes.md'),
+      '# Routes\n\nDynamic routes.\n\n' +
+        '## `[region]` pages\n\nRegional pages.\n\n' +
+        '## `[[...slug]]` catch-all\n\nCatch-all pages.\n',
+    );
+    await writeFile(
+      join(root, 'src', 'routes.ts'),
+      codeReference('//', 'routes#[region] pages') +
+        codeReference('//', 'routes#Routes#[[...slug]] catch-all') +
+        'export const routes = [];\n',
+    );
+
+    const expected = [
+      'src/routes.ts:1:routes#[region] pages',
+      'src/routes.ts:2:routes#Routes#[[...slug]] catch-all',
+    ];
+    const original = process.env._LAT_DISABLE_RG;
+    try {
+      for (const disableRipgrep of [false, true]) {
+        if (disableRipgrep) process.env._LAT_DISABLE_RG = '1';
+        const { refs } = await scanCodeRefs(root);
+        expect(
+          refs.map((ref) => `${ref.file}:${ref.line}:${ref.target}`),
+        ).toEqual(expected);
+        const { errors } = await checkCodeRefs(join(root, 'lat.md'), root);
+        expect(errors).toEqual([]);
+      }
     } finally {
       if (original === undefined) delete process.env._LAT_DISABLE_RG;
       else process.env._LAT_DISABLE_RG = original;
