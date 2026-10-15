@@ -13,7 +13,9 @@ function handler(
   _info: Info,
 ): string {
   const exit = state.enter('wikiLink');
-  const target = state.safe(node.value, { before: '[', after: ']' });
+  // Targets are literal tokenizer data, not Markdown phrasing. Escaping their
+  // brackets would insert backslashes into repository paths when parsed again.
+  const target = node.value;
 
   let value: string;
   if (node.data.alias) {

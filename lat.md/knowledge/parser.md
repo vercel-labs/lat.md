@@ -34,6 +34,10 @@ Custom micromark + mdast extension implementing [[markdown#Wiki Links]]. Located
 
 Built in-house because third-party packages (`mdast-util-wiki-link`, `@portaljs/remark-wiki-link`) are broken with remark v11 / mdast-util-from-markdown v2.
 
+The [[packages/core/src/extensions/wiki-link/syntax.ts#tokenize|tokenizer]] preserves balanced square brackets inside targets, including dynamic route segments such as `[region]` and `[[...slug]]`. Their closing brackets do not terminate the wiki link or become Markdown shortcut references.
+
+The [[packages/core/src/extensions/wiki-link/to-markdown.ts#handler|serializer]] emits targets literally so round-tripping a bracketed path does not insert backslashes into the reference.
+
 ### Wiki Link Node
 
 A `wikiLink` node has `value` (the target string) and `data.alias` (string or null). Registered into mdast's `RootContentMap`, `PhrasingContentMap`, micromark's `TokenTypeMap`, and mdast-util-to-markdown's `ConstructNameMap` via module augmentation.

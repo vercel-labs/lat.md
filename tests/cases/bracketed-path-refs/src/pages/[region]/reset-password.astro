@@ -1,0 +1,1 @@
+<p>Reset password</p>

@@ -92,6 +92,29 @@ describe('parse', () => {
     expect(wikiLinks[1].value).toBe('Page B');
   });
 
+  // @lat: [[ref-resolution#Parses bracketed wiki targets]]
+  it.each([
+    'src/pages/[region]/reset-password.astro',
+    'src/pages/[region]/data.ts#load',
+    'app/[id]/page.tsx|page',
+    'src/routes/[slug]/+page.svelte',
+    'app/[[...slug]]/page.tsx',
+    'src/[region]/[id]',
+  ])('parses and round-trips bracketed target %s', (target) => {
+    const input = `See [[${target}]] and [[Other]]\n`;
+    const tree = parse(input);
+    const links: WikiLink[] = [];
+    visit(tree, 'wikiLink', (node) => {
+      links.push(node as WikiLink);
+    });
+    const [value, alias = null] = target.split('|');
+    expect(links.map((node) => [node.value, node.data.alias])).toEqual([
+      [value, alias],
+      ['Other', null],
+    ]);
+    expect(toMarkdown(tree)).toBe(input);
+  });
+
   it('does not parse incomplete wiki links', () => {
     const tree = parse('See [not a link] and [[also not');
     const wikiLinks: WikiLink[] = [];

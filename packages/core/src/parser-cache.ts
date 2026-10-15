@@ -5,7 +5,7 @@ import { basename, dirname, extname, join, relative } from 'node:path';
 import { toPosix } from './path.js';
 
 /** Version of persistent parser outputs and their shared on-disk contract. */
-export const PARSER_CACHE_VERSION = 5;
+export const PARSER_CACHE_VERSION = 6;
 
 export type ParsedCacheEntry = {
   version: number;

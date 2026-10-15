@@ -71,6 +71,14 @@ A `@lat:` code comment whose file portion uses Windows-style backslashes resolve
 
 `lat refs` for a full ref target finds `@lat:` code references that use the full path form.
 
+## Parses bracketed wiki targets
+
+Dynamic route targets with single or nested brackets parse as complete wiki links and round-trip unchanged, including aliases, symbol fragments, trailing bracketed segments, and adjacent links.
+
+## Validates dynamic route wiki targets
+
+The full CLI check accepts existing Astro, Next.js, and SvelteKit route files, bracketed directories, and TypeScript symbols without reporting shortcut-reference errors.
+
 ## Bare heading in md is error
 
 A wiki link `[[Installation]]` where `Installation` is a heading (not a file) is flagged as a broken link by `check md`. Bare names resolve as file references in Obsidian convention — since no file `Installation.md` exists, it's an error.

@@ -1555,6 +1555,13 @@ describe('error-source-ref-unsupported-ext', () => {
 describe('repository-path-refs', () => {
   const lat = latDir('repository-path-refs');
 
+  // @lat: [[ref-resolution#Validates dynamic route wiki targets]]
+  it('validates bracketed file, directory, and symbol wiki targets', () => {
+    const result = runCli('bracketed-path-refs', ['check']);
+    expect(result.stderr).toBe('');
+    expect(result.exitCode).toBe(0);
+  });
+
   // @lat: [[check-md#Passes with valid links#Accepts repository path links]]
   it('accepts existing repository files and directories without fragments', async () => {
     const { errors } = await checkMd(lat);

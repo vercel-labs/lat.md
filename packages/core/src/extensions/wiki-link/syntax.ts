@@ -34,6 +34,7 @@ function tokenize(
   let aliasCursor = 0;
   let hasData = false;
   let hasAlias = false;
+  let targetBracketDepth = 0;
 
   return start;
 
@@ -68,6 +69,15 @@ function tokenize(
       effects.exit('wikiLinkTarget');
       effects.enter('wikiLinkAliasMarker');
       return consumeAliasMarker(code);
+    }
+
+    // Dynamic route segments (including [[...slug]]) belong to the target.
+    // Only a closing bracket outside those segments can start the ]] marker.
+    if (code === 91) targetBracketDepth++;
+    if (code === 93 && targetBracketDepth > 0) {
+      targetBracketDepth--;
+      effects.consume(code);
+      return consumeTarget;
     }
 
     if (code === CLOSE.charCodeAt(closeCursor)) {
