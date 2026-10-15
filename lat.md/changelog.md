@@ -2,6 +2,14 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
+## 0.13.2
+
+This release supports bracketed route paths in wiki links, adds fullscreen Mermaid navigation, and updates the GitHub Action installer.
+
+- Accept dynamic route paths such as `[region]` and `[[...slug]]` in wiki links, including source symbol references, and preserve them when serializing Markdown. [#206](https://github.com/vercel-labs/lat.md/pull/206)
+- Open Mermaid diagrams fullscreen with zoom controls and minimap navigation. [#204](https://github.com/vercel-labs/lat.md/pull/204)
+- Install the lightweight core checker from npm in the GitHub Action, using the latest release by default or an explicitly selected version. [#203](https://github.com/vercel-labs/lat.md/pull/203)
+
 ## 0.13.1
 
 This patch fixes repository Markdown previews, validation false positives, and deployed and concurrent search.

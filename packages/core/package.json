@@ -1,6 +1,6 @@
 {
   "name": "@lat.md/core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Lat knowledge graph validation and navigation without UI or search",
   "type": "module",
   "license": "MIT",
