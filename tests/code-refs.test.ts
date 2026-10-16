@@ -53,16 +53,7 @@ describe('code-reference target boundaries', () => {
   });
 
   // @lat: [[check-code-refs#Rejects incomplete code-reference targets]]
-  it.each([
-    '',
-    ' ',
-    'target[unclosed',
-    'target]suffix',
-    'target\nnext',
-    'target\rnext',
-    '|alias',
-    'target|',
-  ])(
+  it.each(['', 'target]suffix', 'target\nnext', 'target\rnext'])(
     'ignores malformed target %j without losing the next reference',
     (target) => {
       const malformed = codeReference('//', target).trimEnd();
@@ -72,6 +63,35 @@ describe('code-reference target boundaries', () => {
       ).toEqual(['valid']);
     },
   );
+
+  // @lat: [[check-code-refs#Preserves legacy code-reference targets]]
+  it.each([
+    'guide#Opening [ bracket',
+    'guide#Opening [[ brackets',
+    'target|',
+    '|alias',
+    ' ',
+  ])(
+    'preserves legacy target %j without swallowing another marker',
+    (target) => {
+      for (const prefix of ['//', '#']) {
+        const line = codeReference(prefix, target).trimEnd();
+        expect(extractCodeRefTargets(line)).toEqual([target]);
+        // Extra closing brackets could otherwise complete a balanced scan
+        // across the next reference and hide its independent identity.
+        expect(
+          extractCodeRefTargets(`${line} ${codeReference(prefix, 'next')} ]]`),
+        ).toEqual([target, 'next']);
+      }
+    },
+  );
+
+  it('does not complete an unterminated reference using the next marker', () => {
+    const unfinished = codeReference('//', 'unfinished').slice(0, -3);
+    expect(
+      extractCodeRefTargets(`${unfinished} ${codeReference('#', 'next')}`),
+    ).toEqual(['next']);
+  });
 });
 
 async function createSourceProject(): Promise<string> {
@@ -324,6 +344,7 @@ describe('supported source code-reference scanning', () => {
     await mkdir(join(root, 'lat.md'));
     await mkdir(join(root, 'src'));
     const headings = [
+      'Opening [ bracket',
       '[region] pages',
       '[[...slug]] catch-all',
       'list[dict[str, list[int]]]',

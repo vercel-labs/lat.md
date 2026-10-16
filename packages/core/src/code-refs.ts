@@ -43,14 +43,19 @@ export async function walkFiles(dir: string): Promise<string[]> {
 
 /** Extract complete code-reference targets from a source line, retaining aliases. */
 export function extractCodeRefTargets(line: string): string[] {
-  const markers = /(?:\/\/|#)[^\S\r\n]*@lat:[^\S\r\n]*\[\[/g;
+  const markers = [
+    ...line.matchAll(/(?:\/\/|#)[^\S\r\n]*@lat:[^\S\r\n]*\[\[/g),
+  ];
   const targets: string[] = [];
-  while (markers.exec(line) !== null) {
-    const start = markers.lastIndex;
+  for (const [position, marker] of markers.entries()) {
+    const start = marker.index + marker[0].length;
+    // Neither balanced parsing nor legacy recovery may consume another marker.
+    const limit = markers[position + 1]?.index ?? line.length;
+    let close = -1;
     let depth = 0;
     let alias = false;
     let hasData = false;
-    for (let index = start; index < line.length; index++) {
+    for (let index = start; index < limit; index++) {
       const char = line[index];
       if (char === '\r' || char === '\n') break;
       if (!alias && char === '|') {
@@ -66,14 +71,22 @@ export function extractCodeRefTargets(line: string): string[] {
         if (!alias && depth > 0) {
           depth--;
         } else {
-          if (line[index + 1] === ']' && hasData) {
-            targets.push(line.slice(start, index));
-            markers.lastIndex = index + 2;
+          if (index + 1 < limit && line[index + 1] === ']' && hasData) {
+            close = index;
           }
           break;
         }
       }
       if (char !== ' ' && char !== '\t') hasData = true;
+    }
+    if (close !== -1) {
+      targets.push(line.slice(start, close));
+    } else {
+      // Preserve the old code-comment grammar when balanced parsing fails:
+      // unmatched opening brackets and empty aliases were accepted literally.
+      // This fallback is intentionally not part of Markdown wiki-link parsing.
+      const legacy = /^([^\]\r\n]+)\]\]/.exec(line.slice(start, limit));
+      if (legacy) targets.push(legacy[1]);
     }
   }
   return targets;

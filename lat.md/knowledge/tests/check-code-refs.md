@@ -35,8 +35,12 @@ Code-reference extraction agrees with wiki-link boundaries for route names, deep
 
 ## Rejects incomplete code-reference targets
 
-Empty, unbalanced, and multiline targets or empty aliases are ignored without swallowing a subsequent marked reference.
+Zero-length targets, stray closing brackets, and multiline targets are ignored without swallowing a subsequent marked reference. A missing closing marker cannot be supplied by a later reference.
+
+## Preserves legacy code-reference targets
+
+When balanced parsing fails, unmatched opening brackets, empty aliases, and whitespace-only targets retain their old literal extraction. Recovery cannot consume the next marked reference, even when later brackets could balance the first target.
 
 ## Scans bracketed required-section targets
 
-Ripgrep and the fallback resolve bracketed required sections, report a missing mention when a reference is removed, and diagnose a complete bracketed target when its section does not exist.
+Ripgrep and the fallback resolve balanced and legacy unmatched-bracket required sections, report a missing mention when a reference is removed, and diagnose a complete bracketed target when its section does not exist.
