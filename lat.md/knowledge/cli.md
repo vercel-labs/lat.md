@@ -114,6 +114,8 @@ Two validations:
 1. Every `// @lat: [[...]]` or `# @lat: [[...]]` comment in source code must point to a real section in `lat.md/`
 2. For files with [[markdown#Frontmatter#require-code-mention]], every leaf section must be referenced by at least one `// @lat:` comment in the codebase
 
+[[packages/core/src/code-refs.ts#extractCodeRefTargets]] scans comment targets with a bracket-depth counter, preserving balanced brackets without a nesting limit. Ripgrep results, the TypeScript fallback, and [[src/view/store.ts#codeRefsFromContent|live UI updates]] share this scanner. Incomplete or empty links are ignored; references do not span lines.
+
 ### sections
 
 Validate that every section has a well-formed leading paragraph. Two checks:

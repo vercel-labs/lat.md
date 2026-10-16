@@ -309,6 +309,8 @@ In live views, the output modal defaults to the shared React tree renderer and o
 
 Changing, adding, or deleting project files updates cached documents, navigation, source references, and backlinks without rereading unchanged Markdown files.
 
+Source edits preserve references to headings with deeply nested brackets, using the same target extraction as the CLI scan.
+
 Browser clients receive a change event and refresh the current route while keeping its URL and viewport stable.
 
 Internal parser, search, and external-source cache writes do not publish project generations or restart in-flight document requests.

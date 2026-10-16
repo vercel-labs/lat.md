@@ -41,20 +41,43 @@ export async function walkFiles(dir: string): Promise<string[]> {
     .map((e) => join(dir, e));
 }
 
-/** Build a RegExp from a verbose template — whitespace is insignificant. */
-function re(flags: string) {
-  return (strings: TemplateStringsArray) =>
-    new RegExp(strings.raw[0].replace(/\s+/g, ''), flags);
+/** Extract complete code-reference targets from a source line, retaining aliases. */
+export function extractCodeRefTargets(line: string): string[] {
+  const markers = /(?:\/\/|#)[^\S\r\n]*@lat:[^\S\r\n]*\[\[/g;
+  const targets: string[] = [];
+  while (markers.exec(line) !== null) {
+    const start = markers.lastIndex;
+    let depth = 0;
+    let alias = false;
+    let hasData = false;
+    for (let index = start; index < line.length; index++) {
+      const char = line[index];
+      if (char === '\r' || char === '\n') break;
+      if (!alias && char === '|') {
+        if (!hasData) break;
+        alias = true;
+        hasData = false;
+        continue;
+      }
+      // Like wiki-link targets, bracketed segments may nest to any depth.
+      // Aliases remain literal text ending at the first closing marker.
+      if (!alias && char === '[') depth++;
+      if (char === ']') {
+        if (!alias && depth > 0) {
+          depth--;
+        } else {
+          if (line[index + 1] === ']' && hasData) {
+            targets.push(line.slice(start, index));
+            markers.lastIndex = index + 2;
+          }
+          break;
+        }
+      }
+      if (char !== ' ' && char !== '\t') hasData = true;
+    }
+  }
+  return targets;
 }
-
-// Line comment (// or #), then @lat: marker, then [[target]]
-export const LAT_REF_RE = re('gv')`
-  (?: // | # )
-  \s* @lat: \s*
-  \[\[
-    ( [^\]]+ )
-  \]\]
-`;
 
 export type CodeRef = {
   target: string;
@@ -375,10 +398,8 @@ function parseGrepOutput(
     const file = toPosix(decode(record.data.path)).replace(/^\.\//, '');
     const lineNumber = record.data.line_number;
     if (!Number.isSafeInteger(lineNumber) || lineNumber < 1) continue;
-    LAT_REF_RE.lastIndex = 0;
-    let match;
-    while ((match = LAT_REF_RE.exec(decode(record.data.lines))) !== null)
-      refs.push({ target: match[1], file, line: lineNumber });
+    for (const target of extractCodeRefTargets(decode(record.data.lines)))
+      refs.push({ target, file, line: lineNumber });
   }
   return { refs };
 }
@@ -408,11 +429,9 @@ async function scanFileWithTs(
   const relativePath = toPosix(relative(projectRoot, file));
   const lines = content.split('\n');
   for (let i = 0; i < lines.length; i++) {
-    LAT_REF_RE.lastIndex = 0;
-    let match;
-    while ((match = LAT_REF_RE.exec(lines[i])) !== null) {
+    for (const target of extractCodeRefTargets(lines[i])) {
       refs.push({
-        target: match[1],
+        target,
         file: relativePath,
         line: i + 1,
       });

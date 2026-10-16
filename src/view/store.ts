@@ -19,7 +19,7 @@ import {
 } from 'node:path';
 import {
   createCodeReferenceDiscovery,
-  LAT_REF_RE,
+  extractCodeRefTargets,
   type CodeRef,
 } from '@lat.md/core/code-refs';
 import {
@@ -157,10 +157,8 @@ function codeRefsFromContent(path: string, content: string): CodeRef[] {
   const refs: CodeRef[] = [];
   const lines = content.split('\n');
   for (let index = 0; index < lines.length; index++) {
-    LAT_REF_RE.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = LAT_REF_RE.exec(lines[index])) !== null) {
-      refs.push({ target: match[1], file: path, line: index + 1 });
+    for (const target of extractCodeRefTargets(lines[index])) {
+      refs.push({ target, file: path, line: index + 1 });
     }
   }
   return refs;

@@ -28,3 +28,15 @@ Dart `// @lat:` references retain their authored line numbers before ordinary de
 ## Unambiguous reference filenames
 
 Ripgrep and the fallback preserve colon and newline filenames exactly, preventing a filename from redirecting backlink snippets to another file.
+
+## Parses balanced targets without a nesting limit
+
+Code-reference extraction agrees with wiki-link boundaries for route names, deeply nested brackets, and aliases, preserving multiple marked references on one line and both supported comment prefixes.
+
+## Rejects incomplete code-reference targets
+
+Empty, unbalanced, and multiline targets or empty aliases are ignored without swallowing a subsequent marked reference.
+
+## Scans bracketed required-section targets
+
+Ripgrep and the fallback resolve bracketed required sections, report a missing mention when a reference is removed, and diagnose a complete bracketed target when its section does not exist.

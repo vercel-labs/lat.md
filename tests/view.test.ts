@@ -3742,6 +3742,28 @@ describe('lat ui live project index', () => {
         await fetch(new URL('/api/document?path=target.md', live.url))
       ).json()) as ViewDocument;
       expect(withoutCode.backReferences[0].references).toHaveLength(2);
+
+      writeFileSync(
+        join(liveLatDir, 'target.md'),
+        '# Target\n\nThe target section.\n\n## `list[dict[str, list[int]]]`\n\nNested brackets.\n',
+      );
+      await live.store.refresh(['lat.md/target.md']);
+      writeFileSync(
+        join(sourceDir, 'app.ts'),
+        [
+          '// @',
+          'lat: [[target#Target#list[dict[str, list[int]]]]]\nexport const value = 3;\n',
+        ].join(''),
+      );
+      await live.store.refresh(['src/app.ts']);
+      const bracketed = (await (
+        await fetch(new URL('/api/document?path=target.md', live.url))
+      ).json()) as ViewDocument;
+      expect(
+        bracketed.backReferences
+          .flatMap((section) => section.references)
+          .filter((reference) => reference.kind === 'code'),
+      ).toHaveLength(1);
     } finally {
       await reader.cancel();
       await live.close();

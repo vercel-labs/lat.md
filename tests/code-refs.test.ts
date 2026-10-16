@@ -3,8 +3,12 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { availableParallelism, tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { checkCodeRefs } from '@lat.md/core/cli/check';
+import { parse } from '@lat.md/core/parser';
+import { visit } from 'unist-util-visit';
 import {
   createCodeReferenceDiscovery,
+  extractCodeRefTargets,
   discoverSourceFiles,
   hasRipgrep,
   scanCodeRefs,
@@ -20,6 +24,55 @@ const roots: string[] = [];
 function codeReference(comment: string, target: string): string {
   return `${comment} @${'lat'}: [[${target}]]\n`;
 }
+
+describe('code-reference target boundaries', () => {
+  // @lat: [[check-code-refs#Parses balanced targets without a nesting limit]]
+  it.each([
+    'routes#[region] pages',
+    'routes#Routes#[[...slug]] catch-all',
+    'types#list[dict[str, list[int]]]',
+    `types#${'['.repeat(64)}value${']'.repeat(64)}`,
+    'routes#Plain',
+    'routes#[id]|display text',
+    'routes#Plain|literal [ alias',
+  ])('agrees with wiki-link boundaries for %s', (target) => {
+    const wikiTargets: string[] = [];
+    visit(parse(`[[${target}]]`), 'wikiLink', (node) => {
+      wikiTargets.push(
+        node.value + (node.data.alias ? `|${node.data.alias}` : ''),
+      );
+    });
+    expect(wikiTargets).toEqual([target]);
+    for (const comment of ['//', '#']) {
+      const line = codeReference(comment, target).trimEnd();
+      expect(extractCodeRefTargets(line)).toEqual(wikiTargets);
+      expect(
+        extractCodeRefTargets(`${line} ${codeReference(comment, 'other')}`),
+      ).toEqual([target, 'other']);
+    }
+  });
+
+  // @lat: [[check-code-refs#Rejects incomplete code-reference targets]]
+  it.each([
+    '',
+    ' ',
+    'target[unclosed',
+    'target]suffix',
+    'target\nnext',
+    'target\rnext',
+    '|alias',
+    'target|',
+  ])(
+    'ignores malformed target %j without losing the next reference',
+    (target) => {
+      const malformed = codeReference('//', target).trimEnd();
+      expect(extractCodeRefTargets(malformed)).toEqual([]);
+      expect(
+        extractCodeRefTargets(`${malformed} ${codeReference('#', 'valid')}`),
+      ).toEqual(['valid']);
+    },
+  );
+});
 
 async function createSourceProject(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'lat-code-refs-'));
@@ -258,6 +311,93 @@ describe('supported source code-reference scanning', () => {
       expect(
         refs.map((ref) => `${ref.file}:${ref.line}:${ref.target}`),
       ).toEqual(expected);
+    } finally {
+      if (original === undefined) delete process.env._LAT_DISABLE_RG;
+      else process.env._LAT_DISABLE_RG = original;
+    }
+  });
+
+  // @lat: [[check-code-refs#Scans bracketed required-section targets]]
+  it('validates bracketed required mentions through ripgrep and the fallback', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'lat-bracketed-code-refs-'));
+    roots.push(root);
+    await mkdir(join(root, 'lat.md'));
+    await mkdir(join(root, 'src'));
+    const headings = [
+      '[region] pages',
+      '[[...slug]] catch-all',
+      'list[dict[str, list[int]]]',
+    ];
+    await writeFile(
+      join(root, 'lat.md', 'routes.md'),
+      '---\nlat:\n  require-code-mention: true\n---\n# Routes\n\nRoute specs.\n\n' +
+        headings
+          .map((heading) => `## \`${heading}\`\n\nRoute behavior.\n`)
+          .join('\n'),
+    );
+    const targets = headings.map((heading) => `routes#Routes#${heading}`);
+    const source = join(root, 'src', 'routes.ts');
+    const original = process.env._LAT_DISABLE_RG;
+    const rgAvailable = await hasRipgrep();
+    try {
+      for (const disableRipgrep of [false, true]) {
+        if (disableRipgrep) process.env._LAT_DISABLE_RG = '1';
+        else delete process.env._LAT_DISABLE_RG;
+        await writeFile(
+          source,
+          targets.map((target) => codeReference('//', target)).join(''),
+        );
+        const operations: string[] = [];
+        const { refs } = await scanCodeRefs(root, {
+          async time(label, work) {
+            operations.push(label);
+            return work();
+          },
+        });
+        expect(refs).toEqual(
+          targets.map((target, index) => ({
+            target,
+            file: 'src/routes.ts',
+            line: index + 1,
+          })),
+        );
+        if (!disableRipgrep && rgAvailable) {
+          expect(operations).toContain('scan @lat references with ripgrep');
+        } else {
+          expect(operations).toContain(
+            'scan project files with TypeScript fallback',
+          );
+        }
+        expect(
+          (await checkCodeRefs(join(root, 'lat.md'), root)).errors,
+        ).toEqual([]);
+
+        await writeFile(
+          source,
+          targets
+            .slice(1)
+            .map((target) => codeReference('//', target))
+            .join(''),
+        );
+        const missing = (await checkCodeRefs(join(root, 'lat.md'), root))
+          .errors;
+        expect(missing).toHaveLength(1);
+        expect(missing[0].message).toContain(
+          'requires a code mention but none found',
+        );
+        expect(missing[0].target).toBe(`lat.md/${targets[0]}`);
+
+        await writeFile(
+          source,
+          targets.map((target) => codeReference('//', target)).join('') +
+            codeReference('//', 'routes#Missing[nested[value]]'),
+        );
+        const dangling = (await checkCodeRefs(join(root, 'lat.md'), root))
+          .errors;
+        expect(dangling).toHaveLength(1);
+        expect(dangling[0].target).toBe('routes#Missing[nested[value]]');
+        expect(dangling[0].message).toContain('no matching section found');
+      }
     } finally {
       if (original === undefined) delete process.env._LAT_DISABLE_RG;
       else process.env._LAT_DISABLE_RG = original;
