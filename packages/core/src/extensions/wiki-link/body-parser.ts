@@ -1,3 +1,11 @@
+const ALIAS_DIVIDER_CODE = 124;
+const OPEN_BRACKET_CODE = 91;
+const CLOSE_BRACKET_CODE = 93;
+const TAB_CODE = 9;
+const LINE_FEED_CODE = 10;
+const CARRIAGE_RETURN_CODE = 13;
+const SPACE_CODE = 32;
+
 type BodyStep = 'data' | 'alias-marker' | 'close' | 'end' | 'invalid';
 
 /** Streaming grammar for the content after [[, through the closing ]].
@@ -12,14 +20,18 @@ export class WikiLinkBodyParser {
     if (this.phase === 'done') return 'invalid';
     if (this.phase === 'closing') {
       this.phase = 'done';
-      return code === 93 ? 'end' : 'invalid';
+      return code === CLOSE_BRACKET_CODE ? 'end' : 'invalid';
     }
-    if (code === null || code === 10 || code === 13) {
+    if (
+      code === null ||
+      code === LINE_FEED_CODE ||
+      code === CARRIAGE_RETURN_CODE
+    ) {
       this.phase = 'done';
       return 'invalid';
     }
     if (this.phase === 'target') {
-      if (code === 124) {
+      if (code === ALIAS_DIVIDER_CODE) {
         if (!this.hasData) {
           this.phase = 'done';
           return 'invalid';
@@ -28,13 +40,13 @@ export class WikiLinkBodyParser {
         this.hasData = false;
         return 'alias-marker';
       }
-      if (code === 91) this.depth++;
-      if (code === 93 && this.depth > 0) {
+      if (code === OPEN_BRACKET_CODE) this.depth++;
+      if (code === CLOSE_BRACKET_CODE && this.depth > 0) {
         this.depth--;
         return 'data';
       }
     }
-    if (code === 93) {
+    if (code === CLOSE_BRACKET_CODE) {
       if (!this.hasData) {
         this.phase = 'done';
         return 'invalid';
@@ -42,7 +54,7 @@ export class WikiLinkBodyParser {
       this.phase = 'closing';
       return 'close';
     }
-    if (code !== 9 && code !== 32) this.hasData = true;
+    if (code !== TAB_CODE && code !== SPACE_CODE) this.hasData = true;
     return 'data';
   }
 }

@@ -21,6 +21,11 @@ import './types.js';
 import { WikiLinkBodyParser } from './body-parser.js';
 
 const OPEN = '[[';
+const OPEN_BRACKET_CODE = 91;
+const TAB_CODE = 9;
+const LINE_FEED_CODE = 10;
+const MICROMARK_HORIZONTAL_TAB = -2;
+const MICROMARK_VIRTUAL_SPACE = -1;
 
 function tokenize(
   this: TokenizeContext,
@@ -57,7 +62,11 @@ function tokenize(
   function consumeBody(code: Code): State | undefined {
     // Micromark represents tabs and line endings with virtual character codes.
     const character =
-      code === -2 || code === -1 ? 9 : code !== null && code < -2 ? 10 : code;
+      code === MICROMARK_HORIZONTAL_TAB || code === MICROMARK_VIRTUAL_SPACE
+        ? TAB_CODE
+        : code !== null && code < MICROMARK_HORIZONTAL_TAB
+          ? LINE_FEED_CODE
+          : code;
     switch (body.consume(character)) {
       case 'invalid':
         return nok(code);
@@ -90,7 +99,7 @@ function tokenize(
 export function wikiLinkSyntax(): Extension {
   return {
     text: {
-      91: { tokenize }, // '[' character code
+      [OPEN_BRACKET_CODE]: { tokenize },
     },
   };
 }
