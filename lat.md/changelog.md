@@ -2,6 +2,12 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
+## 0.13.3
+
+This patch fixes code references to section headings containing brackets.
+
+- Preserve bracketed targets such as `[region]` and `[[...slug]]` in `@lat:` comments, including deeper nesting, so required code mentions and live UI backlinks resolve correctly. Preserve existing references containing unmatched opening brackets. [#210](https://github.com/vercel-labs/lat.md/pull/210)
+
 ## 0.13.2
 
 This release supports bracketed route paths in wiki links, adds fullscreen Mermaid navigation, and updates the GitHub Action installer.
