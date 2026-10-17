@@ -35,6 +35,7 @@ describe('code-reference target boundaries', () => {
     'routes#Plain',
     'routes#[id]|display text',
     'routes#Plain|literal [ alias',
+    '\t routes#[id]\t|\tdisplay text\t',
   ])('agrees with wiki-link boundaries for %s', (target) => {
     const wikiTargets: string[] = [];
     visit(parse(`[[${target}]]`), 'wikiLink', (node) => {

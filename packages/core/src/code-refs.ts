@@ -8,6 +8,7 @@ import { isSourceFilePath, SOURCE_FILE_EXTENSIONS } from './source-formats.js';
 import { toPosix } from './path.js';
 import { ALWAYS_IGNORED_DIRECTORIES, walkEntries } from './walk.js';
 import type { Profiler } from './profiler.js';
+import { WikiLinkBodyParser } from './extensions/wiki-link/body-parser.js';
 
 /** Glob patterns used to exclude directories/files from code-ref scanning.
  *  Shared between rg args and the TS fallback's walkFiles filter. */
@@ -52,32 +53,14 @@ export function extractCodeRefTargets(line: string): string[] {
     // Neither balanced parsing nor legacy recovery may consume another marker.
     const limit = markers[position + 1]?.index ?? line.length;
     let close = -1;
-    let depth = 0;
-    let alias = false;
-    let hasData = false;
+    const body = new WikiLinkBodyParser();
     for (let index = start; index < limit; index++) {
-      const char = line[index];
-      if (char === '\r' || char === '\n') break;
-      if (!alias && char === '|') {
-        if (!hasData) break;
-        alias = true;
-        hasData = false;
-        continue;
+      const result = body.consume(line.charCodeAt(index));
+      if (result === 'invalid') break;
+      if (result === 'end') {
+        close = index - 1;
+        break;
       }
-      // Like wiki-link targets, bracketed segments may nest to any depth.
-      // Aliases remain literal text ending at the first closing marker.
-      if (!alias && char === '[') depth++;
-      if (char === ']') {
-        if (!alias && depth > 0) {
-          depth--;
-        } else {
-          if (index + 1 < limit && line[index + 1] === ']' && hasData) {
-            close = index;
-          }
-          break;
-        }
-      }
-      if (char !== ' ' && char !== '\t') hasData = true;
     }
     if (close !== -1) {
       targets.push(line.slice(start, close));

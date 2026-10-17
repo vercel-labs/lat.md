@@ -79,6 +79,10 @@ Dynamic route targets with single or nested brackets parse as complete wiki link
 
 The full CLI check accepts existing Astro, Next.js, and SvelteKit route files, bracketed directories, and TypeScript symbols without reporting shortcut-reference errors.
 
+## Rejects incomplete wiki links
+
+The Markdown adapter rejects empty targets or aliases, missing closing delimiters, and embedded line endings. Spaces and micromark's virtual tabs cannot satisfy the content requirement.
+
 ## Bare heading in md is error
 
 A wiki link `[[Installation]]` where `Installation` is a heading (not a file) is flagged as a broken link by `check md`. Bare names resolve as file references in Obsidian convention — since no file `Installation.md` exists, it's an error.

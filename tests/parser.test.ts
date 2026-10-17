@@ -115,8 +115,20 @@ describe('parse', () => {
     expect(toMarkdown(tree)).toBe(input);
   });
 
-  it('does not parse incomplete wiki links', () => {
-    const tree = parse('See [not a link] and [[also not');
+  // @lat: [[ref-resolution#Rejects incomplete wiki links]]
+  it.each([
+    'See [not a link] and [[also not',
+    '[[]]',
+    '[[ \t ]]',
+    '[[target|]]',
+    '[[target|\t ]]',
+    '[[target]x]]',
+    '[[target\nnext]]',
+    '[[target\r\nnext]]',
+    '[[target]',
+    '[[target|alias',
+  ])('does not parse incomplete wiki link %j', (input) => {
+    const tree = parse(input);
     const wikiLinks: WikiLink[] = [];
     visit(tree, 'wikiLink', (node) => {
       wikiLinks.push(node as WikiLink);
