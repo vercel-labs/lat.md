@@ -198,6 +198,9 @@ importers:
       topojson-client:
         specifier: ^3.1.0
         version: 3.1.0
+      tsc-ts:
+        specifier: 0.1.2
+        version: 0.1.2
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -325,6 +328,9 @@ importers:
       micromark-util-types:
         specifier: ^2.0.2
         version: 2.0.2
+      tsc-ts:
+        specifier: 0.1.2
+        version: 0.1.2
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -359,6 +365,9 @@ importers:
       '@types/node':
         specifier: ^25.3.0
         version: 25.3.0
+      tsc-ts:
+        specifier: 0.1.2
+        version: 0.1.2
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -1266,6 +1275,45 @@ packages:
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
+
+  '@tsc-ts/darwin-arm64@0.1.2':
+    resolution: {integrity: sha512-0LiP0N/+KXSxK3tQbwdjRJpuuZV7+zuNnVX6IvnxmLcQcCXbKNjAFgIDMWhkEQfJNvi4JYPiH+BgGaxEgMopVg==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@tsc-ts/darwin-x64@0.1.2':
+    resolution: {integrity: sha512-eLN25oswunE9FkepwGA6c0epTX4zazGlyfkC6cECenybSNkPcuQQNajXdEyw/PQIkubBaDYvn+C8ZjDp3eUSzg==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@tsc-ts/linux-arm64-gnu@0.1.2':
+    resolution: {integrity: sha512-Nn3owMTfOUtG92QwXNjQHq//edOd0NQkAu4Kf0ZA9EohbPlyBH9uw85cNCYfFL/SBI5yoabx0J7u1r18byBzhw==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@tsc-ts/linux-arm64-musl@0.1.2':
+    resolution: {integrity: sha512-PK/AZ1+fNXuiFIzFTK+hAQg09jaOv14sL8+0LSZHaaw9NiDetTeiR1vK17JceVwINA8E4MUmQaQNEHeacr146g==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@tsc-ts/linux-x64-gnu@0.1.2':
+    resolution: {integrity: sha512-ioCCSh8hrMQHfW+BXGULOsYPeu/LwNsqD+QfMn8HkHTa9xS5OsqvwOblMYYz+0+ygzarKzpA2af3mAzHQy4Mog==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@tsc-ts/linux-x64-musl@0.1.2':
+    resolution: {integrity: sha512-6gXZUzxwa1LTZ1vCHmIXrtUc3u0VYS0ki8mCIIpOfrkSTHbluTUMAXeHYKTM9+7xtPafhc0d0rD/WPlBm6FkLw==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@tsc-ts/win32-x64-msvc@0.1.2':
+    resolution: {integrity: sha512-8NCutmffixhwukUaGx58UrZxVgeI4i02aSVEaOaZ/239PDLcqEOtEQKqbpRPGAcGbV8+tusQsIoB3MEGtGGsYw==}
+    cpu: [x64]
+    os: [win32]
 
   '@tursodatabase/database-common@0.8.2':
     resolution: {integrity: sha512-1G0n/ZDhQELm/lu/tOHUmJZsLBxSK2k8OVXqS/WPJD70wTaFjaWY8C4UBe/AjfOzkhE3qbiUUMRv4Fbt5cDnew==}
@@ -3181,6 +3229,16 @@ packages:
     resolution: {integrity: sha512-JfJeIHke7y2egdGGgRAvpCwYFUsHlM2gPcrVOxFkznt/4uzQ7HFmvE63iFHVLBJNDuyDOQgijDK/tXH/f6Msjg==}
     engines: {node: '>=6.10'}
 
+  tsc-ts@0.1.2:
+    resolution: {integrity: sha512-PBzZXEqfreWPTeyw9Jk5Jg/PUFoVFQBoDhUudJzutmUtdsA1pG6AJiuwviqYEWC14WQ/Tn9C2vncT2Y9lQWPtw==}
+    engines: {node: '>=20'}
+    hasBin: true
+    peerDependencies:
+      '@scriptc/threads': 0.4.8
+    peerDependenciesMeta:
+      '@scriptc/threads':
+        optional: true
+
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
@@ -4193,6 +4251,27 @@ snapshots:
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
+
+  '@tsc-ts/darwin-arm64@0.1.2':
+    optional: true
+
+  '@tsc-ts/darwin-x64@0.1.2':
+    optional: true
+
+  '@tsc-ts/linux-arm64-gnu@0.1.2':
+    optional: true
+
+  '@tsc-ts/linux-arm64-musl@0.1.2':
+    optional: true
+
+  '@tsc-ts/linux-x64-gnu@0.1.2':
+    optional: true
+
+  '@tsc-ts/linux-x64-musl@0.1.2':
+    optional: true
+
+  '@tsc-ts/win32-x64-msvc@0.1.2':
+    optional: true
 
   '@tursodatabase/database-common@0.8.2': {}
 
@@ -6480,6 +6559,16 @@ snapshots:
   trough@2.2.0: {}
 
   ts-dedent@2.3.0: {}
+
+  tsc-ts@0.1.2:
+    optionalDependencies:
+      '@tsc-ts/darwin-arm64': 0.1.2
+      '@tsc-ts/darwin-x64': 0.1.2
+      '@tsc-ts/linux-arm64-gnu': 0.1.2
+      '@tsc-ts/linux-arm64-musl': 0.1.2
+      '@tsc-ts/linux-x64-gnu': 0.1.2
+      '@tsc-ts/linux-x64-musl': 0.1.2
+      '@tsc-ts/win32-x64-msvc': 0.1.2
 
   tslib@2.8.1: {}
 

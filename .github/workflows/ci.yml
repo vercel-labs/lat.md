@@ -45,6 +45,9 @@ jobs:
 
       # buildall = packages (WASM engine + fp16 weights + tsc) then top-level lat.
       - run: pnpm buildall
+      - run: pnpm typecheck:no-build
+      # Also check with the official TypeScript compiler while tsc-ts is new.
+      - run: pnpm typecheck:no-build:tsc
       - run: pnpm vitest run --reporter=verbose
       - run: pnpm test:core
         env:
