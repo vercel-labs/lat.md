@@ -93,7 +93,7 @@
     "sigma": "^3.0.3",
     "three": "^0.185.1",
     "topojson-client": "^3.1.0",
-    "tsc-ts": "0.1.0",
+    "tsc-ts": "0.1.2",
     "tsx": "^4.21.0",
     "typescript": "7.0.2",
     "vite": "^7.0.0",
