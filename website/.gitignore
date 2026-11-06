@@ -1,3 +1,4 @@
 .next
 node_modules
 public/lat.md
+next-env.d.ts
