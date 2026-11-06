@@ -1,0 +1,409 @@
+import { readFile, realpath } from 'node:fs/promises';
+import { dirname, extname, isAbsolute, join, posix, relative, resolve, sep, } from 'node:path';
+import { buildFileIndex, buildSectionSlugIndex, flattenSections, resolveRef, } from '@lat.md/core/lattice-model';
+import { createExternalResolver, } from '@lat.md/core/external-sources';
+import { addExternalDocumentAliasAnchors, externalDocumentSections, } from '@lat.md/core/external-documents';
+import { resolveSourceSymbol, SourceParserRuntime, } from '@lat.md/core/source-parser';
+import { isSourceFileExtension } from '@lat.md/core/source-formats';
+import { toPosix } from '@lat.md/core/path';
+import { renderExternalDocumentTree } from './external-document-tree.js';
+import { visitDocumentElements } from './document-tree.js';
+import { highlightSource } from './highlight.js';
+import { renderMarkdown } from './markdown.js';
+import { renderExternalSectionBackReferences, renderExternalSourceReferences, renderSourceReferenceContext, } from './references.js';
+import { buildViewTableOfContents } from './table-of-contents.js';
+import { viewSourceTarget } from './source-target.js';
+import { documentUrl } from './document-route.js';
+export class ViewDocumentNotFoundError extends Error {
+}
+export class ViewSourceNotFoundError extends Error {
+}
+export class ViewExternalNotFoundError extends Error {
+}
+function isInside(root, candidate) {
+    const rel = relative(root, candidate);
+    return (rel === '' ||
+        (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`)));
+}
+function sourceUrl(path, symbol, origin) {
+    const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+    const query = new URLSearchParams();
+    if (origin) {
+        query.set('from', origin.sectionId);
+        query.set('line', String(origin.line));
+    }
+    const search = query.size > 0 ? `?${query}` : '';
+    const fragment = symbol ? `#${encodeURIComponent(symbol)}` : '';
+    return `/code/${encodedPath}${search}${fragment}`;
+}
+export function externalUrl(target) {
+    const colon = target.indexOf(':');
+    const hash = target.indexOf('#', colon + 1);
+    const handle = target.slice(0, colon);
+    const path = hash === -1 ? target.slice(colon + 1) : target.slice(colon + 1, hash);
+    const fragment = hash === -1 ? '' : target.slice(hash + 1);
+    const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+    return `/external/${encodeURIComponent(handle)}/${encodedPath}${fragment ? `#${encodeURIComponent(fragment)}` : ''}`;
+}
+function baseExternalTarget(identity) {
+    const hash = identity.indexOf('#');
+    return hash === -1 ? identity : identity.slice(0, hash);
+}
+function externalFileKey(handle, path) {
+    return `${handle}\0${path}`;
+}
+function availableExternalFiles(external, referenceIndex, current) {
+    const files = new Map();
+    for (const target of referenceIndex.externalByTarget.keys()) {
+        try {
+            const parsed = external.parse(target);
+            if (!parsed)
+                continue;
+            files.set(externalFileKey(parsed.handle, parsed.resolvedPath), baseExternalTarget(parsed.identity));
+        }
+        catch {
+            // Invalid external references remain diagnostics and are not navigable.
+        }
+    }
+    files.set(externalFileKey(current.handle, current.resolvedPath), baseExternalTarget(current.identity));
+    return files;
+}
+function externalDocumentLink(href, current, external, available) {
+    if (href.startsWith('#') ||
+        href.startsWith('?') ||
+        href.startsWith('//') ||
+        /^[a-z][a-z\d+.-]*:/i.test(href) ||
+        /^\/external(?:\/|$)/.test(href)) {
+        return undefined;
+    }
+    let destination;
+    try {
+        const encodedPath = current.resolvedPath
+            .split('/')
+            .map(encodeURIComponent)
+            .join('/');
+        destination = new URL(href, `http://lat.external/${encodedPath}`);
+    }
+    catch {
+        return null;
+    }
+    if (destination.origin !== 'http://lat.external')
+        return undefined;
+    let path;
+    let fragment;
+    try {
+        path = destination.pathname
+            .slice(1)
+            .split('/')
+            .map(decodeURIComponent)
+            .join('/');
+        fragment = decodeURIComponent(destination.hash.slice(1));
+    }
+    catch {
+        return null;
+    }
+    path = posix.normalize(path);
+    if (!path || path === '.' || path === '..' || path.startsWith('../')) {
+        return null;
+    }
+    let parsed;
+    try {
+        parsed = external.parse(`${current.handle}:${path}${fragment ? `#${fragment}` : ''}`);
+    }
+    catch {
+        return null;
+    }
+    if (!parsed)
+        return null;
+    const availableTarget = available.get(externalFileKey(parsed.handle, parsed.resolvedPath));
+    if (!availableTarget)
+        return null;
+    const route = externalUrl(`${availableTarget}${fragment ? `#${fragment}` : ''}`);
+    if (!destination.search)
+        return route;
+    const hash = route.indexOf('#');
+    return hash === -1
+        ? `${route}${destination.search}`
+        : `${route.slice(0, hash)}${destination.search}${route.slice(hash)}`;
+}
+/** Make repository-relative external-document links reflect pulled files. */
+export function resolveExternalDocumentLinks(tree, current, external, referenceIndex) {
+    const available = availableExternalFiles(external, referenceIndex, current);
+    visitDocumentElements(tree, (element) => {
+        if (element.tagName !== 'a')
+            return;
+        const href = element.properties.href;
+        if (typeof href !== 'string')
+            return;
+        const resolved = externalDocumentLink(href, current, external, available);
+        if (resolved === undefined)
+            return;
+        if (resolved !== null) {
+            element.properties.href = resolved;
+            return;
+        }
+        const currentClasses = element.properties.className;
+        const classes = Array.isArray(currentClasses)
+            ? currentClasses.map(String)
+            : typeof currentClasses === 'string'
+                ? currentClasses.split(/\s+/).filter(Boolean)
+                : [];
+        element.tagName = 'span';
+        element.properties = {
+            ...element.properties,
+            className: [...classes, 'external-source-link-unavailable'],
+            title: 'Linked file is not included in this Lat project',
+        };
+        delete element.properties.href;
+    });
+    return tree;
+}
+function matchingSymbol(symbols, symbolPath) {
+    const parts = symbolPath.split('#');
+    if (parts.length === 1) {
+        return symbols.find((symbol) => symbol.name === parts[0] && !symbol.parent);
+    }
+    if (parts.length === 2) {
+        return symbols.find((symbol) => symbol.parent === parts[0] && symbol.name === parts[1]);
+    }
+    return undefined;
+}
+export async function createMarkdownWikiLinkResolver(latDir, requestedPath, loadedSections, referenceIndex, externalResolver, publishable) {
+    const external = externalResolver ?? (await createExternalResolver(latDir, dirname(latDir)));
+    const projectRoot = dirname(latDir);
+    const flat = flattenSections(loadedSections);
+    const sectionIds = new Set(flat.map((section) => section.id.toLowerCase()));
+    const fileIndex = buildFileIndex(loadedSections);
+    const slugIndex = buildSectionSlugIndex(loadedSections);
+    const byId = new Map(flat.map((section) => [section.id.toLowerCase(), section]));
+    const currentFile = toPosix(relative(projectRoot, resolve(latDir, requestedPath)));
+    const currentSections = flat
+        .filter((section) => section.filePath === currentFile)
+        .sort((a, b) => a.startLine - b.startLine);
+    return async (target, context) => {
+        try {
+            const parsed = external.parse(target);
+            if (parsed) {
+                return {
+                    href: externalUrl(parsed.identity),
+                    referenceCount: referenceIndex?.externalByTarget.get(parsed.identity)?.length ?? 0,
+                };
+            }
+        }
+        catch {
+            return null;
+        }
+        const result = resolveRef(target, sectionIds, fileIndex, slugIndex);
+        if (result.ambiguous)
+            return null;
+        const section = byId.get(result.resolved.toLowerCase());
+        if (section) {
+            const absoluteFile = resolve(projectRoot, section.filePath);
+            const file = toPosix(relative(latDir, absoluteFile));
+            const fragment = target.includes('#') && section.githubSlug
+                ? `#${encodeURIComponent(section.githubSlug)}`
+                : '';
+            return {
+                href: `${documentUrl(file)}${fragment}`,
+                referenceCount: referenceIndex?.incomingBySection.get(section.id.toLowerCase())
+                    ?.length ?? 0,
+            };
+        }
+        const source = viewSourceTarget(target);
+        if (!source || (publishable && !(await publishable(source.path))))
+            return null;
+        try {
+            await readViewSource(latDir, projectRoot, source.path, source.symbol);
+            let section;
+            for (const candidate of currentSections) {
+                if (candidate.startLine > context.line)
+                    break;
+                section = candidate;
+            }
+            const origin = section
+                ? { sectionId: section.id, line: context.line }
+                : undefined;
+            return {
+                href: sourceUrl(source.path, source.symbol, origin),
+                referenceCount: referenceIndex?.sourceReferenceCounts.get(source.key) ?? 0,
+            };
+        }
+        catch (error) {
+            if (error instanceof ViewSourceNotFoundError)
+                return null;
+            throw error;
+        }
+    };
+}
+/** Resolve and render one configured external file through the normal view models. */
+export async function getViewExternal(latDir, projectRoot, targetValue, external, allSections, referenceIndex, publishable) {
+    let resolved;
+    try {
+        resolved = await external.resolve(targetValue);
+    }
+    catch (error) {
+        throw new ViewExternalNotFoundError(error.message);
+    }
+    const createResolver = (path) => createMarkdownWikiLinkResolver(latDir, path, allSections, referenceIndex, external, publishable);
+    if (resolved.kind === 'document') {
+        const virtualPath = join(projectRoot, 'lat.md', '.external', resolved.target.handle, resolved.target.resolvedPath);
+        const analysis = resolved.document;
+        const sections = externalDocumentSections(virtualPath, analysis);
+        // Remote-authored wiki links may resolve only to configured external files.
+        // Do not call the local resolver before rewriting their URLs.
+        const available = availableExternalFiles(external, referenceIndex, resolved.target);
+        const resolver = async (target) => {
+            try {
+                const parsed = external.parse(target);
+                if (parsed)
+                    return { href: externalUrl(parsed.identity), referenceCount: 0 };
+            }
+            catch {
+                return null;
+            }
+            const href = externalDocumentLink(target, resolved.target, external, available);
+            return typeof href === 'string' ? { href, referenceCount: 0 } : null;
+        };
+        const rendered = analysis.format === 'markdown'
+            ? await renderMarkdown(resolved.fullContent, resolved.target.resolvedPath, resolver, {})
+            : {
+                title: analysis.title,
+                tree: await renderExternalDocumentTree(analysis.format, resolved.fullContent),
+            };
+        resolveExternalDocumentLinks(rendered.tree, resolved.target, external, referenceIndex);
+        const fragmentIndex = resolved.target.identity.indexOf('#');
+        const baseTarget = fragmentIndex === -1
+            ? resolved.target.identity
+            : resolved.target.identity.slice(0, fragmentIndex);
+        const targetHeadings = new Map();
+        targetHeadings.set(baseTarget, analysis.sections[0]?.anchor ?? '');
+        for (const section of analysis.sections) {
+            for (const alias of section.aliases) {
+                const target = `${baseTarget}#${alias}`;
+                if (!targetHeadings.has(target)) {
+                    targetHeadings.set(target, section.anchor);
+                }
+            }
+        }
+        return {
+            kind: 'markdown',
+            target: resolved.target.identity,
+            document: {
+                path: baseTarget,
+                ...rendered,
+                tree: addExternalDocumentAliasAnchors(rendered.tree, analysis),
+                gitTree: null,
+                graphNodeIds: {},
+                tableOfContents: buildViewTableOfContents(sections, analysis.sections.map((section) => section.title), {
+                    errors: [],
+                    gitTree: null,
+                }),
+                errors: [],
+                backReferences: await renderExternalSectionBackReferences(referenceIndex, targetHeadings, latDir, projectRoot, createResolver),
+                frontmatter: { requireCodeMention: false },
+            },
+        };
+    }
+    const references = await renderExternalSourceReferences(referenceIndex, resolved.target.identity, latDir, projectRoot, createResolver);
+    return {
+        kind: 'source',
+        target: resolved.target.identity,
+        source: {
+            path: `${resolved.target.handle}:${resolved.target.authoredPath}`,
+            content: resolved.fullContent,
+            highlightedLines: highlightSource(resolved.target.resolvedPath, resolved.fullContent),
+            focus: resolved.target.fragment
+                ? {
+                    symbol: resolved.target.fragment,
+                    kind: 'external',
+                    signature: resolved.signature ?? resolved.target.fragment,
+                    startLine: resolved.startLine,
+                    endLine: resolved.endLine,
+                }
+                : null,
+            context: null,
+            otherReferences: references,
+        },
+    };
+}
+async function readViewSource(latDir, projectRoot, requestedPath, requestedSymbol = '', requestedLine = 0) {
+    if (!requestedPath ||
+        requestedPath.includes('\\') ||
+        isAbsolute(requestedPath) ||
+        (requestedSymbol && !isSourceFileExtension(extname(requestedPath)))) {
+        throw new ViewSourceNotFoundError('Source document not found');
+    }
+    const candidate = resolve(projectRoot, requestedPath);
+    let realRoot;
+    let realFile;
+    try {
+        [realRoot, realFile] = await Promise.all([
+            realpath(projectRoot),
+            realpath(candidate),
+        ]);
+    }
+    catch {
+        throw new ViewSourceNotFoundError('Source document not found');
+    }
+    if (!isInside(realRoot, realFile)) {
+        throw new ViewSourceNotFoundError('Source document not found');
+    }
+    let content;
+    try {
+        content = new TextDecoder('utf-8', { fatal: true }).decode(await readFile(realFile));
+        if (content.includes('\0'))
+            throw new Error('Binary file');
+    }
+    catch {
+        throw new ViewSourceNotFoundError('Source file is not readable UTF-8 text');
+    }
+    if (!requestedSymbol) {
+        if (!requestedLine)
+            return { path: requestedPath, content, focus: null };
+        const line = content.split('\n')[requestedLine - 1];
+        if (line === undefined) {
+            throw new ViewSourceNotFoundError('Source line not found');
+        }
+        return {
+            path: requestedPath,
+            content,
+            focus: {
+                symbol: `line ${requestedLine}`,
+                kind: 'reference',
+                signature: line.trim() || `Line ${requestedLine}`,
+                startLine: requestedLine,
+                endLine: requestedLine,
+            },
+        };
+    }
+    const resolved = await resolveSourceSymbol(requestedPath, requestedSymbol, projectRoot, { latDir, runtime: new SourceParserRuntime() });
+    const symbol = resolved.found
+        ? matchingSymbol(resolved.symbols, requestedSymbol)
+        : undefined;
+    if (!symbol) {
+        throw new ViewSourceNotFoundError('Source symbol not found');
+    }
+    return {
+        path: requestedPath,
+        content,
+        focus: {
+            symbol: requestedSymbol,
+            kind: symbol.kind,
+            signature: symbol.signature,
+            startLine: symbol.startLine,
+            endLine: symbol.endLine,
+        },
+    };
+}
+/** Read and highlight a source file after constraining it to the project root. */
+export async function getViewSource(latDir, projectRoot, requestedPath, requestedSymbol = '', origin, requestedLine = 0, allSections = [], referenceIndex, publishable) {
+    const source = await readViewSource(latDir, projectRoot, requestedPath, requestedSymbol, requestedLine);
+    const references = referenceIndex
+        ? await renderSourceReferenceContext(referenceIndex, `${source.path}${requestedSymbol ? `#${requestedSymbol}` : ''}`, origin, latDir, projectRoot, (path) => createMarkdownWikiLinkResolver(latDir, path, allSections, referenceIndex, undefined, publishable))
+        : { context: null, otherReferences: [] };
+    return {
+        ...source,
+        highlightedLines: highlightSource(source.path, source.content),
+        ...references,
+    };
+}

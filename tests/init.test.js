@@ -1,0 +1,482 @@
+import { spawnSync } from 'node:child_process';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, symlinkSync, readdirSync, lstatSync, } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import xdg from '@folder/xdg';
+import { parse as parseYaml } from 'yaml';
+import { checklistMenu } from '../src/cli/checklist-menu.js';
+import { INIT_VERSION, readInitVersion, writeInitMeta, } from '@lat.md/core/init-version';
+import { analyzeMarkdownFile } from '@lat.md/core/markdown-analysis';
+import { readAgentsTemplate, readCursorRulesTemplate, readSkillTemplate, } from '../src/cli/gen.js';
+const cliPath = join(import.meta.dirname, '..', 'dist', 'src', 'cli', 'index.js');
+const disableNetworkUrl = pathToFileURL(join(import.meta.dirname, 'support', 'disable-network.mjs')).href;
+const seedDbPath = join(import.meta.dirname, 'support', 'seed-model.mjs');
+const { closeDb, ensureMeta, getLlmKey, getRepoEmbedding, getStoredModel, openDb, reindexCommand, selectMenu, setRepoEmbedding, } = vi.hoisted(() => ({
+    closeDb: vi.fn(async () => { }),
+    ensureMeta: vi.fn(async () => { }),
+    getLlmKey: vi.fn(),
+    getRepoEmbedding: vi.fn(),
+    getStoredModel: vi.fn(async () => null),
+    openDb: vi.fn(() => ({})),
+    reindexCommand: vi.fn(),
+    selectMenu: vi.fn(),
+    setRepoEmbedding: vi.fn(),
+}));
+vi.mock('@lat.md/core/config', () => ({
+    getLlmKey,
+    getRepoEmbedding,
+    setRepoEmbedding,
+}));
+vi.mock('../src/version.js', () => ({
+    fetchLatestVersion: vi.fn(async () => null),
+    getLocalVersion: vi.fn(() => 'test'),
+}));
+vi.mock('../src/cli/checklist-menu.js', () => ({
+    checklistMenu: vi.fn(async () => []),
+}));
+vi.mock('@lat.md/core/cli/select-menu', () => ({ selectMenu }));
+vi.mock('node:readline/promises', () => ({
+    createInterface: vi.fn(() => ({
+        question: vi.fn(async () => 'n'),
+        close: vi.fn(),
+    })),
+}));
+vi.mock('../src/cli/reindex.js', () => ({ reindexCommand }));
+vi.mock('../src/search/db.js', () => ({
+    closeDb,
+    ensureMeta,
+    getStoredModel,
+    openDb,
+}));
+import { initCmd } from '../src/cli/init.js';
+describe('generated Markdown templates', () => {
+    // @lat: [[init#Generated instructions#Templates satisfy graph validation]]
+    it('satisfies local graph validation in every Markdown template', () => {
+        const templates = [
+            ['AGENTS.md', readAgentsTemplate()],
+            ['cursor-rules.md', readCursorRulesTemplate()],
+            ['SKILL.md', readSkillTemplate()],
+        ];
+        for (const [name, content] of templates) {
+            const analysis = analyzeMarkdownFile(`/project/lat.md/${name}`, content, '/project/lat.md', '/project');
+            expect(analysis.diagnostics, name).toEqual([]);
+            expect(content, name).not.toMatch(/lat(?: |_)expand/);
+        }
+    });
+});
+describe('lat init embedding setup', () => {
+    let root;
+    let stdinIsTTY;
+    function latDir() {
+        return join(root, 'lat.md');
+    }
+    function configPath() {
+        const env = {
+            ...process.env,
+            XDG_CONFIG_HOME: join(root, '.config'),
+        };
+        return join(xdg({ env }).config, 'lat', 'config.json');
+    }
+    function createLatDir() {
+        mkdirSync(latDir(), { recursive: true });
+    }
+    /** Stamp a setup one version behind, so init treats it as outdated. */
+    function writeOutdatedInitMeta() {
+        createLatDir();
+        writeInitMeta(latDir(), {});
+        const path = join(latDir(), '.cache', 'lat_init.json');
+        const meta = JSON.parse(readFileSync(path, 'utf-8'));
+        meta.init_version = INIT_VERSION - 1;
+        writeFileSync(path, JSON.stringify(meta, null, 2) + '\n');
+    }
+    function writeRepoEmbedding(embedding) {
+        const path = configPath();
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, JSON.stringify({ repos: { [resolve(latDir())]: { embedding } } }, null, 2) + '\n');
+    }
+    function readRepoEmbedding() {
+        if (!existsSync(configPath()))
+            return undefined;
+        const config = JSON.parse(readFileSync(configPath(), 'utf-8'));
+        return config.repos?.[resolve(latDir())]?.embedding;
+    }
+    function seedStoredModel(model) {
+        createLatDir();
+        const result = spawnSync(process.execPath, [seedDbPath, latDir(), model], {
+            encoding: 'utf-8',
+        });
+        if (result.error)
+            throw result.error;
+        expect(result.status, result.stderr).toBe(0);
+    }
+    function mockStoredModel(model) {
+        mkdirSync(join(latDir(), '.cache'), { recursive: true });
+        writeFileSync(join(latDir(), '.cache', 'search.db'), 'mock index');
+        getStoredModel.mockResolvedValue(model);
+    }
+    function runInit(key) {
+        const result = spawnSync(process.execPath, ['--import', disableNetworkUrl, cliPath, '--no-color', 'init', root], {
+            cwd: root,
+            encoding: 'utf-8',
+            env: {
+                ...process.env,
+                XDG_CONFIG_HOME: join(root, '.config'),
+                LAT_LLM_KEY: key ?? '',
+                LAT_LLM_KEY_FILE: '',
+                LAT_LLM_KEY_HELPER: '',
+                NO_COLOR: '1',
+            },
+        });
+        if (result.error)
+            throw result.error;
+        return {
+            stdout: result.stdout ?? '',
+            stderr: result.stderr ?? '',
+            exitCode: result.status ?? 1,
+        };
+    }
+    function expectSuccess(result) {
+        expect(result.exitCode, result.stderr).toBe(0);
+    }
+    function setInteractive(interactive) {
+        Object.defineProperty(process.stdin, 'isTTY', {
+            configurable: true,
+            value: interactive,
+        });
+    }
+    beforeEach(() => {
+        root = mkdtempSync(join(tmpdir(), 'lat-init-'));
+        stdinIsTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+        setInteractive(false);
+        closeDb.mockClear();
+        ensureMeta.mockClear();
+        getLlmKey.mockReset();
+        getRepoEmbedding.mockReset();
+        getStoredModel.mockReset();
+        getStoredModel.mockResolvedValue(null);
+        openDb.mockClear();
+        reindexCommand.mockReset();
+        reindexCommand.mockResolvedValue({ output: 'Reindexed.' });
+        selectMenu.mockReset();
+        vi.mocked(checklistMenu).mockReset();
+        vi.mocked(checklistMenu).mockResolvedValue([]);
+        setRepoEmbedding.mockClear();
+        vi.spyOn(console, 'log').mockImplementation(() => { });
+        vi.spyOn(console, 'error').mockImplementation(() => { });
+        vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    });
+    afterEach(() => {
+        vi.restoreAllMocks();
+        if (stdinIsTTY) {
+            Object.defineProperty(process.stdin, 'isTTY', stdinIsTTY);
+        }
+        else {
+            delete process.stdin.isTTY;
+        }
+        rmSync(root, { recursive: true, force: true });
+    });
+    // @lat: [[init#Agent preferences#Remembers completed selections]]
+    it('persists selected agents locally and restores them on the next init', async () => {
+        createLatDir();
+        setInteractive(true);
+        const path = join(latDir(), 'config.local.yaml');
+        writeFileSync(path, '# My checkout\nexternal-sources:\n  docs:\n    local-path: ../docs\n');
+        vi.mocked(checklistMenu).mockResolvedValueOnce(['codex', 'cursor']);
+        selectMenu.mockResolvedValue('global');
+        await initCmd(root);
+        const saved = readFileSync(path, 'utf8');
+        expect(saved).toContain('# My checkout');
+        expect(parseYaml(saved)).toEqual({
+            'external-sources': { docs: { 'local-path': '../docs' } },
+            init: { agents: ['codex', 'cursor'] },
+        });
+        expect(readFileSync(join(latDir(), '.gitignore'), 'utf8')).toContain('config.local.yaml');
+        expect(existsSync(join(root, '.codex', 'hooks.json'))).toBe(true);
+        await initCmd(root);
+        expect(checklistMenu).toHaveBeenLastCalledWith(expect.any(Array), 'Which coding agents do you use?', ['codex', 'cursor']);
+        expect(parseYaml(readFileSync(path, 'utf8')).init.agents).toEqual([]);
+    });
+    // @lat: [[init#Agent preferences#Non-interactive runs preserve preferences]]
+    it('does not create or erase agent preferences without a TTY', async () => {
+        createLatDir();
+        const path = join(latDir(), 'config.local.yaml');
+        await initCmd(root);
+        expect(existsSync(path)).toBe(false);
+        const original = 'init:\n  agents: [codex]\n';
+        writeFileSync(path, original);
+        expectSuccess(runInit());
+        expect(readFileSync(path, 'utf8')).toBe(original);
+        expect(existsSync(join(root, '.codex'))).toBe(false);
+    });
+    // @lat: [[init#Agent preferences#Aborted setup preserves preferences]]
+    it('does not save a selection when the command-style prompt is canceled', async () => {
+        createLatDir();
+        setInteractive(true);
+        const path = join(latDir(), 'config.local.yaml');
+        const original = 'init:\n  agents: [cursor]\n';
+        writeFileSync(path, original);
+        vi.mocked(checklistMenu).mockResolvedValue(['codex']);
+        selectMenu.mockResolvedValue(null);
+        await initCmd(root);
+        expect(readFileSync(path, 'utf8')).toBe(original);
+    });
+    // @lat: [[init#Agent preferences#Rejects invalid local preferences]]
+    it('reports invalid YAML or preference shapes without overwriting them', async () => {
+        createLatDir();
+        setInteractive(true);
+        const path = join(latDir(), 'config.local.yaml');
+        for (const original of [
+            'init: [',
+            '- codex\n',
+            'init: false\n',
+            'init:\n  agents: codex\n',
+        ]) {
+            writeFileSync(path, original);
+            await expect(initCmd(root)).rejects.toThrow('config.local.yaml');
+            expect(readFileSync(path, 'utf8')).toBe(original);
+        }
+        expect(checklistMenu).not.toHaveBeenCalled();
+    });
+    // @lat: [[init#Generated instructions#Claude Code shares AGENTS.md]]
+    it('sets up Claude-only projects through AGENTS.md and preserves existing CLAUDE.md', async () => {
+        createLatDir();
+        setInteractive(true);
+        vi.mocked(checklistMenu).mockResolvedValue(['claude']);
+        selectMenu.mockResolvedValue('global');
+        await initCmd(root);
+        const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
+        expect(agents).toContain(readAgentsTemplate().trim());
+        expect(existsSync(join(root, 'CLAUDE.md'))).toBe(false);
+        expect(existsSync(join(root, '.claude/skills/lat-md/SKILL.md'))).toBe(true);
+        const settings = JSON.parse(readFileSync(join(root, '.claude/settings.json'), 'utf8'));
+        expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
+        expect(settings.hooks.Stop).toHaveLength(1);
+        const legacy = 'User instructions\n\n%% lat:begin %%\nLegacy guidance\n%% lat:end %%\n';
+        writeFileSync(join(root, 'CLAUDE.md'), legacy);
+        await initCmd(root);
+        expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).toBe(legacy);
+        expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toBe(agents);
+        const meta = JSON.parse(readFileSync(join(latDir(), '.cache/lat_init.json'), 'utf8'));
+        expect(meta.file_hashes['AGENTS.md']).toBeTruthy();
+        expect(meta.file_hashes['CLAUDE.md']).toBeUndefined();
+    });
+    // @lat: [[tests/init#Initialization confines every write]]
+    it.each([
+        'AGENTS.md',
+        '.github/copilot-instructions.md',
+        '.cursor/rules/lat.md',
+        '.cursor/hooks.json',
+        '.mcp.json',
+        '.cursor/mcp.json',
+        '.vscode/mcp.json',
+        '.codex/config.toml',
+        '.claude/settings.json',
+        '.codex/hooks.json',
+        '.pi/extensions/lat.ts',
+        '.opencode/plugins/lat.ts',
+        '.agents/skills/lat-md/SKILL.md',
+        'lat.md/config.local.yaml',
+        'lat.md/.cache/lat_init.json',
+        '.gitignore',
+        'lat.md/.gitignore',
+    ])('rejects existing and dangling external symlinks at %s', async (path) => {
+        createLatDir();
+        setInteractive(true);
+        vi.mocked(checklistMenu).mockResolvedValue([
+            'claude',
+            'codex',
+            'cursor',
+            'copilot',
+            'pi',
+            'opencode',
+        ]);
+        selectMenu.mockResolvedValue('global');
+        const outside = mkdtempSync(join(tmpdir(), 'lat-init-victim-'));
+        const victim = join(outside, 'victim');
+        const destination = join(root, path);
+        mkdirSync(dirname(destination), { recursive: true });
+        try {
+            for (const existing of [true, false]) {
+                if (existing)
+                    writeFileSync(victim, 'unchanged');
+                else
+                    rmSync(victim, { force: true });
+                rmSync(destination, { force: true });
+                symlinkSync(victim, destination);
+                await expect(initCmd(root)).rejects.toThrow(join(...path.split('/')));
+                if (existing)
+                    expect(readFileSync(victim, 'utf8')).toBe('unchanged');
+                else
+                    expect(existsSync(victim)).toBe(false);
+            }
+        }
+        finally {
+            rmSync(outside, { recursive: true, force: true });
+        }
+    });
+    it.each([
+        'lat.md',
+        'lat.md/.cache',
+        '.claude',
+        '.codex',
+        '.cursor',
+        '.vscode',
+        '.pi',
+        '.opencode',
+        '.github',
+        '.agents',
+    ])('rejects external directory symlinks at %s', async (path) => {
+        createLatDir();
+        setInteractive(true);
+        vi.mocked(checklistMenu).mockResolvedValue([
+            'claude',
+            'codex',
+            'cursor',
+            'copilot',
+            'pi',
+            'opencode',
+        ]);
+        selectMenu.mockResolvedValue('global');
+        const outside = mkdtempSync(join(tmpdir(), 'lat-init-victim-'));
+        const destination = join(root, path);
+        rmSync(destination, { recursive: true, force: true });
+        mkdirSync(dirname(destination), { recursive: true });
+        symlinkSync(outside, destination, process.platform === 'win32' ? 'junction' : 'dir');
+        try {
+            await expect(initCmd(root)).rejects.toThrow(join(...path.split('/')));
+            expect(readdirSync(outside)).toEqual([]);
+        }
+        finally {
+            rmSync(outside, { recursive: true, force: true });
+        }
+    });
+    it('preserves in-project instruction symlinks and unrelated user text', async () => {
+        createLatDir();
+        setInteractive(true);
+        vi.mocked(checklistMenu).mockResolvedValue(['codex']);
+        selectMenu.mockResolvedValue('global');
+        const target = join(root, 'instructions.md');
+        writeFileSync(target, '# My instructions\n\nKeep this text.\n');
+        symlinkSync(target, join(root, 'AGENTS.md'));
+        await initCmd(root);
+        expect(lstatSync(join(root, 'AGENTS.md')).isSymbolicLink()).toBe(true);
+        expect(readFileSync(target, 'utf8')).toContain('Keep this text.');
+        expect(readFileSync(target, 'utf8')).toContain('%% lat:begin %%');
+    });
+    // @lat: [[init#Embedding setup#Fresh init pins local embeddings]]
+    it('pins local embeddings before agent selection on a fresh init', () => {
+        const result = runInit('sk-test');
+        expectSuccess(result);
+        expect(readRepoEmbedding()).toBe('local');
+        expect(readInitVersion(latDir())).toBe(INIT_VERSION);
+    });
+    // @lat: [[tests/init#Lat-owned build output ignore]]
+    it('gitignores the Lat-owned UI build output', async () => {
+        const git = spawnSync('git', ['init', '--quiet'], { cwd: root });
+        expect(git.status, git.stderr?.toString()).toBe(0);
+        await initCmd(root);
+        const ignored = readFileSync(join(root, '.gitignore'), 'utf8').split(/\r?\n/);
+        expect(ignored).toContain('.lat-build');
+        expect(ignored).not.toContain('.vercel');
+    });
+    // @lat: [[init#Embedding setup#Configured key asks for a backend]]
+    it('allows a configured key to opt the repo into hosted embeddings', async () => {
+        createLatDir();
+        getLlmKey.mockReturnValue('sk-test');
+        selectMenu.mockResolvedValue('remote');
+        setInteractive(true);
+        await initCmd(root);
+        expect(selectMenu).toHaveBeenCalledWith(expect.arrayContaining([
+            expect.objectContaining({ value: 'local' }),
+            expect.objectContaining({ value: 'remote' }),
+        ]), 'Embedding backend', 0);
+        expect(setRepoEmbedding).toHaveBeenCalledWith(latDir(), null);
+    });
+    // @lat: [[init#Embedding setup#Backend mismatch offers reindexing]]
+    it('offers and runs a local reindex for an existing remote index', async () => {
+        createLatDir();
+        mockStoredModel('openai:1536');
+        selectMenu.mockResolvedValue('now');
+        setInteractive(true);
+        await initCmd(root);
+        expect(selectMenu).toHaveBeenCalledWith(expect.any(Array), 'Rebuild the existing index with local embeddings?', 0);
+        expect(reindexCommand).toHaveBeenCalledWith(expect.objectContaining({
+            latDir: latDir(),
+            projectRoot: root,
+            mode: 'cli',
+        }), { local: true });
+    });
+    // @lat: [[init#Embedding setup#Current setup preserves explicit backend choice]]
+    it('does not overwrite the backend choice on a current re-run', () => {
+        createLatDir();
+        writeInitMeta(latDir(), {});
+        writeRepoEmbedding('local');
+        const result = runInit();
+        expectSuccess(result);
+        expect(readRepoEmbedding()).toBe('local');
+    });
+    // @lat: [[init#Embedding setup#Hosted re-run defaults to hosted]]
+    it('defaults an interactive hosted re-run to its existing backend', async () => {
+        createLatDir();
+        writeInitMeta(latDir(), {});
+        mockStoredModel('openai:1536');
+        getLlmKey.mockReturnValue('sk-test');
+        selectMenu.mockResolvedValue('remote');
+        setInteractive(true);
+        await initCmd(root);
+        expect(selectMenu).toHaveBeenCalledWith(expect.any(Array), 'Embedding backend', 1);
+        expect(setRepoEmbedding).toHaveBeenCalledWith(latDir(), null);
+        expect(reindexCommand).not.toHaveBeenCalled();
+    });
+    // @lat: [[init#Embedding setup#Non-interactive re-run does not choose]]
+    it('does not prompt or mutate a current hosted repo without a TTY', () => {
+        createLatDir();
+        writeInitMeta(latDir(), {});
+        seedStoredModel('openai:1536');
+        const result = runInit('sk-test');
+        expectSuccess(result);
+        expect(result.stdout).not.toContain('Embedding backend');
+        expect(readRepoEmbedding()).toBeUndefined();
+    });
+    // @lat: [[init#Embedding setup#Outdated re-run keeps a working hosted index]]
+    it('leaves an outdated hosted repo on its existing backend', () => {
+        writeOutdatedInitMeta();
+        seedStoredModel('openai:1536');
+        const result = runInit('sk-test');
+        expectSuccess(result);
+        expect(readRepoEmbedding()).toBeUndefined();
+        expect(result.stdout).not.toContain('lat reindex --local');
+    });
+    // @lat: [[init#Embedding setup#Outdated hosted provider mismatch defaults local]]
+    it('defaults an outdated hosted repo to local when its key provider changed', () => {
+        writeOutdatedInitMeta();
+        seedStoredModel('openai:1536');
+        const result = runInit('vck_test');
+        expectSuccess(result);
+        expect(readRepoEmbedding()).toBe('local');
+        expect(result.stdout).toContain('lat reindex --local');
+    });
+    // @lat: [[init#Embedding setup#Hosted provider mismatch offers reindexing]]
+    it('prints a remote reindex command when the hosted provider changed', () => {
+        createLatDir();
+        writeInitMeta(latDir(), {});
+        seedStoredModel('openai:1536');
+        const result = runInit('vck_test');
+        expectSuccess(result);
+        expect(result.stdout).toContain('lat reindex --remote');
+        expect(readRepoEmbedding()).toBeUndefined();
+    });
+    // @lat: [[init#Embedding setup#Non-interactive mismatch prints command]]
+    it('prints the reindex command for a non-interactive mismatch', () => {
+        createLatDir();
+        writeInitMeta(latDir(), {});
+        seedStoredModel('openai:1536');
+        writeRepoEmbedding('local');
+        const result = runInit();
+        expectSuccess(result);
+        expect(result.stdout).toContain('lat reindex --local');
+        expect(readRepoEmbedding()).toBe('local');
+    });
+});

@@ -1,0 +1,1737 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { execSync, spawnSync } from 'node:child_process';
+import { globSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { listLatticeFiles, loadAllSections, findSections, flattenSections, extractRefs, } from '@lat.md/core/lattice';
+import { formatSectionPreview } from '@lat.md/core/format';
+import { plainStyler } from '@lat.md/core/context';
+import { checkMd, checkCodeRefs, checkIndex, checkSections, } from '@lat.md/core/cli/check';
+import { discoverSourceFiles, scanCodeRefs } from '@lat.md/core/code-refs';
+import { findRefs } from '@lat.md/core/cli/refs';
+import { getSection, formatSectionOutput } from '@lat.md/core/cli/section';
+// eslint-disable-next-line no-control-regex
+const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+const casesDir = join(import.meta.dirname, 'cases');
+const cliPath = join(import.meta.dirname, '..', 'dist', 'src', 'cli', 'index.js');
+afterAll(() => {
+    for (const cache of globSync('**/.cache', { cwd: casesDir })) {
+        rmSync(join(casesDir, cache), { recursive: true, force: true });
+    }
+});
+function runCli(caseName, args) {
+    const result = spawnSync(process.execPath, [cliPath, ...args], {
+        cwd: caseDir(caseName),
+        encoding: 'utf-8',
+        env: process.env,
+    });
+    return {
+        stdout: (result.stdout ?? '').replaceAll('\\', '/'),
+        stderr: result.stderr ?? '',
+        exitCode: result.status ?? 1,
+    };
+}
+function caseDir(name) {
+    return join(casesDir, name);
+}
+function latDir(name) {
+    return join(casesDir, name, 'lat.md');
+}
+function clearParsedCache(name, target = 'lat.md') {
+    rmSync(join(caseDir(name), target, '.cache', 'parsed'), {
+        recursive: true,
+        force: true,
+    });
+}
+function testCtx(name) {
+    return {
+        latDir: latDir(name),
+        projectRoot: caseDir(name),
+        styler: plainStyler,
+        mode: 'cli',
+    };
+}
+describe('cli command surface', () => {
+    it('exposes ui and removes view', () => {
+        const ui = runCli('basic-project', ['ui', '--help']);
+        expect(ui.exitCode).toBe(0);
+        expect(ui.stdout).toContain('Usage: lat ui');
+        expect(ui.stdout).toContain('build');
+        expect(ui.stdout).toContain('run');
+        expect(ui.stdout).toContain('--logo-text <text>');
+        expect(ui.stdout).toContain('--no-git');
+        expect(ui.stdout).toContain('--port <number>');
+        const run = runCli('basic-project', ['ui', 'run', '--help']);
+        expect(run.exitCode).toBe(0);
+        expect(run.stdout).toContain('Usage: lat ui run');
+        expect(run.stdout).toContain('--no-git');
+        const build = runCli('basic-project', ['ui', 'build', '--help']);
+        expect(build.exitCode).toBe(0);
+        expect(build.stdout).toContain('Usage: lat ui build');
+        expect(build.stdout).toContain('static');
+        expect(build.stdout).toContain('server');
+        const staticBuild = runCli('basic-project', [
+            'ui',
+            'build',
+            'static',
+            '--help',
+        ]);
+        expect(staticBuild.exitCode).toBe(0);
+        expect(staticBuild.stdout).toContain('Usage: lat ui build static');
+        expect(staticBuild.stdout).toContain('.lat-build/static');
+        expect(staticBuild.stdout).toContain('--force');
+        expect(staticBuild.stdout).toContain('--logo-text <text>');
+        const serverBuild = runCli('basic-project', [
+            'ui',
+            'build',
+            'server',
+            '--help',
+        ]);
+        expect(serverBuild.exitCode).toBe(0);
+        expect(serverBuild.stdout).toContain('Usage: lat ui build server');
+        expect(serverBuild.stdout).toContain('.lat-build/server');
+        expect(serverBuild.stdout).toContain('.vercel/output');
+        expect(serverBuild.stdout).toContain('--force');
+        expect(serverBuild.stdout).toContain('--logo-text <text>');
+        expect(serverBuild.stdout).toContain('--target <target>');
+        expect(serverBuild.stdout).toContain('node or vercel');
+        const invalidTarget = runCli('basic-project', [
+            'ui',
+            'build',
+            'server',
+            '--target',
+            'edge',
+        ]);
+        expect(invalidTarget.exitCode).toBe(1);
+        expect(invalidTarget.stderr).toContain('target must be node or vercel');
+        const existingOutput = runCli('basic-project', [
+            'ui',
+            'build',
+            'static',
+            'lat.md',
+            '--logo-text',
+            'Project Atlas',
+        ]);
+        expect(existingOutput.exitCode).toBe(1);
+        expect(existingOutput.stderr).toContain('Static UI output already exists:');
+        expect(existingOutput.stderr).toContain('Use --force to replace it.');
+        const invalidPort = runCli('basic-project', ['ui', '--port', '0']);
+        expect(invalidPort.exitCode).toBe(1);
+        expect(invalidPort.stderr).toContain('port must be an integer from 1 to 65535');
+        const view = runCli('basic-project', ['view']);
+        expect(view.exitCode).toBe(1);
+        expect(view.stderr).toContain("unknown command 'view'");
+    });
+    it('exposes search score controls', () => {
+        const search = runCli('basic-project', ['search', '--help']);
+        expect(search.exitCode).toBe(0);
+        expect(search.stdout).toContain('--debug');
+        expect(search.stdout).toContain('show retrieval scores and candidate diagnostics');
+        expect(search.stdout).toContain('--min-similarity <score>');
+        expect(search.stdout).toContain('default: 0.2');
+        for (const threshold of ['-0.1', '1.1']) {
+            const invalidThreshold = runCli('basic-project', [
+                'search',
+                'query',
+                '--min-similarity',
+                threshold,
+            ]);
+            expect(invalidThreshold.exitCode).toBe(1);
+            expect(invalidThreshold.stderr).toContain('min-similarity must be a number from 0 to 1');
+        }
+    });
+});
+// --- basic-project ---
+describe('basic-project', () => {
+    const lat = latDir('basic-project');
+    // @lat: [[section-parsing#Builds a section tree from nested headings]]
+    it('parses section tree from nested headings', async () => {
+        const sections = await loadAllSections(lat);
+        const flat = flattenSections(sections);
+        const ids = flat.map((s) => s.id);
+        expect(ids).toContain('lat.md/dev-process#Dev Process');
+        expect(ids).toContain('lat.md/dev-process#Dev Process#Testing');
+        expect(ids).toContain('lat.md/dev-process#Dev Process#Testing#Running Tests');
+        expect(ids).toContain('lat.md/dev-process#Dev Process#Formatting');
+        expect(ids).toContain('lat.md/notes#Notes');
+        expect(ids).toContain('lat.md/notes#Notes#First Topic');
+        expect(ids).toContain('lat.md/notes#Notes#Second Topic');
+    });
+    // @lat: [[section-parsing#Populates position and firstParagraph fields]]
+    it('populates startLine, endLine, and firstParagraph', async () => {
+        const sections = await loadAllSections(lat);
+        const flat = flattenSections(sections);
+        const running = flat.find((s) => s.id === 'lat.md/dev-process#Dev Process#Testing#Running Tests');
+        expect(running.startLine).toBe(5);
+        expect(running.endLine).toBe(8);
+        expect(running.firstParagraph).toBe('Run tests with vitest.');
+        const formatting = flat.find((s) => s.id === 'lat.md/dev-process#Dev Process#Formatting');
+        expect(formatting.startLine).toBe(9);
+        expect(formatting.firstParagraph).toBe('Prettier all the things.');
+    });
+    // @lat: [[section-parsing#Renders inline code in firstParagraph]]
+    it('renders inline code in firstParagraph', async () => {
+        const sections = await loadAllSections(lat);
+        const flat = flattenSections(sections);
+        const first = flat.find((s) => s.id === 'lat.md/notes#Notes#First Topic');
+        expect(first.firstParagraph).toBe('Run `vitest` to test.');
+    });
+    // @lat: [[section-parsing#Renders wiki links in firstParagraph]]
+    it('renders wiki links in firstParagraph', async () => {
+        const sections = await loadAllSections(lat);
+        const flat = flattenSections(sections);
+        const second = flat.find((s) => s.id === 'lat.md/notes#Notes#Second Topic');
+        expect(second.firstParagraph).toBe('See [[dev-process#Testing]] for more.');
+    });
+    // @lat: [[ref-extraction#Extracts wiki link references]]
+    it('extracts wiki link references', async () => {
+        const files = await listLatticeFiles(lat);
+        const notesFile = files.find((f) => f.endsWith('notes.md'));
+        const { readFile } = await import('node:fs/promises');
+        const content = await readFile(notesFile, 'utf-8');
+        const refs = extractRefs(notesFile, content, caseDir('basic-project'));
+        expect(refs).toHaveLength(1);
+        expect(refs[0].target).toBe('dev-process#Testing');
+        expect(refs[0].fromSection).toBe('lat.md/notes#Notes#Second Topic');
+    });
+    // @lat: [[ref-extraction#Returns empty for files without links]]
+    it('returns no refs for files without wiki links', async () => {
+        const files = await listLatticeFiles(lat);
+        const devFile = files.find((f) => f.endsWith('dev-process.md'));
+        const { readFile } = await import('node:fs/promises');
+        const content = await readFile(devFile, 'utf-8');
+        const refs = extractRefs(devFile, content, caseDir('basic-project'));
+        expect(refs).toHaveLength(0);
+    });
+    // @lat: [[section-preview#Formats section with firstParagraph]]
+    it('formats section preview with firstParagraph', async () => {
+        const sections = await loadAllSections(lat);
+        const flat = flattenSections(sections);
+        const running = flat.find((s) => s.id === 'lat.md/dev-process#Dev Process#Testing#Running Tests');
+        const output = stripAnsi(formatSectionPreview(testCtx('basic-project'), running));
+        const lines = output.split('\n');
+        expect(lines[0]).toBe('* Section: [[lat.md/dev-process#Dev Process#Testing#Running Tests]]');
+        expect(lines[1]).toContain('Defined in');
+        expect(lines[1]).toContain('dev-process.md:5-8');
+        expect(lines[3]).toContain('> Run tests with vitest.');
+    });
+    // @lat: [[section-preview#Formats section without firstParagraph]]
+    it('formats section preview without firstParagraph', async () => {
+        const sections = await loadAllSections(lat);
+        const flat = flattenSections(sections);
+        const testing = flat.find((s) => s.id === 'lat.md/dev-process#Dev Process#Testing');
+        const output = stripAnsi(formatSectionPreview(testCtx('basic-project'), testing));
+        const lines = output.split('\n');
+        expect(lines[0]).toBe('* Section: [[lat.md/dev-process#Dev Process#Testing]]');
+        expect(lines[1]).toContain('Defined in');
+        expect(lines[1]).toContain('dev-process.md:3-4');
+        expect(lines).toHaveLength(2);
+    });
+    // @lat: [[locate#Finds sections by exact id]]
+    it('locate finds sections by exact id', async () => {
+        const sections = await loadAllSections(lat);
+        const matches = findSections(sections, 'dev-process#Testing#Running Tests');
+        expect(matches).toHaveLength(1);
+        expect(matches[0].section.file).toBe('lat.md/dev-process');
+    });
+    // @lat: [[locate#Matches subsection by trailing segment]]
+    it('locate matches subsection by trailing segment name', async () => {
+        const sections = await loadAllSections(lat);
+        const matches = findSections(sections, 'Running Tests');
+        expect(matches.length).toBeGreaterThanOrEqual(1);
+        expect(matches[0].section.id).toBe('lat.md/dev-process#Dev Process#Testing#Running Tests');
+    });
+    // @lat: [[locate#Fuzzy matches with typos]]
+    it('locate fuzzy matches with typos', async () => {
+        const sections = await loadAllSections(lat);
+        const matches = findSections(sections, 'Runing Tests');
+        expect(matches.length).toBeGreaterThanOrEqual(1);
+        expect(matches[0].section.id).toBe('lat.md/dev-process#Dev Process#Testing#Running Tests');
+    });
+    it('locate returns empty for non-matching query', async () => {
+        const sections = await loadAllSections(lat);
+        expect(findSections(sections, 'Nonexistent')).toHaveLength(0);
+    });
+    // @lat: [[locate#Reports match reasons]]
+    it('locate reports match reasons', async () => {
+        const sections = await loadAllSections(lat);
+        const exact = findSections(sections, 'lat.md/dev-process#Dev Process#Testing');
+        expect(exact[0].reason).toBe('exact match');
+        const sub = findSections(sections, 'Running Tests');
+        expect(sub[0].reason).toBe('section name match');
+        const fuzzy = findSections(sections, 'Runing Tests');
+        expect(fuzzy[0].reason).toMatch(/^fuzzy match/);
+    });
+    // @lat: [[locate#Matches with skipped intermediate sections]]
+    it('locate matches with skipped intermediate sections', async () => {
+        const sections = await loadAllSections(lat);
+        const matches = findSections(sections, 'dev-process#Running Tests');
+        expect(matches.length).toBeGreaterThanOrEqual(1);
+        expect(matches[0].section.id).toBe('lat.md/dev-process#Dev Process#Testing#Running Tests');
+        expect(matches[0].reason).toContain('intermediate section');
+        expect(matches[0].reason).toContain('skipped');
+    });
+    // @lat: [[locate#Strips brackets from query]]
+    it('locate strips [[brackets]] from query', async () => {
+        const sections = await loadAllSections(lat);
+        const withBrackets = findSections(sections, '[[Running Tests]]');
+        // findSections itself doesn't strip brackets — that's locateCmd's job.
+        // But we can verify the locate.ts stripping logic inline:
+        const stripped = '[[Running Tests]]'.replace(/^\[\[|\]\]$/g, '');
+        const matches = findSections(sections, stripped);
+        expect(matches.length).toBeGreaterThanOrEqual(1);
+        expect(matches[0].section.id).toBe('lat.md/dev-process#Dev Process#Testing#Running Tests');
+    });
+    // @lat: [[locate#Strips leading hash from query]]
+    it('locate strips leading hash from query', async () => {
+        const sections = await loadAllSections(lat);
+        const matches = findSections(sections, '#Testing');
+        expect(matches.length).toBeGreaterThanOrEqual(1);
+        expect(matches[0].section.id).toBe('lat.md/dev-process#Dev Process#Testing');
+        expect(matches[0].reason).toBe('section name match');
+    });
+    // @lat: [[refs-e2e#Finds referring sections via wiki links]]
+    it('refs finds sections referencing a target', async () => {
+        const files = await listLatticeFiles(lat);
+        const { readFile } = await import('node:fs/promises');
+        const allRefs = [];
+        for (const file of files) {
+            const content = await readFile(file, 'utf-8');
+            allRefs.push(...extractRefs(file, content, caseDir('basic-project')));
+        }
+        const matching = allRefs
+            .filter((r) => r.target.toLowerCase() === 'dev-process#testing')
+            .map((r) => r.fromSection.toLowerCase());
+        expect(matching).toContain('lat.md/notes#notes#second topic');
+    });
+    // @lat: [[check-md#Passes with valid links]]
+    it('check md passes with valid links', async () => {
+        const { errors } = await checkMd(lat);
+        expect(errors).toHaveLength(0);
+    });
+});
+// --- expand ---
+describe('expand', () => {
+    const root = caseDir('basic-project');
+    function runExpand(text) {
+        return execSync(`node ${join(import.meta.dirname, '..', 'dist', 'src', 'cli', 'index.js')} expand ${JSON.stringify(text)}`, {
+            cwd: root,
+            encoding: 'utf-8',
+            env: process.env,
+        });
+    }
+    // @lat: [[tests/expand#Resolves exact ref with context]]
+    it('resolves exact ref with "is referring to" context', () => {
+        const output = runExpand('see [[dev-process#Testing]]');
+        expect(output).toContain('see [[lat.md/dev-process#Dev Process#Testing]]');
+        expect(output).toContain('<lat-context>');
+        expect(output).toContain('`[[dev-process#Testing]]` is referring to:');
+        expect(output).toContain('* [[lat.md/dev-process#Dev Process#Testing]]');
+        expect(output).toContain('dev-process.md:');
+    });
+    // @lat: [[tests/expand#Resolves fuzzy ref with alternatives]]
+    it('resolves fuzzy ref with "might be referring to" context', () => {
+        const output = runExpand('fix [[Runing Tests]]');
+        expect(output).toContain('[[lat.md/dev-process#Dev Process#Testing#Running Tests]]');
+        expect(output).toContain('`[[Runing Tests]]` might be referring to');
+        expect(output).toContain('fuzzy match');
+    });
+    // @lat: [[tests/expand#Passes through text without refs]]
+    it('passes through text without refs unchanged', () => {
+        const output = runExpand('no refs here');
+        expect(output).toBe('no refs here');
+        expect(output).not.toContain('<lat-context>');
+    });
+});
+// --- broken-links ---
+describe('error-broken-links', () => {
+    // @lat: [[check-md#Detects broken links]]
+    it('check md detects broken wiki links', async () => {
+        const { errors } = await checkMd(latDir('error-broken-links'));
+        expect(errors).toHaveLength(1);
+        expect(errors[0].target).toBe('Nonexistent#Thing');
+        expect(errors[0].line).toBe(3);
+    });
+});
+// --- valid-links ---
+describe('valid-links', () => {
+    it('check md passes when all links resolve', async () => {
+        const { errors } = await checkMd(latDir('valid-links'));
+        expect(errors).toHaveLength(0);
+    });
+    // @lat: [[ref-resolution#Wiki links accept literal and GitHub headings]]
+    it('lat check md accepts literal headings and GitHub slugs', () => {
+        const { stdout, stderr, exitCode } = runCli('valid-links', ['check', 'md']);
+        expect(exitCode).toBe(0);
+        expect(stderr).toBe('');
+        expect(stdout).toContain('md: All links OK\n');
+    });
+});
+// --- md-links ---
+describe('error-md-links', () => {
+    // @lat: [[check-links#Detects broken relative links]]
+    it('lat check links reports every broken destination at its line', () => {
+        const { stdout, stderr: output, exitCode, } = runCli('error-md-links', ['check', 'links']);
+        expect(exitCode).toBe(1);
+        expect(stdout).toBe('');
+        for (const expected of [
+            'lat.md/a.md:5: broken link (does-not-exist.md)',
+            'lat.md/a.md:6: broken link (./does-not-exist.md)',
+            'lat.md/a.md:7: broken link (../does-not-exist.md)',
+            'lat.md/a.md:8: broken link (./does-not-exist.md#Heading)',
+            'lat.md/a.md:9: broken link (./50%.md)',
+            'lat.md/a.md:10: broken image (./does-not-exist.svg)',
+            'lat.md/a.md:12: undefined link reference',
+            'lat.md/a.md:13: undefined image reference',
+            'lat.md/a.md:14: undefined link reference',
+            'lat.md/a.md:15: undefined shortcut link reference',
+            'lat.md/a.md:16: undefined shortcut image reference',
+            'lat.md/a.md:17: broken link (#Alpha)',
+            'lat.md/a.md:22: broken link (./does-not-exist-def.md)',
+            'lat.md/a.md:24: malformed reference definition ([packed one]:)',
+            'lat.md/a.md:24: malformed reference definition ([packed two]:)',
+        ]) {
+            expect(output).toContain(expected);
+        }
+        expect(output).toContain('18 errors found');
+    });
+    // @lat: [[check-links#Rejects undefined shortcut references]]
+    it('lat check links explains how to fix undefined shortcut references', () => {
+        const { stderr: output, exitCode } = runCli('error-md-links', [
+            'check',
+            'links',
+        ]);
+        expect(exitCode).toBe(1);
+        expect(output).toContain('undefined shortcut link reference ([undefined shortcut]) — ' +
+            'add a definition "[undefined shortcut]: <destination>" to make it a link, ' +
+            'or escape the opening bracket as "\\[undefined shortcut]" to keep it as literal text');
+        expect(output).toContain('undefined shortcut image reference (![undefined shortcut image]) — ' +
+            'add a definition "[undefined shortcut image]: <destination>" to make it an image, ' +
+            'or escape the opening bracket as "!\\[undefined shortcut image]" to keep it as literal text');
+        expect(output).toContain('malformed reference definition ([packed one]:) — ' +
+            'write it as "[packed one]: <destination>" on its own line, ' +
+            'or escape the opening bracket as "\\[packed one]:" to keep it as literal text');
+    });
+    // @lat: [[check-links#Rejects backslash path separators]]
+    it('lat check links rejects Windows path separators', () => {
+        const { stderr: output, exitCode } = runCli('error-md-links', [
+            'check',
+            'links',
+        ]);
+        expect(exitCode).toBe(1);
+        expect(output).toContain('invalid link (.\\a.md)');
+        expect(output).toContain('invalid link (.%5Ca.md)');
+        expect(output).toContain('invalid link (C:\\notes.md)');
+        expect(output.match(/backslashes are not path separators in Markdown; use "\/" instead/g)).toHaveLength(3);
+    });
+    // @lat: [[check-links#Rejects non-GitHub heading fragments]]
+    it('lat check links rejects an Obsidian-style heading fragment', () => {
+        const { stderr: output, exitCode } = runCli('error-md-links', [
+            'check',
+            'links',
+        ]);
+        expect(exitCode).toBe(1);
+        expect(output).toContain('broken link (#Alpha) — heading "#Alpha" not found in "lat.md/a.md"');
+    });
+    // @lat: [[check-links#Names the resolved file and the link kind]]
+    it('lat check links names resolved files and distinguishes images', () => {
+        const { stderr: output } = runCli('error-md-links', ['check', 'links']);
+        expect(output).toContain('broken link (./does-not-exist.md#Heading) — file "lat.md/does-not-exist.md" not found');
+        expect(output).toContain('undefined image reference (![undefined image][missing-image])');
+    });
+    // @lat: [[check-links#Default check validates relative links]]
+    it('lat check includes relative-link validation', () => {
+        const { stdout, stderr: output, exitCode, } = runCli('error-md-links', ['check']);
+        expect(exitCode).toBe(1);
+        expect(stdout).toBe('');
+        expect(output).toContain('lat.md/a.md:5: broken link (does-not-exist.md)');
+        expect(output).toContain('18 errors found');
+        expect(output).not.toContain('missing index file');
+    });
+});
+// --- valid-md-links ---
+describe('valid-md-links', () => {
+    // @lat: [[check-links#Passes valid and skipped link forms]]
+    it('lat check links accepts valid and skipped destinations', () => {
+        const { stdout, stderr, exitCode } = runCli('valid-md-links', [
+            'check',
+            'links',
+        ]);
+        expect(exitCode).toBe(0);
+        expect(stderr).toBe('');
+        expect(stdout).toBe('links: All relative links resolve\n');
+    });
+    // @lat: [[check-links#Accepts GitHub heading fragments]]
+    it('lat check links accepts punctuation and duplicate heading slugs', () => {
+        const { stdout, stderr, exitCode } = runCli('valid-md-links', [
+            'check',
+            'links',
+        ]);
+        expect(exitCode).toBe(0);
+        expect(stderr).toBe('');
+        expect(stdout).toBe('links: All relative links resolve\n');
+    });
+});
+// --- headless check targets ---
+describe('headless-check', () => {
+    // @lat: [[tests/check-headless#Profiles validation work]]
+    it('reports detailed validation timings only with --profile', () => {
+        clearParsedCache('headless-check', 'links');
+        const regular = runCli('headless-check', ['check', '--', 'links']);
+        clearParsedCache('headless-check', 'links');
+        const profiled = runCli('headless-check', [
+            'check',
+            '--profile',
+            '--',
+            'links',
+        ]);
+        expect(regular.stdout).not.toContain('Profile (');
+        expect(profiled.exitCode).toBe(0);
+        expect(profiled.stderr).toBe('');
+        for (const operation of [
+            'check Markdown wiki links',
+            'parse Markdown AST',
+            'import Markdown analyzer',
+            'hash Markdown file',
+            'parsed Markdown cache miss',
+            'extract wiki links',
+            'check relative Markdown links',
+            'check @lat code references',
+            'scan project files for @lat references',
+            'check directory indexes',
+            'check section structure',
+            'extract Markdown sections',
+        ]) {
+            expect(profiled.stdout).toContain(operation);
+        }
+        expect(profiled.stdout).toMatch(/across \d+ calls/);
+        expect(profiled.stdout).toContain('All checks passed');
+    });
+    // @lat: [[tests/check-headless#Reports concise completion timing]]
+    it('reports total time without misleading file-extension counts', () => {
+        const result = runCli('headless-check', ['check', '--', 'links']);
+        expect(result.exitCode).toBe(0);
+        expect(result.stderr).toBe('');
+        expect(result.stdout).toMatch(/^All checks passed in (?:\d+ms|\d+\.\ds)\n$/);
+        expect(result.stdout).not.toContain('Scanned');
+    });
+    // @lat: [[tests/check-headless#Reuses check data across validators]]
+    it('parses each Markdown file once across the full check', () => {
+        clearParsedCache('headless-check', 'links');
+        const { stdout, stderr, exitCode } = runCli('headless-check', [
+            'check',
+            '--profile',
+            '--',
+            'links',
+        ]);
+        expect(exitCode).toBe(0);
+        expect(stderr).toBe('');
+        expect(stdout.match(/parse Markdown AST:/g)).toHaveLength(1);
+        expect(stdout).toMatch(/parse Markdown AST: .* across 2 calls/);
+    });
+    // @lat: [[tests/check-headless#Profiles persistent parser cache hits]]
+    it('reports cache hits without parser work on a warm check', () => {
+        clearParsedCache('headless-check', 'links');
+        expect(runCli('headless-check', ['check', '--', 'links']).exitCode).toBe(0);
+        const { stdout, stderr, exitCode } = runCli('headless-check', [
+            'check',
+            '--profile',
+            '--',
+            'links',
+        ]);
+        expect(exitCode).toBe(0);
+        expect(stderr).toBe('');
+        expect(stdout).toMatch(/parsed Markdown cache hit: .* across 2 calls/);
+        expect(stdout).toContain('skip Markdown analyzer import');
+        expect(stdout).not.toContain('import Markdown analyzer');
+        expect(stdout).not.toContain('parse Markdown AST');
+    });
+    // @lat: [[tests/check-headless#Profiles persistent source cache hits]]
+    it('reports source cache hits without tree-sitter work on a warm check', () => {
+        clearParsedCache('source-ref-ts-valid');
+        const cold = runCli('source-ref-ts-valid', ['check', '--profile']);
+        expect(cold.exitCode).toBe(0);
+        expect(cold.stderr).toBe('');
+        expect(cold.stdout).toContain('parsed source cache miss');
+        expect(cold.stdout).toContain('parse source symbols');
+        const warm = runCli('source-ref-ts-valid', ['check', '--profile']);
+        expect(warm.exitCode).toBe(0);
+        expect(warm.stderr).toBe('');
+        expect(warm.stdout).toContain('parsed source cache hit');
+        expect(warm.stdout).not.toContain('parse source symbols');
+    });
+    // @lat: [[tests/check-headless#Separator disambiguates directory names]]
+    it('treats a name after -- as a directory, not a subcommand', () => {
+        const full = runCli('headless-check', ['check', '--', 'links']);
+        const subcommand = runCli('headless-check', ['check', 'links']);
+        expect(full.exitCode).toBe(0);
+        expect(full.stderr).toBe('');
+        expect(full.stdout).toContain('All checks passed');
+        expect(full.stdout).not.toContain('No init version recorded');
+        expect(subcommand.exitCode).toBe(0);
+        expect(subcommand.stderr).toBe('');
+        expect(subcommand.stdout).toBe('links: All relative links resolve\n');
+    });
+    // @lat: [[tests/check-headless#Every subcommand accepts a directory]]
+    it('runs every check subcommand against the explicit directory', () => {
+        const expected = new Map([
+            ['md', 'md: All links OK'],
+            ['links', 'links: All relative links resolve'],
+            ['code-refs', 'code-refs: All references OK'],
+            ['index', 'index: All directory index files OK'],
+            ['sections', 'sections: All sections have valid leading paragraphs'],
+        ]);
+        for (const [subcommand, message] of expected) {
+            const result = runCli('headless-check', [
+                'check',
+                subcommand,
+                '--',
+                'links',
+            ]);
+            expect(result.exitCode, subcommand).toBe(0);
+            expect(result.stderr, subcommand).toBe('');
+            expect(result.stdout, subcommand).toContain(message);
+        }
+    });
+    // @lat: [[tests/check-headless#Target syntax requires one directory]]
+    it('requires exactly one directory after the separator', () => {
+        for (const args of [
+            ['check', '--'],
+            ['check', '--', 'links', 'extra'],
+        ]) {
+            const result = runCli('headless-check', args);
+            expect(result.exitCode).toBe(1);
+            expect(result.stderr).toContain('expects exactly one directory');
+        }
+    });
+});
+describe('error-headless-check', () => {
+    // @lat: [[tests/check-headless#Default check runs every validator]]
+    it('runs every validator against the explicit directory', () => {
+        const { stdout, stderr, exitCode } = runCli('error-headless-check', [
+            'check',
+            '--',
+            'links',
+        ]);
+        expect(exitCode).toBe(1);
+        expect(stdout).toBe('');
+        expect(stderr).toContain('broken link [[missing]]');
+        expect(stderr).toContain('broken link (missing.md)');
+        expect(stderr).toContain('@lat: [[cli#locate]]');
+        expect(stderr).toContain('missing index file "links.md"');
+        expect(stderr).toContain('has no leading paragraph');
+        expect(stderr).toContain('5 errors found');
+    });
+});
+// --- dangling-code-ref ---
+describe('error-dangling-code-ref', () => {
+    // @lat: [[check-code-refs#Detects dangling code ref]]
+    it('check code-refs detects @lat pointing to nonexistent section', async () => {
+        const { errors } = await checkCodeRefs(latDir('error-dangling-code-ref'));
+        const dangling = errors.filter((e) => e.target === 'Alpha#Nonexistent');
+        expect(dangling).toHaveLength(1);
+        expect(dangling[0].message).toContain('no matching section found');
+    });
+});
+// --- python-code-ref ---
+describe('python-code-ref', () => {
+    it('scans @lat refs from Python # comments including between decorators', async () => {
+        const { refs } = await scanCodeRefs(caseDir('python-code-ref'));
+        expect(refs).toHaveLength(3);
+        expect(refs[0].target).toBe('Specs#Feature A');
+        expect(refs[0].file).toContain('app.py');
+        expect(refs[0].line).toBe(1);
+        expect(refs[1].target).toBe('Specs#Feature B');
+        expect(refs[1].file).toContain('app.py');
+        expect(refs[1].line).toBe(9);
+        expect(refs[2].target).toBe('Specs#Nonexistent');
+        expect(refs[2].line).toBe(13);
+    });
+    it('detects dangling @lat ref in Python file', async () => {
+        const { errors } = await checkCodeRefs(latDir('python-code-ref'));
+        expect(errors).toHaveLength(1);
+        expect(errors[0].target).toBe('Specs#Nonexistent');
+        expect(errors[0].message).toContain('no matching section found');
+    });
+});
+// --- dart-code-ref ---
+describe('dart-code-ref', () => {
+    // @lat: [[tests/check-code-refs#Scans Dart references around annotations]]
+    it('scans Dart // references including between annotations', async () => {
+        const { refs } = await scanCodeRefs(caseDir('dart-code-ref'));
+        expect(refs).toHaveLength(3);
+        expect(refs[0]).toMatchObject({
+            target: 'Specs#Feature A',
+            file: 'app.dart',
+            line: 1,
+        });
+        expect(refs[1]).toMatchObject({
+            target: 'Specs#Feature B',
+            file: 'app.dart',
+            line: 5,
+        });
+        expect(refs[2]).toMatchObject({
+            target: 'Specs#Nonexistent',
+            file: 'app.dart',
+            line: 8,
+        });
+    });
+    it('reports a dangling reference from a Dart file', async () => {
+        const { errors } = await checkCodeRefs(latDir('dart-code-ref'));
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toMatchObject({
+            target: 'Specs#Nonexistent',
+            line: 8,
+        });
+        expect(errors[0].message).toContain('no matching section found');
+    });
+});
+// --- gitignore-filtering ---
+describe('gitignore-filtering', () => {
+    it('skips .gitignore-d dirs and .git/', async () => {
+        const root = caseDir('gitignore-filtering');
+        const [{ refs }, files] = await Promise.all([
+            scanCodeRefs(root),
+            discoverSourceFiles(root),
+        ]);
+        // build/ and vendor/ are gitignored; .git/ is always excluded
+        expect(refs).toHaveLength(1);
+        expect(refs[0].file).toContain('src/app.ts');
+        expect(files).toHaveLength(1); // src/app.ts (dotfiles like .gitignore are excluded)
+        expect(files.every((f) => !f.includes('.git/'))).toBe(true);
+    });
+    it('reports no errors when gitignored refs are excluded', async () => {
+        const { errors } = await checkCodeRefs(latDir('gitignore-filtering'));
+        expect(errors).toHaveLength(0);
+    });
+});
+// --- require-code-mention ---
+describe('error-require-code-mention', () => {
+    // @lat: [[check-code-refs#Detects missing code mention for required file]]
+    it('check code-refs detects uncovered leaf sections', async () => {
+        const { errors } = await checkCodeRefs(latDir('error-require-code-mention'));
+        const uncovered = errors.filter((e) => e.message.includes('requires a code mention'));
+        expect(uncovered).toHaveLength(1);
+        expect(uncovered[0].target).toBe('lat.md/specs#Specs#Must Do Y');
+    });
+});
+// --- check index ---
+describe('error-missing-index', () => {
+    // @lat: [[check-index#Detects missing index file]]
+    it('reports missing index file with snippet', async () => {
+        const errors = await checkIndex(latDir('error-missing-index'));
+        expect(errors).toHaveLength(1);
+        expect(errors[0].message).toContain('missing index file');
+        expect(errors[0].snippet).toContain('[[notes]]');
+    });
+});
+describe('valid-index', () => {
+    // @lat: [[check-index#Passes with valid index]]
+    it('passes when index lists all entries', async () => {
+        const errors = await checkIndex(latDir('valid-index'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('error-stale-index', () => {
+    // @lat: [[check-index#Detects stale index entry]]
+    it('reports entry that does not exist on disk', async () => {
+        const errors = await checkIndex(latDir('error-stale-index'));
+        expect(errors).toHaveLength(1);
+        expect(errors[0].message).toContain('"[[gone]]"');
+        expect(errors[0].message).toContain('does not exist');
+    });
+});
+// --- check index (subdirectory) ---
+describe('error-missing-subdir-index', () => {
+    // @lat: [[check-index#Detects missing subdirectory index file]]
+    it('reports missing index file in subdirectory', async () => {
+        const errors = await checkIndex(latDir('error-missing-subdir-index'));
+        expect(errors).toHaveLength(1);
+        expect(errors[0].message).toContain('missing index file');
+        expect(errors[0].message).toContain('guides');
+        expect(errors[0].snippet).toContain('[[setup]]');
+    });
+});
+describe('valid-subdir-index', () => {
+    // @lat: [[check-index#Passes with valid subdirectory index]]
+    it('passes when subdirectory index lists all entries', async () => {
+        const errors = await checkIndex(latDir('valid-subdir-index'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('error-stale-subdir-index', () => {
+    // @lat: [[check-index#Detects stale subdirectory index entry]]
+    it('reports stale entry in subdirectory index', async () => {
+        const errors = await checkIndex(latDir('error-stale-subdir-index'));
+        expect(errors).toHaveLength(1);
+        expect(errors[0].message).toContain('"[[advanced]]"');
+        expect(errors[0].message).toContain('does not exist');
+    });
+});
+// --- ambiguous short ref ---
+describe('error-ambiguous-short-ref', () => {
+    const lat = latDir('error-ambiguous-short-ref');
+    // @lat: [[ref-resolution#Ambiguous short ref in md]]
+    it('check md reports ambiguous wiki link with candidate paths', async () => {
+        const { errors } = await checkMd(lat);
+        expect(errors).toHaveLength(2);
+        const topicAErr = errors.find((e) => e.target === 'notes#Topic A');
+        expect(topicAErr.message).toContain("ambiguous link '[[notes#Topic A]]'");
+        expect(topicAErr.message).toContain('use either of');
+        expect(topicAErr.message).toContain("'[[lat.md/alpha/notes#Topic A]]'");
+        expect(topicAErr.message).toContain("'[[lat.md/beta/notes#Topic A]]'");
+        expect(topicAErr.message).toContain('short path "notes" is ambiguous');
+        expect(topicAErr.message).toContain('"lat.md/alpha/notes.md"');
+        expect(topicAErr.message).toContain('"lat.md/beta/notes.md"');
+        expect(topicAErr.message).toContain('Please fix the link');
+    });
+    // @lat: [[ref-resolution#Ambiguous short ref unique section]]
+    it('check md suggests fix when section exists in only one file', async () => {
+        const { errors } = await checkMd(lat);
+        const topicCErr = errors.find((e) => e.target === 'notes#Topic C');
+        expect(topicCErr).toBeDefined();
+        expect(topicCErr.message).toContain("ambiguous link '[[notes#Topic C]]'");
+        expect(topicCErr.message).toContain("did you mean '[[lat.md/alpha/notes#Topic C]]'");
+        expect(topicCErr.message).toContain('"lat.md/alpha/notes.md"');
+        expect(topicCErr.message).toContain('"lat.md/beta/notes.md"');
+        expect(topicCErr.message).toContain('Please fix the link');
+    });
+    // @lat: [[ref-resolution#Ambiguous short ref in code]]
+    it('check code-refs reports ambiguous code ref with candidate paths', async () => {
+        const { errors } = await checkCodeRefs(lat);
+        expect(errors).toHaveLength(1);
+        expect(errors[0].message).toContain("ambiguous link '[[notes#Topic B]]'");
+        expect(errors[0].message).toContain('use either of');
+        expect(errors[0].message).toContain("'[[lat.md/alpha/notes#Topic B]]'");
+        expect(errors[0].message).toContain("'[[lat.md/beta/notes#Topic B]]'");
+        expect(errors[0].message).toContain('"lat.md/alpha/notes.md"');
+        expect(errors[0].message).toContain('"lat.md/beta/notes.md"');
+        expect(errors[0].message).toContain('Please fix the link');
+    });
+});
+// --- short ref ---
+describe('short-ref', () => {
+    const lat = latDir('short-ref');
+    // @lat: [[ref-resolution#Short ref passes check md]]
+    it('check md passes with short wiki links to subdir files', async () => {
+        const { errors } = await checkMd(lat);
+        expect(errors).toHaveLength(0);
+    });
+    // @lat: [[ref-resolution#Short ref passes check code-refs]]
+    it('check code-refs passes with short code refs to subdir files', async () => {
+        const { errors } = await checkCodeRefs(lat);
+        expect(errors).toHaveLength(0);
+    });
+    // @lat: [[ref-resolution#Short ref findSections resolves]]
+    it('findSections resolves short ref to full section', async () => {
+        const sections = await loadAllSections(lat);
+        const matches = findSections(sections, 'setup#Install');
+        expect(matches).toHaveLength(1);
+        expect(matches[0].section.id).toBe('lat.md/guides/setup#Setup#Install');
+        expect(matches[0].reason).toMatch(/file stem expanded/);
+        const explicitExtension = findSections(sections, 'setup.md#Install');
+        expect(explicitExtension).toHaveLength(1);
+        expect(explicitExtension[0].section.id).toBe('lat.md/guides/setup#Setup#Install');
+    });
+    // @lat: [[locate#File stem fuzzy does not over-match]]
+    it('fuzzy does not over-match when file prefix is shared', async () => {
+        const sections = await loadAllSections(lat);
+        // "setup#Instal" (typo) should fuzzy-match "guides/setup#Install"
+        // but not "guides/setup#Configure" — heading-only comparison
+        const matches = findSections(sections, 'setup#Instal');
+        expect(matches.length).toBeGreaterThanOrEqual(1);
+        expect(matches[0].section.id).toBe('lat.md/guides/setup#Setup#Install');
+        const ids = matches.map((m) => m.section.id);
+        expect(ids).not.toContain('lat.md/guides/setup#Setup#Configure');
+    });
+    // @lat: [[ref-resolution#Short ref refs finds md references]]
+    it('findRefs with short query finds md wiki links', async () => {
+        const result = await findRefs(testCtx('short-ref'), 'setup#Install', 'md');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.target.id).toBe('lat.md/guides/setup#Setup#Install');
+        const ids = result.mdRefs.map((r) => r.section.id);
+        expect(ids).toContain('lat.md/links#Links');
+    });
+    // @lat: [[ref-resolution#Short ref refs finds code references]]
+    it('findRefs with short query finds code refs', async () => {
+        const result = await findRefs(testCtx('short-ref'), 'setup#Configure', 'code');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.target.id).toBe('lat.md/guides/setup#Setup#Configure');
+        expect(result.codeRefs).toHaveLength(1);
+        expect(result.codeRefs[0]).toContain('app.ts');
+    });
+});
+// --- full ref ---
+describe('full-ref', () => {
+    const lat = latDir('full-ref');
+    // @lat: [[ref-resolution#Full ref passes check md]]
+    it('check md passes with fully qualified wiki links', async () => {
+        const { errors } = await checkMd(lat);
+        expect(errors).toHaveLength(0);
+    });
+    // @lat: [[ref-resolution#Full ref passes check code-refs]]
+    it('check code-refs passes with fully qualified code refs', async () => {
+        const { errors } = await checkCodeRefs(lat);
+        expect(errors).toHaveLength(0);
+    });
+    // @lat: [[ref-resolution#Windows-style backslash refs pass]]
+    it('check code-refs accepts backslashes in the file portion of a ref', async () => {
+        const { errors } = await checkCodeRefs(lat);
+        const backslashRef = errors.find((e) => e.target === String.raw `lat.md\guides\setup#Setup#Install`);
+        expect(backslashRef).toBeUndefined();
+    });
+    // @lat: [[ref-resolution#Full ref findSections resolves]]
+    it('findSections finds section by full path', async () => {
+        const sections = await loadAllSections(lat);
+        const matches = findSections(sections, 'guides/setup#Install');
+        expect(matches).toHaveLength(1);
+        expect(matches[0].section.id).toBe('lat.md/guides/setup#Setup#Install');
+    });
+    it('findSections treats a backslash path as an exact match', async () => {
+        const sections = await loadAllSections(lat);
+        const matches = findSections(sections, String.raw `lat.md\guides\setup#Setup#Install`);
+        expect(matches).toHaveLength(1);
+        expect(matches[0].section.id).toBe('lat.md/guides/setup#Setup#Install');
+        expect(matches[0].reason).toBe('exact match');
+    });
+    // @lat: [[ref-resolution#Full ref refs finds md references]]
+    it('findRefs with full query finds md wiki links', async () => {
+        const result = await findRefs(testCtx('full-ref'), 'lat.md/guides/setup#Setup#Install', 'md');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const ids = result.mdRefs.map((r) => r.section.id);
+        expect(ids).toContain('lat.md/links#Links');
+    });
+    // @lat: [[ref-resolution#Full ref refs finds code references]]
+    it('findRefs with full query finds code refs', async () => {
+        const result = await findRefs(testCtx('full-ref'), 'lat.md/guides/setup#Setup#Configure', 'code');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.codeRefs).toHaveLength(1);
+        expect(result.codeRefs[0]).toContain('app.ts');
+    });
+});
+// --- bare heading ref ---
+describe('error-bare-heading-ref', () => {
+    const lat = latDir('error-bare-heading-ref');
+    // @lat: [[ref-resolution#Bare heading in md is error]]
+    it('check md rejects bare heading name as wiki link', async () => {
+        const { errors } = await checkMd(lat);
+        const bare = errors.find((e) => e.target === 'Installation');
+        expect(bare).toBeDefined();
+        expect(bare.message).toContain('not found');
+    });
+    // @lat: [[ref-resolution#Local section syntax in md is error]]
+    it('check md rejects [[#Heading]] local section syntax', async () => {
+        const { errors } = await checkMd(lat);
+        const local = errors.find((e) => e.target === '#Configuration');
+        expect(local).toBeDefined();
+        expect(local.message).toContain('no matching section found');
+    });
+    // @lat: [[ref-resolution#Nonexistent file ref in md is error]]
+    it('check md rejects link to nonexistent file', async () => {
+        const { errors } = await checkMd(lat);
+        const missing = errors.find((e) => e.target === 'other-file#Missing');
+        expect(missing).toBeDefined();
+        expect(missing.message).toContain('no matching section found');
+    });
+    // @lat: [[ref-resolution#Bare heading in code is error]]
+    it('check code-refs rejects bare heading name', async () => {
+        const { errors } = await checkCodeRefs(lat);
+        const bare = errors.find((e) => e.target === 'Installation');
+        expect(bare).toBeDefined();
+        expect(bare.message).toContain('no matching section found');
+    });
+    // @lat: [[ref-resolution#Valid code ref with file prefix passes]]
+    it('check code-refs passes valid file#Heading ref', async () => {
+        const { errors } = await checkCodeRefs(lat);
+        const valid = errors.find((e) => e.target === 'docs#Configuration');
+        expect(valid).toBeUndefined();
+    });
+});
+// --- nested in-file refs ---
+describe('valid-nested-refs', () => {
+    // @lat: [[ref-resolution#Nested in-file refs pass]]
+    it('check md passes with fully qualified nested section refs', async () => {
+        const { errors } = await checkMd(latDir('valid-nested-refs'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('error-bad-nested-refs', () => {
+    // @lat: [[ref-resolution#Skipped intermediate in ref is error]]
+    it('check md rejects ref that skips intermediate section', async () => {
+        const { errors } = await checkMd(latDir('error-bad-nested-refs'));
+        const skipped = errors.find((e) => e.target === 'guide#Prerequisites');
+        expect(skipped).toBeDefined();
+        expect(skipped.message).toContain('no matching section found');
+    });
+    // @lat: [[ref-resolution#Wrong nesting order in ref is error]]
+    it('check md rejects ref with wrong nesting order', async () => {
+        const { errors } = await checkMd(latDir('error-bad-nested-refs'));
+        const wrong = errors.find((e) => e.target === 'guide#Install#Setup');
+        expect(wrong).toBeDefined();
+        expect(wrong.message).toContain('no matching section found');
+    });
+    // @lat: [[ref-resolution#Nonexistent leaf in nested ref is error]]
+    it('check md rejects ref with nonexistent leaf heading', async () => {
+        const { errors } = await checkMd(latDir('error-bad-nested-refs'));
+        const missing = errors.find((e) => e.target === 'guide#Setup#Missing');
+        expect(missing).toBeDefined();
+        expect(missing.message).toContain('no matching section found');
+    });
+});
+// --- source code wiki links ---
+describe('source-ref-ts-valid', () => {
+    it('resolves TS function, class, method, and const refs without errors', async () => {
+        // docs.md links: greet (function), Greeter (class),
+        // Greeter#greet (method), DEFAULT_NAME (const)
+        const { errors } = await checkMd(latDir('source-ref-ts-valid'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('source-ref-js-valid', () => {
+    it('resolves JS function, class, method, and const refs without errors', async () => {
+        const { errors } = await checkMd(latDir('source-ref-js-valid'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('source-ref-jsx-valid', () => {
+    it('resolves JSX function, class, method, component const, and const refs without errors', async () => {
+        const { errors } = await checkMd(latDir('source-ref-jsx-valid'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('source-ref-py-valid', () => {
+    it('resolves Python function, class, method, variable, and decorated symbol refs without errors', async () => {
+        // docs.md links: greet (function), decorated_greet (decorated function),
+        // Greeter (class), Greeter#greet (method), Greeter#decorated_method (decorated method),
+        // DecoratedGreeter (decorated class), DecoratedGreeter#wave (method on decorated class),
+        // DEFAULT_NAME (variable)
+        const { errors } = await checkMd(latDir('source-ref-py-valid'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('error-source-ref-ts-missing', () => {
+    it('check md reports all missing TS symbols', async () => {
+        const { errors } = await checkMd(latDir('error-source-ref-ts-missing'));
+        expect(errors).toHaveLength(4);
+        const byTarget = new Map(errors.map((e) => [e.target, e]));
+        const fn = byTarget.get('src/app.ts#nonexistent');
+        expect(fn).toBeDefined();
+        expect(fn.message).toContain('symbol "nonexistent" not found');
+        const cls = byTarget.get('src/app.ts#MissingClass');
+        expect(cls).toBeDefined();
+        expect(cls.message).toContain('symbol "MissingClass" not found');
+        const cnst = byTarget.get('src/app.ts#MISSING_CONST');
+        expect(cnst).toBeDefined();
+        expect(cnst.message).toContain('symbol "MISSING_CONST" not found');
+        const method = byTarget.get('src/app.ts#Greeter#missingMethod');
+        expect(method).toBeDefined();
+        expect(method.message).toContain('symbol "Greeter#missingMethod" not found');
+    });
+});
+describe('error-source-ref-py-missing', () => {
+    it('check md reports all missing Python symbols', async () => {
+        const { errors } = await checkMd(latDir('error-source-ref-py-missing'));
+        expect(errors).toHaveLength(4);
+        const byTarget = new Map(errors.map((e) => [e.target, e]));
+        const fn = byTarget.get('src/app.py#nonexistent');
+        expect(fn).toBeDefined();
+        expect(fn.message).toContain('symbol "nonexistent" not found');
+        const cls = byTarget.get('src/app.py#MissingClass');
+        expect(cls).toBeDefined();
+        expect(cls.message).toContain('symbol "MissingClass" not found');
+        const v = byTarget.get('src/app.py#MISSING_VAR');
+        expect(v).toBeDefined();
+        expect(v.message).toContain('symbol "MISSING_VAR" not found');
+        const method = byTarget.get('src/app.py#Greeter#missing_method');
+        expect(method).toBeDefined();
+        expect(method.message).toContain('symbol "Greeter#missing_method" not found');
+    });
+});
+describe('error-source-ref-bad-file', () => {
+    it('check md detects wiki link to nonexistent source file', async () => {
+        const { errors } = await checkMd(latDir('error-source-ref-bad-file'));
+        expect(errors).toHaveLength(1);
+        expect(errors[0].target).toBe('src/missing.ts#foo');
+        expect(errors[0].message).toContain('file "src/missing.ts" not found');
+    });
+});
+describe('source-ref-rs-valid', () => {
+    it('resolves Rust function, struct, trait, method, const, and enum refs without errors', async () => {
+        // docs.md links: greet (fn), Greeter (struct), Greeter#greet (method),
+        // Greeting (trait), DEFAULT_NAME (const), Color (enum)
+        const { errors } = await checkMd(latDir('source-ref-rs-valid'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('source-ref-go-valid', () => {
+    it('resolves Go function, struct, method, interface, and const refs without errors', async () => {
+        // docs.md links: Greet (func), Greeter (struct), Greeter#Greet (method),
+        // NewGreeter (func), Greeting (interface), DefaultName (const)
+        const { errors } = await checkMd(latDir('source-ref-go-valid'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('source-ref-dart-valid', () => {
+    // @lat: [[tests/check-md#Passes with valid links#Passes with Dart source symbol links]]
+    it('resolves Dart declarations and nested members without errors', async () => {
+        const { errors } = await checkMd(latDir('source-ref-dart-valid'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('source-ref-java-valid', () => {
+    // @lat: [[tests/check-md#Passes with valid links#Passes with Java source symbol links]]
+    it('resolves Java types and nested members without errors', async () => {
+        const { errors } = await checkMd(latDir('source-ref-java-valid'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('error-source-ref-rs-missing', () => {
+    it('check md reports all missing Rust symbols', async () => {
+        const { errors } = await checkMd(latDir('error-source-ref-rs-missing'));
+        expect(errors).toHaveLength(4);
+        const byTarget = new Map(errors.map((e) => [e.target, e]));
+        const fn = byTarget.get('src/app.rs#nonexistent');
+        expect(fn).toBeDefined();
+        expect(fn.message).toContain('symbol "nonexistent" not found');
+        const st = byTarget.get('src/app.rs#MissingStruct');
+        expect(st).toBeDefined();
+        expect(st.message).toContain('symbol "MissingStruct" not found');
+        const cnst = byTarget.get('src/app.rs#MISSING_CONST');
+        expect(cnst).toBeDefined();
+        expect(cnst.message).toContain('symbol "MISSING_CONST" not found');
+        const method = byTarget.get('src/app.rs#Greeter#missing_method');
+        expect(method).toBeDefined();
+        expect(method.message).toContain('symbol "Greeter#missing_method" not found');
+    });
+});
+describe('error-source-ref-go-missing', () => {
+    it('check md reports all missing Go symbols', async () => {
+        const { errors } = await checkMd(latDir('error-source-ref-go-missing'));
+        expect(errors).toHaveLength(4);
+        const byTarget = new Map(errors.map((e) => [e.target, e]));
+        const fn = byTarget.get('src/app.go#nonexistent');
+        expect(fn).toBeDefined();
+        expect(fn.message).toContain('symbol "nonexistent" not found');
+        const st = byTarget.get('src/app.go#MissingStruct');
+        expect(st).toBeDefined();
+        expect(st.message).toContain('symbol "MissingStruct" not found');
+        const cnst = byTarget.get('src/app.go#MISSING_CONST');
+        expect(cnst).toBeDefined();
+        expect(cnst.message).toContain('symbol "MISSING_CONST" not found');
+        const method = byTarget.get('src/app.go#Greeter#MissingMethod');
+        expect(method).toBeDefined();
+        expect(method.message).toContain('symbol "Greeter#MissingMethod" not found');
+    });
+});
+describe('error-source-ref-dart-missing', () => {
+    it('check md reports all missing Dart symbols', async () => {
+        const { errors } = await checkMd(latDir('error-source-ref-dart-missing'));
+        expect(errors).toHaveLength(4);
+        const byTarget = new Map(errors.map((error) => [error.target, error]));
+        expect(byTarget.get('src/app.dart#nonexistent')?.message).toContain('symbol "nonexistent" not found');
+        expect(byTarget.get('src/app.dart#MissingClass')?.message).toContain('symbol "MissingClass" not found');
+        expect(byTarget.get('src/app.dart#missingName')?.message).toContain('symbol "missingName" not found');
+        expect(byTarget.get('src/app.dart#Greeter#missingMethod')?.message).toContain('symbol "Greeter#missingMethod" not found');
+    });
+});
+describe('error-source-ref-java-missing', () => {
+    it('check md reports all missing Java symbols', async () => {
+        const { errors } = await checkMd(latDir('error-source-ref-java-missing'));
+        expect(errors).toHaveLength(4);
+        const byTarget = new Map(errors.map((error) => [error.target, error]));
+        expect(byTarget.get('src/Greeter.java#nonexistent')?.message).toContain('symbol "nonexistent" not found');
+        expect(byTarget.get('src/Greeter.java#MissingClass')?.message).toContain('symbol "MissingClass" not found');
+        expect(byTarget.get('src/Greeter.java#MISSING_CONST')?.message).toContain('symbol "MISSING_CONST" not found');
+        expect(byTarget.get('src/Greeter.java#Greeter#missingMethod')?.message).toContain('symbol "Greeter#missingMethod" not found');
+    });
+});
+describe('source-ref-c-valid', () => {
+    // @lat: [[tests/check-md#Passes with valid links#Passes with C enum value links]]
+    it('resolves C function, struct, struct field, enum, typedef, define, variable, pointer-returning, and array refs without errors', async () => {
+        // docs.md links across .c and .h: greet (function), Greeter (struct),
+        // Greeter#prefix / Greeter#count (struct fields),
+        // Color (enum), GREEN / JS_TAG_INT / JS_GC_OBJ_TYPE_FUNCTION_BYTECODE /
+        // JS_PROMISE_PENDING (enum values), ErrorCode (typedef), MAX_SIZE (define), DEFAULT_NAME (variable),
+        // make_greeting (pointer-returning fn), split_lines (double-pointer-returning fn),
+        // version_string (array variable), CLAMP (function-like macro)
+        const { errors } = await checkMd(latDir('source-ref-c-valid'));
+        expect(errors).toHaveLength(0);
+    });
+});
+describe('error-source-ref-c-missing', () => {
+    it('check md reports all missing C symbols', async () => {
+        const { errors } = await checkMd(latDir('error-source-ref-c-missing'));
+        expect(errors).toHaveLength(5);
+        const byTarget = new Map(errors.map((e) => [e.target, e]));
+        const fn = byTarget.get('src/app.c#nonexistent');
+        expect(fn).toBeDefined();
+        expect(fn.message).toContain('symbol "nonexistent" not found');
+        const st = byTarget.get('src/app.c#MissingStruct');
+        expect(st).toBeDefined();
+        expect(st.message).toContain('symbol "MissingStruct" not found');
+        const def = byTarget.get('src/app.c#MISSING_DEFINE');
+        expect(def).toBeDefined();
+        expect(def.message).toContain('symbol "MISSING_DEFINE" not found');
+        const v = byTarget.get('src/app.c#MISSING_VAR');
+        expect(v).toBeDefined();
+        expect(v.message).toContain('symbol "MISSING_VAR" not found');
+        const field = byTarget.get('src/app.c#Greeter#nonexistent');
+        expect(field).toBeDefined();
+        expect(field.message).toContain('symbol "Greeter#nonexistent" not found');
+    });
+});
+describe('error-source-ref-unsupported-ext', () => {
+    it('check md reports unsupported extension with list of supported ones', async () => {
+        const { errors } = await checkMd(latDir('error-source-ref-unsupported-ext'));
+        expect(errors).toHaveLength(1);
+        expect(errors[0].target).toBe('src/app.blah#spam');
+        expect(errors[0].message).toContain('unsupported file extension ".blah"');
+        expect(errors[0].message).toContain('Supported:');
+        expect(errors[0].message).toContain('.ts');
+        expect(errors[0].message).toContain('.rs');
+        expect(errors[0].message).toContain('.go');
+        expect(errors[0].message).toContain('.dart');
+    });
+});
+describe('repository-path-refs', () => {
+    const lat = latDir('repository-path-refs');
+    // @lat: [[ref-resolution#Validates dynamic route wiki targets]]
+    it('validates bracketed file, directory, and symbol wiki targets', () => {
+        const result = runCli('bracketed-path-refs', ['check']);
+        expect(result.stderr).toBe('');
+        expect(result.exitCode).toBe(0);
+    });
+    // @lat: [[check-md#Passes with valid links#Accepts repository path links]]
+    it('accepts existing repository files and directories without fragments', async () => {
+        const { errors } = await checkMd(lat);
+        const invalid = new Set(errors.map((error) => error.target));
+        for (const target of [
+            'schema.sql',
+            'CHANGELOG',
+            'README.md',
+            'assets',
+            'assets/',
+            'generated.ts',
+            '.',
+            'src/app.ts',
+            String.raw `src\app.ts`,
+            'src/app.ts#run',
+        ]) {
+            expect(invalid).not.toContain(target);
+        }
+    });
+    // @lat: [[check-md#Detects broken links#Rejects invalid repository path links]]
+    it('rejects missing, escaping, and unsupported-fragment path targets', async () => {
+        const { errors } = await checkMd(lat);
+        expect(errors).toHaveLength(8);
+        const byTarget = new Map(errors.map((error) => [error.target, error]));
+        expect(byTarget.get('missing.sql')?.message).toContain('not found');
+        expect(byTarget.get('missing-dir/')?.message).toContain('not found');
+        expect(byTarget.get('schema.sql#users')?.message).toContain('unsupported file extension ".sql"');
+        expect(byTarget.get('CHANGELOG#entry')?.message).toContain('unsupported file extension "(none)"');
+        expect(byTarget.get('assets#entry')?.message).toContain('directory "assets" cannot have a fragment');
+        expect(byTarget.get('assets.v1#entry')?.message).toContain('directory "assets.v1" cannot have a fragment');
+        expect(byTarget.get('generated.ts#entry')?.message).toContain('directory "generated.ts" cannot have a fragment');
+        expect(byTarget.get('../source-ref-ts-valid')?.message).toContain('must stay within the project root');
+    });
+});
+// --- source file refs ---
+describe('source-file-refs', () => {
+    const lat = latDir('source-ref-ts-valid');
+    const projectRoot = caseDir('source-ref-ts-valid');
+    // @lat: [[tests/refs-e2e#Source symbol query finds md sections]]
+    it('findRefs with source symbol query finds md sections', async () => {
+        const ctx = {
+            latDir: lat,
+            projectRoot,
+            styler: plainStyler,
+            mode: 'cli',
+        };
+        const result = await findRefs(ctx, 'src/app.ts#greet', 'md');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.target.id).toBe('src/app.ts#greet');
+        expect(result.mdRefs.length).toBeGreaterThan(0);
+        const ids = result.mdRefs.map((r) => r.section.id);
+        expect(ids).toContain('lat.md/docs#Docs');
+    });
+    // @lat: [[tests/refs-e2e#File-level query finds all refs to that file]]
+    it('findRefs with file-level query finds all refs to that file', async () => {
+        const ctx = {
+            latDir: lat,
+            projectRoot,
+            styler: plainStyler,
+            mode: 'cli',
+        };
+        const result = await findRefs(ctx, 'src/app.ts', 'md');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.target.id).toBe('src/app.ts');
+        // docs.md references greet, Greeter, Greeter#greet, DEFAULT_NAME — all in src/app.ts
+        expect(result.mdRefs.length).toBeGreaterThan(0);
+    });
+    // @lat: [[tests/refs-e2e#Source query returns no-match for nonexistent file]]
+    it('findRefs with source query returns no-match for nonexistent file', async () => {
+        const ctx = {
+            latDir: lat,
+            projectRoot,
+            styler: plainStyler,
+            mode: 'cli',
+        };
+        // Nonexistent file falls through to section resolution, which also fails
+        const result = await findRefs(ctx, 'src/nonexistent.ts#foo', 'md');
+        expect(result.kind).toBe('no-match');
+    });
+});
+// --- getSection ---
+describe('getSection', () => {
+    // @lat: [[tests/section#Nonexistent section returns no-match]]
+    it('returns no-match for nonexistent section', async () => {
+        const ctx = testCtx('basic-project');
+        const result = await getSection(ctx, 'nonexistent-xyz');
+        expect(result.kind).toBe('no-match');
+    });
+    // @lat: [[tests/section#Full id resolves to section]]
+    it('finds section by full id', async () => {
+        const ctx = testCtx('basic-project');
+        const result = await getSection(ctx, 'lat.md/dev-process#Dev Process#Testing');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.section.id).toBe('lat.md/dev-process#Dev Process#Testing');
+        expect(result.content).toContain('## Testing');
+    });
+    // @lat: [[tests/section#Short id resolves to section]]
+    it('finds section by short id', async () => {
+        const ctx = testCtx('short-ref');
+        const result = await getSection(ctx, 'setup#Install');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.section.id).toBe('lat.md/guides/setup#Setup#Install');
+    });
+    // @lat: [[tests/section#CLI accepts literal and GitHub heading syntax]]
+    it('lat section resolves literal and GitHub-slugged heading paths', () => {
+        const literal = runCli('basic-project', [
+            'section',
+            'dev-process#Testing#Running Tests',
+        ]);
+        const github = runCli('basic-project', [
+            'section',
+            'dev-process#testing#running-tests',
+        ]);
+        expect(literal.exitCode).toBe(0);
+        expect(github.exitCode).toBe(0);
+        expect(github.stderr).toBe('');
+        expect(stripAnsi(github.stdout)).toBe(stripAnsi(literal.stdout));
+        expect(stripAnsi(github.stdout)).toContain('[[lat.md/dev-process#Dev Process#Testing#Running Tests]]');
+    });
+    // @lat: [[tests/section#Section with no refs or links]]
+    it('returns empty refs for section with no refs or links', async () => {
+        const ctx = testCtx('basic-project');
+        const result = await getSection(ctx, 'lat.md/dev-process#Dev Process#Formatting');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.outgoingRefs).toHaveLength(0);
+        expect(result.incomingRefs).toHaveLength(0);
+    });
+    // @lat: [[tests/section#Section with outgoing refs only]]
+    it('returns outgoing refs for section that links to others', async () => {
+        const ctx = testCtx('basic-project');
+        const result = await getSection(ctx, 'lat.md/notes#Notes#Second Topic');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.outgoingRefs.length).toBeGreaterThan(0);
+        expect(result.outgoingRefs[0].resolved.id).toBe('lat.md/dev-process#Dev Process#Testing');
+        expect(result.incomingRefs).toHaveLength(0);
+    });
+    // @lat: [[tests/section#Section with incoming refs only]]
+    it('returns incoming refs for section referenced by others', async () => {
+        const ctx = testCtx('basic-project');
+        const result = await getSection(ctx, 'lat.md/dev-process#Dev Process#Testing');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.outgoingRefs).toHaveLength(0);
+        expect(result.incomingRefs.length).toBeGreaterThan(0);
+        const incomingIds = result.incomingRefs.map((r) => r.section.id);
+        expect(incomingIds).toContain('lat.md/notes#Notes#Second Topic');
+    });
+    // @lat: [[tests/section#Section with both outgoing and incoming refs]]
+    it('returns both outgoing and incoming refs', async () => {
+        const ctx = testCtx('short-ref');
+        const result = await getSection(ctx, 'setup#Install');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.incomingRefs.length).toBeGreaterThan(0);
+        // Verify formatSectionOutput includes incoming
+        const output = formatSectionOutput(ctx, result);
+        expect(output).toContain('Referenced by:');
+        expect(output).toContain('lat.md/links#Links');
+    });
+    // @lat: [[tests/section#Parent section aggregates descendant references]]
+    it('aggregates outgoing refs and code backlinks from descendants', async () => {
+        const ctx = testCtx('section-nested');
+        const result = await getSection(ctx, 'guide#Guide');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.outgoingRefs.map((ref) => ref.resolved.id)).toEqual([
+            'lat.md/target#Target',
+        ]);
+        expect(result.outgoingSourceRefs.map((ref) => ref.target)).toEqual([
+            'src/example.ts#child',
+        ]);
+        expect(result.codeRefs.map((ref) => ref.line)).toEqual([1, 4]);
+        const output = stripAnsi(formatSectionOutput(ctx, result));
+        expect(output).toContain('This section references:');
+        expect(output).toContain('Referenced by code:');
+        expect(output).toContain('@lat: [[guide#Guide#Child]]');
+        expect(output).toContain('@lat: [[guide#Guide#Child#Grandchild]]');
+    });
+    // @lat: [[tests/section#Reference summaries preserve leading paragraphs]]
+    it('renders full reference summaries with a malformed-content safety cap', async () => {
+        const ctx = testCtx('section-nested');
+        const result = await getSection(ctx, 'guide#Guide');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const completeOutput = stripAnsi(formatSectionOutput(ctx, result));
+        expect(completeOutput).toContain('outgoing summary ending.');
+        expect(completeOutput).toContain('incoming summary ending.');
+        result.outgoingRefs[0].resolved.firstParagraph =
+            'x'.repeat(300) + 'content beyond the safety limit';
+        const cappedOutput = stripAnsi(formatSectionOutput(ctx, result));
+        expect(cappedOutput).toContain('x'.repeat(300) + '...');
+        expect(cappedOutput).not.toContain('content beyond the safety limit');
+    });
+    // @lat: [[tests/section#Source refs include line range]]
+    it('TS: outgoingSourceRefs include endLine for function, class, type, interface', async () => {
+        const ctx = testCtx('source-ref-ts-valid');
+        const result = await getSection(ctx, 'lat.md/docs#Docs');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const ref = (t) => result.outgoingSourceRefs.find((r) => r.target === t);
+        // function spans lines 1-3
+        expect(ref('src/app.ts#greet')).toMatchObject({ line: 1, endLine: 3 });
+        // class spans lines 5-9
+        expect(ref('src/app.ts#Greeter')).toMatchObject({ line: 5, endLine: 9 });
+        // const is single-line
+        expect(ref('src/app.ts#DEFAULT_NAME')).toMatchObject({
+            line: 11,
+            endLine: 11,
+        });
+        // type alias spans lines 13-16
+        expect(ref('src/app.ts#Config')).toMatchObject({ line: 13, endLine: 16 });
+        // interface spans lines 18-21
+        expect(ref('src/app.ts#Logger')).toMatchObject({ line: 18, endLine: 21 });
+    });
+    it('Python: outgoingSourceRefs include endLine for function, class, decorated function', async () => {
+        const ctx = testCtx('source-ref-py-valid');
+        const result = await getSection(ctx, 'lat.md/docs#Docs');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const ref = (t) => result.outgoingSourceRefs.find((r) => r.target === t);
+        // plain function: lines 1-2
+        expect(ref('src/app.py#greet')).toMatchObject({ line: 1, endLine: 2 });
+        // class: lines 11-17
+        expect(ref('src/app.py#Greeter')).toMatchObject({ line: 11, endLine: 17 });
+        // decorated function: lines 7-9 (includes decorator)
+        expect(ref('src/app.py#decorated_greet')).toMatchObject({
+            line: 7,
+            endLine: 9,
+        });
+        // decorated class: lines 19-22 (includes decorator)
+        expect(ref('src/app.py#DecoratedGreeter')).toMatchObject({
+            line: 19,
+            endLine: 22,
+        });
+    });
+    // @lat: [[tests/check-md#Passes with valid links#Passes with C struct field links]]
+    it('C: outgoingSourceRefs include endLine for struct, struct field, function, macro', async () => {
+        const ctx = testCtx('source-ref-c-valid');
+        const result = await getSection(ctx, 'lat.md/docs#Docs');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const ref = (t) => result.outgoingSourceRefs.find((r) => r.target === t);
+        // struct in header: lines 4-7 (added count field)
+        expect(ref('src/app.h#Greeter')).toMatchObject({ line: 4, endLine: 7 });
+        // struct field: pointer member (line 5)
+        expect(ref('src/app.h#Greeter#prefix')).toMatchObject({
+            line: 5,
+            endLine: 5,
+        });
+        // struct field: plain member (line 6)
+        expect(ref('src/app.h#Greeter#count')).toMatchObject({
+            line: 6,
+            endLine: 6,
+        });
+        // enum: line 9
+        expect(ref('src/app.h#Color')).toMatchObject({ line: 9, endLine: 9 });
+        // function in .c: lines 4-6
+        expect(ref('src/app.c#greet')).toMatchObject({ line: 4, endLine: 6 });
+        // multi-line function: lines 15-17
+        expect(ref('src/app.c#make_greeting')).toMatchObject({
+            line: 15,
+            endLine: 17,
+        });
+    });
+    it('Rust: outgoingSourceRefs include endLine for struct, impl method, trait, enum', async () => {
+        const ctx = testCtx('source-ref-rs-valid');
+        const result = await getSection(ctx, 'lat.md/docs#Docs');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const ref = (t) => result.outgoingSourceRefs.find((r) => r.target === t);
+        // function: lines 1-3
+        expect(ref('src/app.rs#greet')).toMatchObject({ line: 1, endLine: 3 });
+        // struct: lines 5-7
+        expect(ref('src/app.rs#Greeter')).toMatchObject({ line: 5, endLine: 7 });
+        // trait: lines 21-23
+        expect(ref('src/app.rs#Greeting')).toMatchObject({ line: 21, endLine: 23 });
+        // enum: lines 27-31
+        expect(ref('src/app.rs#Color')).toMatchObject({ line: 27, endLine: 31 });
+    });
+    it('Go: outgoingSourceRefs include endLine for struct, function, interface', async () => {
+        const ctx = testCtx('source-ref-go-valid');
+        const result = await getSection(ctx, 'lat.md/docs#Docs');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const ref = (t) => result.outgoingSourceRefs.find((r) => r.target === t);
+        // function: lines 5-7
+        expect(ref('src/app.go#Greet')).toMatchObject({ line: 5, endLine: 7 });
+        // struct: lines 9-11
+        expect(ref('src/app.go#Greeter')).toMatchObject({ line: 9, endLine: 11 });
+        // function: lines 17-19
+        expect(ref('src/app.go#NewGreeter')).toMatchObject({
+            line: 17,
+            endLine: 19,
+        });
+        // interface: lines 21-23
+        expect(ref('src/app.go#Greeting')).toMatchObject({ line: 21, endLine: 23 });
+    });
+    it('Dart: outgoingSourceRefs include complete annotated and member ranges', async () => {
+        const ctx = testCtx('source-ref-dart-valid');
+        const result = await getSection(ctx, 'lat.md/docs#Docs');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const ref = (target) => result.outgoingSourceRefs.find((reference) => reference.target === target);
+        expect(ref('src/app.dart#greet')).toMatchObject({ line: 7, endLine: 10 });
+        expect(ref('src/app.dart#Greeter')).toMatchObject({
+            line: 12,
+            endLine: 26,
+        });
+        expect(ref('src/app.dart#Greeter#greet')).toMatchObject({
+            line: 19,
+            endLine: 21,
+        });
+        expect(ref('src/app.dart#Greeting#wave')).toMatchObject({
+            line: 29,
+            endLine: 29,
+        });
+        expect(ref('src/app.dart#UserId#format')).toMatchObject({
+            line: 44,
+            endLine: 44,
+        });
+    });
+    it('Java: outgoingSourceRefs include annotated types and member ranges', async () => {
+        const ctx = testCtx('source-ref-java-valid');
+        const result = await getSection(ctx, 'lat.md/docs#Docs');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const ref = (target) => result.outgoingSourceRefs.find((reference) => reference.target === target);
+        expect(ref('src/Greeter.java#Greeter')).toMatchObject({
+            line: 3,
+            endLine: 25,
+        });
+        expect(ref('src/Greeter.java#Greeter#greet')).toMatchObject({
+            line: 13,
+            endLine: 16,
+        });
+        expect(ref('src/Greeter.java#Point#Point')).toMatchObject({
+            line: 53,
+            endLine: 55,
+        });
+        expect(ref('src/Greeter.java#Marker#value')).toMatchObject({
+            line: 63,
+            endLine: 63,
+        });
+    });
+    // @lat: [[tests/section#formatSectionOutput renders source ref line ranges]]
+    it('formatSectionOutput renders source ref line ranges', async () => {
+        const ctx = testCtx('source-ref-ts-valid');
+        const result = await getSection(ctx, 'lat.md/docs#Docs');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const output = stripAnsi(formatSectionOutput(ctx, result));
+        // Multi-line function: should show range
+        expect(output).toContain('src/app.ts:1-3');
+        // Multi-line class: should show range
+        expect(output).toContain('src/app.ts:5-9');
+        // Single-line const: should show just the line
+        expect(output).toMatch(/src\/app\.ts:11\b/);
+        // Type alias: should show range
+        expect(output).toContain('src/app.ts:13-16');
+        // Interface: should show range
+        expect(output).toContain('src/app.ts:18-21');
+    });
+    // @lat: [[tests/section#formatSectionOutput marks source snippets as inline code]]
+    it('formatSectionOutput marks source snippets as robust Markdown inline code', async () => {
+        const sourceCtx = testCtx('source-ref-ts-valid');
+        const sourceResult = await getSection(sourceCtx, 'lat.md/docs#Docs');
+        expect(sourceResult.kind).toBe('found');
+        if (sourceResult.kind !== 'found')
+            return;
+        const sourceOutput = stripAnsi(formatSectionOutput(sourceCtx, sourceResult));
+        expect(sourceOutput).toContain('| `export function greet(name: string): string {`');
+        expect(sourceOutput).toContain('| ``  return `Hello, ${name}!`;``');
+        const backlinkCtx = testCtx('section-nested');
+        const backlinkResult = await getSection(backlinkCtx, 'guide#Guide');
+        expect(backlinkResult.kind).toBe('found');
+        if (backlinkResult.kind !== 'found')
+            return;
+        const backlinkOutput = stripAnsi(formatSectionOutput(backlinkCtx, backlinkResult));
+        const backlinkAnnotation = '// @' + 'lat: [[guide#Guide#Child]]';
+        expect(backlinkOutput).toContain(`| \`${backlinkAnnotation}\``);
+    });
+    // @lat: [[tests/section#formatSectionOutput includes all parts]]
+    it('formatSectionOutput includes content and refs', async () => {
+        const ctx = testCtx('basic-project');
+        const result = await getSection(ctx, 'lat.md/notes#Notes#Second Topic');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        const output = formatSectionOutput(ctx, result);
+        expect(output).toContain('[[lat.md/notes#Notes#Second Topic]]');
+        expect(output).toContain('See [[dev-process#Testing]]');
+        expect(output).toContain('This section references:');
+        expect(output).toContain('lat.md/dev-process#Dev Process#Testing');
+    });
+});
+// --- check sections ---
+describe('error-missing-body', () => {
+    // @lat: [[check-sections#Detects missing leading paragraph]]
+    it('check sections detects sections without a leading paragraph', async () => {
+        const errors = await checkSections(latDir('error-missing-body'));
+        const missing = errors.filter((e) => e.message.includes('has no leading paragraph'));
+        expect(missing).toHaveLength(2);
+        expect(missing[0].target).toBe('lat.md/notes#Notes');
+        expect(missing[1].target).toBe('lat.md/notes#Notes#First');
+    });
+});
+describe('error-long-body', () => {
+    // @lat: [[check-sections#Detects overly long leading paragraph]]
+    it('check sections detects overly long leading paragraph', async () => {
+        const errors = await checkSections(latDir('error-long-body'));
+        expect(errors).toHaveLength(1);
+        expect(errors[0].target).toBe('lat.md/notes#Notes');
+        expect(errors[0].message).toContain('384 characters');
+        expect(errors[0].message).toContain('max 250');
+    });
+    // @lat: [[check-sections#Excludes wiki link content from character count]]
+    it('excludes wiki link content from character count', async () => {
+        const errors = await checkSections(latDir('error-long-body'));
+        const linkSection = errors.find((e) => e.target === 'lat.md/notes#Notes#With Links');
+        expect(linkSection).toBeUndefined();
+    });
+});
+// --- non-md file in lat.md/ ---
+describe('error-non-md-file', () => {
+    // @lat: [[check-index#Detects non-markdown file]]
+    it('reports an unreferenced non-.md file but allows a linked resource', async () => {
+        const errors = await checkIndex(latDir('error-non-md-file'));
+        const nonMd = errors.filter((e) => e.message.includes('not a .md file'));
+        expect(nonMd).toHaveLength(1);
+        expect(nonMd[0].message).toContain('README');
+        expect(nonMd[0].message).not.toContain('asset.svg');
+    });
+    // @lat: [[check-index#Non-markdown files excluded from index listing]]
+    it('does not include non-.md file in missing index entries', async () => {
+        const errors = await checkIndex(latDir('error-non-md-file'));
+        const indexErrors = errors.filter((e) => e.message.includes('missing entries') || e.snippet);
+        for (const err of indexErrors) {
+            expect(err.snippet ?? '').not.toContain('README');
+        }
+    });
+});
+// --- scanCodeRefs TS fallback (no rg) ---
+// Re-runs a representative subset of code-ref tests with ripgrep disabled
+// to ensure the pure-TypeScript scanner produces identical results.
+describe('scanCodeRefs TS fallback (_LAT_DISABLE_RG)', () => {
+    let origEnv;
+    beforeAll(() => {
+        origEnv = process.env._LAT_DISABLE_RG;
+        process.env._LAT_DISABLE_RG = '1';
+    });
+    afterAll(() => {
+        if (origEnv === undefined) {
+            delete process.env._LAT_DISABLE_RG;
+        }
+        else {
+            process.env._LAT_DISABLE_RG = origEnv;
+        }
+    });
+    // @lat: [[tests/ts-fallback#scanCodeRefs finds refs without rg]]
+    it('scanCodeRefs finds refs without rg', async () => {
+        const { refs } = await scanCodeRefs(caseDir('python-code-ref'));
+        expect(refs).toHaveLength(3);
+        expect(refs[0].target).toBe('Specs#Feature A');
+        expect(refs[0].file).toContain('app.py');
+        expect(refs[1].target).toBe('Specs#Feature B');
+        expect(refs[2].target).toBe('Specs#Nonexistent');
+    });
+    // @lat: [[tests/ts-fallback#checkCodeRefs detects dangling ref without rg]]
+    it('checkCodeRefs detects dangling ref without rg', async () => {
+        const { errors } = await checkCodeRefs(latDir('error-dangling-code-ref'));
+        const dangling = errors.filter((e) => e.target === 'Alpha#Nonexistent');
+        expect(dangling).toHaveLength(1);
+        expect(dangling[0].message).toContain('no matching section found');
+    });
+    // @lat: [[tests/ts-fallback#gitignore filtering works without rg]]
+    it('gitignore filtering works without rg', async () => {
+        const root = caseDir('gitignore-filtering');
+        const [{ refs }, files] = await Promise.all([
+            scanCodeRefs(root),
+            discoverSourceFiles(root),
+        ]);
+        expect(refs).toHaveLength(1);
+        expect(refs[0].file).toContain('src/app.ts');
+        expect(files).toHaveLength(1);
+    });
+    // @lat: [[tests/ts-fallback#findRefs with code scope works without rg]]
+    it('findRefs with code scope works without rg', async () => {
+        const result = await findRefs(testCtx('short-ref'), 'setup#Configure', 'code');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.codeRefs.length).toBeGreaterThan(0);
+    });
+    // @lat: [[tests/ts-fallback#getSection includes code back-refs without rg]]
+    it('getSection includes code back-refs without rg', async () => {
+        const result = await getSection(testCtx('short-ref'), 'setup#Configure');
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found')
+            return;
+        expect(result.codeRefs.length).toBeGreaterThan(0);
+        expect(result.codeRefs[0].file).toContain('app.ts');
+    });
+});

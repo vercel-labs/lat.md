@@ -1,0 +1,267 @@
+import { posix } from 'node:path';
+import { buildFileIndex, buildSectionSlugIndex, flattenSections, resolveRef, } from '@lat.md/core/lattice-model';
+import { linkedSection } from './references.js';
+import { viewSourceTarget } from './source-target.js';
+import { isDocumentPath, stripDocumentExtension, } from '@lat.md/core/document-formats';
+import { documentUrl } from './document-route.js';
+function encodedPath(path) {
+    return path.split('/').map(encodeURIComponent).join('/');
+}
+function sourceUrl(path, symbol = '', line = 0) {
+    const search = line > 0 ? `?at=${line}` : '';
+    const fragment = symbol ? `#${encodeURIComponent(symbol)}` : '';
+    return `/code/${encodedPath(path)}${search}${fragment}`;
+}
+function externalUrl(target) {
+    const colon = target.indexOf(':');
+    const hash = target.indexOf('#', colon + 1);
+    const handle = target.slice(0, colon);
+    const path = hash === -1 ? target.slice(colon + 1) : target.slice(colon + 1, hash);
+    const fragment = hash === -1 ? '' : target.slice(hash + 1);
+    return `/external/${encodeURIComponent(handle)}/${encodedPath(path)}${fragment ? `#${encodeURIComponent(fragment)}` : ''}`;
+}
+function externalNodeTarget(target) {
+    if (!isDocumentPath(target.resolvedPath))
+        return target.identity;
+    const hash = target.identity.indexOf('#');
+    return hash === -1 ? target.identity : target.identity.slice(0, hash);
+}
+function pathBreadcrumbs(path) {
+    return stripDocumentExtension(path).split('/');
+}
+function nodeLabelFromPath(path) {
+    return posix.basename(stripDocumentExtension(path));
+}
+/** Project the cached view state into stable nodes and weighted relationships. */
+export function buildViewGraph(markdownFiles, codeFiles, allSections, diagnostics, git, generation, references, external) {
+    const files = [...markdownFiles].sort((left, right) => left.path.localeCompare(right.path));
+    const sections = flattenSections(allSections);
+    const sectionIds = new Set(sections.map((section) => section.id.toLowerCase()));
+    const fileIndex = buildFileIndex(allSections);
+    const slugIndex = buildSectionSlugIndex(allSections);
+    const sectionById = new Map(sections.map((section) => [section.id.toLowerCase(), section]));
+    const sectionsByPath = new Map();
+    const documentNodeBySection = new Map();
+    const nodes = new Map();
+    const edges = new Map();
+    const invalidWikiTargets = new Set();
+    for (const [path, errors] of diagnostics) {
+        for (const error of errors) {
+            invalidWikiTargets.add(`${path}\0${error.line}\0${error.target}`);
+        }
+    }
+    const addNode = (node) => {
+        if (!nodes.has(node.id))
+            nodes.set(node.id, node);
+        return node.id;
+    };
+    const addEdge = (from, to, kind) => {
+        if (from === to)
+            return;
+        const key = `${kind}\0${from}\0${to}`;
+        const existing = edges.get(key);
+        if (existing) {
+            existing.weight++;
+            return;
+        }
+        edges.set(key, {
+            id: `edge:${kind}:${from}->${to}`,
+            from,
+            to,
+            kind,
+            weight: 1,
+        });
+    };
+    for (const file of files) {
+        const flat = flattenSections(file.sections);
+        sectionsByPath.set(file.path.toLowerCase(), flat);
+        const root = file.sections[0];
+        const id = `document:${file.path}`;
+        for (const section of flat) {
+            documentNodeBySection.set(section.id.toLowerCase(), id);
+        }
+        const errorCount = diagnostics.get(file.path)?.length ?? 0;
+        addNode({
+            id,
+            kind: 'document',
+            label: root?.heading ?? nodeLabelFromPath(file.path),
+            url: documentUrl(file.path),
+            breadcrumbs: pathBreadcrumbs(file.path),
+            documentPath: file.path,
+            sectionId: root?.id,
+            inDegree: flat.reduce((count, section) => count +
+                (references.incomingBySection.get(section.id.toLowerCase())?.length ??
+                    0), 0),
+            outDegree: 0,
+            ...(git.files.get(file.path)?.status
+                ? { gitStatus: git.files.get(file.path)?.status }
+                : {}),
+            ...(errorCount > 0 ? { errorCount } : {}),
+        });
+    }
+    const documentNodeForSection = (section) => documentNodeBySection.get(section.id.toLowerCase()) ?? null;
+    for (const file of files) {
+        const fileSections = flattenSections(file.sections).sort((left, right) => left.startLine - right.startLine);
+        const containingSection = (line) => fileSections.filter((section) => section.startLine <= line).at(-1) ??
+            file.sections[0];
+        for (const ref of file.wikiRefs) {
+            const sourceSection = sectionById.get(ref.fromSection.toLowerCase());
+            const from = sourceSection ? documentNodeForSection(sourceSection) : null;
+            if (!from)
+                continue;
+            let externalTarget = null;
+            try {
+                externalTarget = external?.parse(ref.target) ?? null;
+            }
+            catch {
+                continue;
+            }
+            if (externalTarget) {
+                const target = externalNodeTarget(externalTarget);
+                const document = isDocumentPath(externalTarget.resolvedPath);
+                const to = addNode({
+                    id: `${document ? 'external-document' : 'external-source'}:${target}`,
+                    kind: document ? 'document' : 'source',
+                    label: document
+                        ? nodeLabelFromPath(externalTarget.resolvedPath)
+                        : externalTarget.fragment ||
+                            posix.basename(externalTarget.authoredPath),
+                    url: externalUrl(target),
+                    breadcrumbs: [
+                        externalTarget.handle,
+                        ...externalTarget.authoredPath.split('/'),
+                        ...(!document && externalTarget.fragment
+                            ? [externalTarget.fragment]
+                            : []),
+                    ],
+                    externalTarget: target,
+                    inDegree: 0,
+                    outDegree: 0,
+                });
+                addEdge(from, to, document ? 'wiki' : 'source');
+                continue;
+            }
+            const source = viewSourceTarget(ref.target);
+            if (source) {
+                if (invalidWikiTargets.has(`${file.path}\0${ref.line}\0${ref.target}`)) {
+                    continue;
+                }
+                const sourceId = addNode({
+                    id: `source:${source.path}${source.symbol ? `#${source.symbol}` : ''}`,
+                    kind: 'source',
+                    label: source.symbol || posix.basename(source.path),
+                    url: sourceUrl(source.path, source.symbol),
+                    breadcrumbs: [
+                        ...source.path.split('/'),
+                        ...(source.symbol ? [source.symbol] : []),
+                    ],
+                    sourcePath: source.path,
+                    symbol: source.symbol || undefined,
+                    inDegree: 0,
+                    outDegree: 0,
+                });
+                addEdge(from, sourceId, 'source');
+                continue;
+            }
+            const resolved = resolveRef(ref.target, sectionIds, fileIndex, slugIndex);
+            if (resolved.ambiguous)
+                continue;
+            const target = sectionById.get(resolved.resolved.toLowerCase());
+            const to = target ? documentNodeForSection(target) : null;
+            if (to)
+                addEdge(from, to, 'wiki');
+        }
+        for (const link of file.markdownLinks) {
+            if (link.kind !== 'link')
+                continue;
+            const target = linkedSection(link.url, file.path, sectionsByPath);
+            const source = containingSection(link.line);
+            const from = source ? documentNodeForSection(source) : null;
+            const to = target ? documentNodeForSection(target) : null;
+            if (from && to)
+                addEdge(from, to, 'markdown');
+        }
+    }
+    for (const file of [...codeFiles].sort((left, right) => left.path.localeCompare(right.path))) {
+        for (const ref of [...file.refs].sort((left, right) => left.line - right.line)) {
+            let externalTarget = null;
+            try {
+                externalTarget = external?.parse(ref.target) ?? null;
+            }
+            catch {
+                continue;
+            }
+            if (externalTarget) {
+                const target = externalNodeTarget(externalTarget);
+                const document = isDocumentPath(externalTarget.resolvedPath);
+                const to = addNode({
+                    id: `${document ? 'external-document' : 'external-source'}:${target}`,
+                    kind: document ? 'document' : 'source',
+                    label: document
+                        ? nodeLabelFromPath(externalTarget.resolvedPath)
+                        : externalTarget.fragment ||
+                            posix.basename(externalTarget.authoredPath),
+                    url: externalUrl(target),
+                    breadcrumbs: [
+                        externalTarget.handle,
+                        ...externalTarget.authoredPath.split('/'),
+                    ],
+                    externalTarget: target,
+                    inDegree: 0,
+                    outDegree: 0,
+                });
+                const snippet = file.lines[ref.line - 1]?.trim() ?? '';
+                const from = addNode({
+                    id: `code-ref:${file.path}:${ref.line}`,
+                    kind: 'code-reference',
+                    label: `${posix.basename(file.path)}:${ref.line}`,
+                    url: sourceUrl(file.path, '', ref.line),
+                    breadcrumbs: [...file.path.split('/'), `line ${ref.line}`],
+                    sourcePath: file.path,
+                    line: ref.line,
+                    snippet,
+                    inDegree: 0,
+                    outDegree: 0,
+                });
+                addEdge(from, to, 'code-mention');
+                continue;
+            }
+            const resolved = resolveRef(ref.target, sectionIds, fileIndex, slugIndex);
+            if (resolved.ambiguous)
+                continue;
+            const target = sectionById.get(resolved.resolved.toLowerCase());
+            const to = target ? documentNodeForSection(target) : null;
+            if (!to)
+                continue;
+            const snippet = file.lines[ref.line - 1]?.trim() ?? '';
+            const from = addNode({
+                id: `code-ref:${file.path}:${ref.line}`,
+                kind: 'code-reference',
+                label: `${posix.basename(file.path)}:${ref.line}`,
+                url: sourceUrl(file.path, '', ref.line),
+                breadcrumbs: [...file.path.split('/'), `line ${ref.line}`],
+                sourcePath: file.path,
+                line: ref.line,
+                snippet,
+                inDegree: 0,
+                outDegree: 0,
+            });
+            addEdge(from, to, 'code-mention');
+        }
+    }
+    for (const edge of edges.values()) {
+        const source = nodes.get(edge.from);
+        const target = nodes.get(edge.to);
+        if (source)
+            source.outDegree += edge.weight;
+        // Local documents use the sum of their headings' displayed backlink counts,
+        // not visual edge weights (which omit self-links and count repeat links).
+        if (target && !target.documentPath)
+            target.inDegree += edge.weight;
+    }
+    return {
+        generation,
+        nodes: [...nodes.values()].sort((left, right) => left.id.localeCompare(right.id)),
+        edges: [...edges.values()].sort((left, right) => left.id.localeCompare(right.id)),
+    };
+}
