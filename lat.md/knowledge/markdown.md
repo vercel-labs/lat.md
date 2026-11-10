@@ -8,6 +8,8 @@ GitHub-flavored pipe tables are parsed as structured rows and cells, so `lat ui`
 
 Table syntax is supported by the shared [[parser#Tables|parser extension]], including inline Markdown inside cells.
 
+Document and search-preview table cells have a minimum width in [[view/src/styles.css]] to keep narrow columns readable. Tables scroll horizontally when their columns cannot fit in the available space.
+
 ## Strikethrough
 
 GitHub-flavored single- or double-tilde delimiters render obsolete text with semantic `del` markup while preserving the authored delimiters during serialization.

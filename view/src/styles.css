@@ -1784,6 +1784,7 @@ a {
 
 .markdown th,
 .markdown td {
+  min-width: 8rem;
   padding: 8px 12px;
   border-bottom: 1px solid var(--panel-border);
   vertical-align: baseline;
@@ -3043,6 +3044,7 @@ a.wiki-link-active {
 }
 .search-passage td,
 .search-passage th {
+  min-width: 8rem;
   padding: 5px 9px;
   border: 1px solid var(--panel-border);
   text-align: left;
