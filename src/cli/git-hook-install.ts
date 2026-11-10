@@ -111,7 +111,10 @@ export function installGitHook(
         detail: `Existing ${path} preserved. Add \`${command}\` to its workflow; preserve existing exit codes. Lat has not installed a Git hook.`,
       };
     }
-    if (readFileSync(path, 'utf8') === content && (info.mode & 0o111) !== 0) {
+    // Windows does not expose Unix executable bits; Git runs the shell hook there.
+    const executable =
+      process.platform === 'win32' || (info.mode & 0o111) !== 0;
+    if (readFileSync(path, 'utf8') === content && executable) {
       return { status: 'already configured', detail: path };
     }
   } catch (error) {

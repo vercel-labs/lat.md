@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { setImmediate } from 'node:timers/promises';
 import { isAgentCommit } from '../src/cli/git-hook.js';
 import { installGitHook } from '../src/cli/git-hook-install.js';
 import { writeExperiments } from '../src/cli/experiments.js';
@@ -105,10 +106,13 @@ function hook(root: string, extra: Record<string, string> = {}, agent = true) {
     },
   );
 }
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllEnvs();
   for (const dir of directories.splice(0))
     rmSync(dir, { recursive: true, force: true });
+  // Synchronous Git/CLI calls can keep the worker busy for over a minute across
+  // tests. Let Vitest receive reporting RPC replies between those calls.
+  await setImmediate();
 });
 
 // @lat: [[tests/hook#Agent detection protects manual commits]]
@@ -427,6 +431,11 @@ it('installs and updates its hook without replacing custom or edited hooks', () 
   const path = join(root, '.git/hooks/pre-commit');
   expect(installGitHook(join(root, 'nested'), invocation).status).toBe(
     'installed',
+  );
+  expect(installGitHook(root, invocation).status).toBe('already configured');
+  chmodSync(path, 0o644);
+  expect(installGitHook(root, invocation).status).toBe(
+    process.platform === 'win32' ? 'already configured' : 'installed',
   );
   expect(installGitHook(root, invocation).status).toBe('already configured');
   expect(

@@ -9,6 +9,8 @@ Git and agent integration tests verify staged validation, manual-commit exclusio
 
 Tests use real temporary Git repositories and invoke the source CLI, including actual commits with Git-provided indexes and linked worktrees. Implementations live in [[tests/git-hook.test.ts]] and [[tests/hook.test.ts]].
 
+The Git-hook suite yields to the event loop between tests so synchronous subprocess calls do not starve Vitest's reporting messages on slower runners.
+
 ## Legacy stop hooks are silent
 
 In opted-in projects, Claude, Codex, and Cursor stop commands exit successfully without reading stdin or validating broken projects, so stale settings do not interrupt agents.
@@ -60,6 +62,8 @@ Malformed exclusion lists, absolute paths, and dot components fail validation in
 ## Installs only owned Git hooks
 
 Fresh hooks install and refresh idempotently. Existing custom hooks and edited Lat hooks remain unchanged, with integration instructions instead of replacement.
+
+[[src/cli/git-hook-install.ts#installGitHook]] repairs missing executable bits on Unix. Windows treats matching hook content as already configured because Unix executable bits are unavailable there; repeated setup must not rewrite that hook.
 
 ## Preserves hook managers and custom paths
 
