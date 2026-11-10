@@ -192,8 +192,11 @@ it('suggests review even with Lat edits and allows a real initial commit', () =>
     env: { ...cleanEnv(), AI_AGENT: 'codex' },
   });
   expect(result.status, result.stderr).toBe(0);
-  expect(result.stderr.match(/Lat suggestion:/g)).toHaveLength(1);
+  expect(
+    result.stderr.match(/IMPORTANT: lat precommit hook suggests/g),
+  ).toHaveLength(1);
   expect(result.stderr).toContain('feel free to ignore');
+  expect(result.stderr).toContain('it does not block the commit.\n\n\n');
   expect(git(root, 'status', '--porcelain')).toBe('');
 });
 
@@ -218,7 +221,7 @@ it('ignores unstaged work and documentation churn but counts staged deletions', 
   git(root, 'add', path);
   const staged = hook(root);
   expect(staged.status, staged.stderr).toBe(0);
-  expect(staged.stderr).toContain('Lat suggestion:');
+  expect(staged.stderr).toContain('IMPORTANT: lat precommit hook suggests');
   git(root, 'commit', '-qm', 'source');
   write(root, path, source.replace('= 0', '= 10'));
   git(root, 'add', path);
@@ -230,12 +233,12 @@ it('ignores unstaged work and documentation churn but counts staged deletions', 
   git(root, 'rm', '-f', path);
   const deleted = hook(root);
   expect(deleted.status, deleted.stderr).toBe(0);
-  expect(deleted.stderr).toContain('Lat suggestion:');
+  expect(deleted.stderr).toContain('IMPORTANT: lat precommit hook suggests');
   write(root, 'lat.md/lat.md', '# Project\n\n[[missing]]\n');
   git(root, 'add', 'lat.md/lat.md');
   const broken = hook(root);
   expect(broken.status).toBe(1);
-  expect(broken.stderr).toContain('Lat suggestion:');
+  expect(broken.stderr).toContain('IMPORTANT: lat precommit hook suggests');
   expect(broken.stderr).toContain('staged validation failed');
 });
 
@@ -268,7 +271,9 @@ it('limits review suggestions to opted-in projects outside excluded subtrees', (
   git(root, 'add', '.');
   const inside = hook(root);
   expect(inside.status, inside.stderr).toBe(0);
-  expect(inside.stderr.match(/Lat suggestion:/g)).toHaveLength(1);
+  expect(
+    inside.stderr.match(/IMPORTANT: lat precommit hook suggests/g),
+  ).toHaveLength(1);
 });
 
 // @lat: [[tests/hook#Checks deletions and nested projects]]

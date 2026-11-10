@@ -85,7 +85,7 @@ function suggestDocumentationReview(
       codeLines += Number(match[1]) + Number(match[2]);
       if (codeLines >= REVIEW_CODE_LINES) {
         console.error(
-          'Lat suggestion: consider reviewing the staged code and lat.md changes to check that important behavior, architecture, and test changes are covered. If this commit needs no documentation update, feel free to ignore this reminder; it does not block the commit.',
+          'IMPORTANT: lat precommit hook suggests reviewing the staged code and lat.md changes to check that important behavior, architecture, and test changes are covered. If this commit needs no documentation update, feel free to ignore this reminder; it does not block the commit.\n\n',
         );
         return;
       }
