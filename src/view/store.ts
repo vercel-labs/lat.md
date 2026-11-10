@@ -921,7 +921,7 @@ export class ViewStore {
   }
 
   private async applyRefresh(paths: string[], pollGit: boolean): Promise<void> {
-    if (this.options.sharingPolicy) {
+    if (this.options.sharingPolicy && !pollGit) {
       try {
         const next = await createViewStore(this.latDir, this.projectRoot, {
           ...this.options,
@@ -1131,7 +1131,6 @@ export async function createViewStore(
       ...options,
       ...(await options.sharingPolicy()),
       filterMarkdown: true,
-      git: false,
       externalIgnoreLocal: true,
     };
   }

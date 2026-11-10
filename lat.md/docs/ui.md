@@ -16,7 +16,7 @@ Use `lat ui --host 0.0.0.0` to listen on all IPv4 interfaces, or pass a specific
 
 Non-loopback addresses and hostnames enable read-only sharing: public vault Markdown and explicitly linked public source files, project Markdown, and resources are available. In Git projects, add those files to Git first. Hidden, ignored, untracked, and unlinked files remain private, including local configuration and source files mentioned only by backlinks. Linked external sources use pinned content instead of local overrides.
 
-Sharing disables editing, Git diffs, semantic search, and `lat section` output. Use the default loopback listener for the full local workflow. Removing links or adding ignore rules updates sharing permissions when the server refreshes.
+Sharing includes Git diffs and change indicators for public Markdown; `--no-git` disables them. Editing, semantic search, and `lat section` output remain loopback-only. Removing links or adding ignore rules updates sharing permissions when the server refreshes.
 
 Use the sidebar and table of contents to navigate, or follow references between explanations, source definitions, and tests. Validation errors and Git diffs appear beside the affected content.
 

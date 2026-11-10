@@ -89,7 +89,7 @@ describe('document TOC navigation', () => {
       externalFiles: [],
       entry: 'guide.md',
       errorCounts: {},
-      git: null,
+      git: { files: { 'guide.md': 'modified' } },
       logoText: 'lat.md',
     };
     fetchViewJson
@@ -123,6 +123,11 @@ describe('document TOC navigation', () => {
     try {
       await act(async () => root.render(createElement(App)));
       expect(container.querySelector('.document-mode-switch')).toBeNull();
+      expect(
+        container
+          .querySelector('.sidebar-git')
+          ?.getAttribute('data-has-changes'),
+      ).toBe('true');
       expect(container.querySelector('[aria-label="Search"]')).toBeNull();
       expect(container.textContent).not.toContain('lat section');
       expect(container.querySelector('.markdown')).not.toBeNull();

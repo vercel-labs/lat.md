@@ -27,7 +27,7 @@ afterEach(async () => {
   );
 });
 
-async function fixture(git: boolean, host = '0.0.0.0') {
+async function fixture(git: boolean, host = '0.0.0.0', gitEnabled = true) {
   const root = await mkdtemp(join(tmpdir(), 'lat-sharing-'));
   roots.push(root);
   const latDir = join(root, 'lat.md');
@@ -77,6 +77,7 @@ async function fixture(git: boolean, host = '0.0.0.0') {
       host,
       port: 0,
       watch: false,
+      git: gitEnabled,
       clientDir: join(root, 'client'),
       search,
     },
@@ -147,7 +148,9 @@ it.each([false, true])(
       expect(response.status).toBe(200);
       expect(await response.text()).not.toContain('PRIVATE_');
     }
-    expect((await (await get('/api/index')).json()).git).toBeNull();
+    const gitState = (await (await get('/api/index')).json()).git;
+    if (git) expect(gitState.files).toEqual({ 'lat.md': 'new' });
+    else expect(gitState).toBeNull();
     expect(await (await get('/')).text()).toContain('lat-shared-view');
     const edit = await get('/api/document?path=lat.md', {
       method: 'PATCH',
@@ -166,6 +169,62 @@ it.each([false, true])(
     );
   },
 );
+
+// @lat: [[view/specs#Shared Git diffs]]
+it('shows shared Markdown diffs and polls commits without expanding file access', async () => {
+  const { root, server, write, get, markdown, latDir } = await fixture(true);
+  const git = (...args: string[]) =>
+    execFileSync('git', [
+      '-C',
+      root,
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      'commit.gpgsign=false',
+      ...args,
+    ]);
+  await write(
+    'lat.md/lat.md',
+    markdown + '\nPrevious wording. [Previous source](../private.ts)\n',
+  );
+  git('add', 'lat.md/lat.md');
+  git('commit', '-qm', 'Baseline');
+  await write('lat.md/lat.md', markdown + '\nCurrent wording.\n');
+  await write('lat.md/private.md', '# Private\n\nPRIVATE_CHANGED\n');
+  await server.store.refresh([join(latDir, 'lat.md')]);
+  expect((await (await get('/api/index')).json()).git.files).toEqual({
+    'lat.md': 'modified',
+  });
+  const document = await (await get('/api/document?path=lat.md')).json();
+  const diff = JSON.stringify(document.gitTree);
+  expect(diff).toContain('git-removed');
+  expect(diff).toContain('git-added');
+  expect(diff).toContain('Previous');
+  expect(diff).toContain('Current');
+  expect(JSON.stringify(document)).not.toContain('PRIVATE_');
+  expect((await get('/api/source?path=private.ts')).status).toBe(404);
+  git('add', 'lat.md/lat.md');
+  git('commit', '-qm', 'Update published Markdown');
+  await vi.waitFor(
+    () => {
+      expect(server.store.getIndex().git?.files).toEqual({});
+    },
+    { timeout: 5000 },
+  );
+  expect(
+    (await (await get('/api/document?path=lat.md')).json()).gitTree,
+  ).toBeNull();
+});
+
+it('honors --no-git for shared listeners', async () => {
+  const { get } = await fixture(true, '0.0.0.0', false);
+  expect((await (await get('/api/index')).json()).git).toBeNull();
+  expect(
+    (await (await get('/api/document?path=lat.md')).json()).gitTree,
+  ).toBeNull();
+});
 
 it('revokes removed links and new ignore rules and fails closed on refresh errors', async () => {
   const { server, get, write, latDir, markdown } = await fixture(true);

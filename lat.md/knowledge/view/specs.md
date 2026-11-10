@@ -447,7 +447,11 @@ Coverage exercises Git and non-Git projects, nested Markdown cycles, source/reso
 
 ## Shared UI controls
 
-The shared browser hides editing, search, and section-command controls while keeping published Markdown readable, matching the server's read-only request boundary.
+The shared browser hides editing, search, and section-command controls while retaining the Git toggle and change indicator for published Markdown, matching the server's read-only request boundary.
+
+## Shared Git diffs
+
+Shared views show HEAD-to-working-tree diffs and change markers for public Markdown only. Commit polling clears stale diffs, `--no-git` disables them, and links in deleted text cannot authorize other files.
 
 ## Export publication boundaries
 
