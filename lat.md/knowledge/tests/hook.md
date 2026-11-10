@@ -142,3 +142,15 @@ Prompt hooks read each project's saved experiment choices and describe completio
 ## Git validation requires explicit opt-in
 
 Missing or disabled project choices make the Git hook skip even broken staged graphs. Linked worktrees retain independent opt-ins despite sharing the installed launcher.
+
+## Staged code review reminders are advisory
+
+An initial agent commit with enough staged code prints one optional review reminder and succeeds, even when substantial Lat changes are already staged. Documentation churn does not prove semantic coverage.
+
+## Review reminders use only staged code churn
+
+Suggestions ignore untracked code, unstaged edits, documentation-only changes, and small staged edits. Staged additions and deletions count, unusual filenames remain intact, and reminders do not hide validation failures.
+
+## Review reminders respect project scope
+
+Suggestions count only source changes within affected opted-in projects and outside excluded fixture subtrees. A root project’s opt-out prevents unrelated root changes from triggering reminders for an opted-in nested project.

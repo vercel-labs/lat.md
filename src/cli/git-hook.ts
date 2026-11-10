@@ -10,7 +10,16 @@ import {
   rmSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import {
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
+import { isSourceFileExtension } from '@lat.md/core/source-formats';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { resolveLatInvocation } from './agent-invocation.js';
@@ -39,6 +48,52 @@ function git(root: string, args: string[]): string {
 }
 
 type Entry = { mode: string; oid: string; path: string };
+
+/** Avoid reminders for very small edits without imposing a documentation ratio. */
+const REVIEW_CODE_LINES = 5;
+
+/** Advisory only: inspect Git's staged index, never unstaged or untracked work. */
+function suggestDocumentationReview(
+  root: string,
+  projects: Set<string>,
+  excluded: string[],
+): void {
+  try {
+    const records = git(root, [
+      'diff',
+      '--cached',
+      '--numstat',
+      '-z',
+      '--no-renames',
+      '--no-ext-diff',
+    ]).split('\0');
+    let codeLines = 0;
+    for (const record of records) {
+      // Keep tabs and newlines in filenames intact; binary diffs do not match.
+      const match = /^(\d+)\t(\d+)\t([\s\S]+)$/.exec(record);
+      if (!match) continue;
+      const path = match[3];
+      if (
+        !isSourceFileExtension(extname(path)) ||
+        path.split('/').includes('lat.md') ||
+        excluded.some((prefix) => path.startsWith(prefix + '/')) ||
+        ![...projects].some(
+          (prefix) => !prefix || path.startsWith(prefix + '/'),
+        )
+      )
+        continue;
+      codeLines += Number(match[1]) + Number(match[2]);
+      if (codeLines >= REVIEW_CODE_LINES) {
+        console.error(
+          'Lat suggestion: consider reviewing the staged code and lat.md changes to check that important behavior, architecture, and test changes are covered. If this commit needs no documentation update, feel free to ignore this reminder; it does not block the commit.',
+        );
+        return;
+      }
+    }
+  } catch {
+    // An unavailable advisory diff must not prevent an otherwise valid commit.
+  }
+}
 
 function inside(root: string, path: string): boolean {
   const rel = relative(root, path);
@@ -228,6 +283,7 @@ export async function gitPreCommit(cwd = process.cwd()): Promise<number> {
         projects.delete(project);
     }
     if (!projects.size) return 0;
+    suggestDocumentationReview(root, projects, excluded);
     temporary = mkdtempSync(join(tmpdir(), 'lat-staged-'));
     const snapshot = join(temporary, 'tree');
     mkdirSync(snapshot);

@@ -45,6 +45,8 @@ Run `lat init --experimental` to choose experimental features for this project. 
 
 Enable **Replace end-of-turn checks with Git commit checks** to validate staged content when an agent commits. Setup removes Lat completion hooks, refreshes installed integrations, and installs the Git hook or explains how to integrate with your existing hook manager. Prompt context remains enabled; ordinary manual commits skip validation.
 
+Staged code changes can also prompt a brief suggestion to review whether Lat covers the important changes. This reminder never blocks the commit; the agent may ignore it when no documentation update is needed. Structural validation errors still fail the hook.
+
 Choices are stored locally in `lat.md/.cache/experiments.json`. Normal `lat init` runs preserve them. Rerun `lat init --experimental` and uncheck the experiment to restore completion checks. Choosing experiments requires an interactive terminal. Deleting the cache resets the choices; rerun init afterward to synchronize installed integrations.
 
 ## Existing Git hooks

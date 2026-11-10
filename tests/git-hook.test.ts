@@ -171,6 +171,106 @@ it('validates real git commit -a and path-specific temporary indexes', () => {
   expect(result.status, result.stderr).toBe(0);
 });
 
+// @lat: [[tests/hook#Staged code review reminders are advisory]]
+it('suggests review even with Lat edits and allows a real initial commit', () => {
+  const root = repo();
+  write(
+    root,
+    'src/feature.ts',
+    'export function feature() {\n  const value = 1;\n  return value;\n}\n\n',
+  );
+  write(
+    root,
+    'lat.md/lat.md',
+    '# Project\n\nFeature behavior is documented here.\n' + '\n'.repeat(60),
+  );
+  git(root, 'add', '.');
+  expect(installGitHook(root, invocation).status).toBe('installed');
+  const result = spawnSync('git', ['commit', '-qm', 'initial'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...cleanEnv(), AI_AGENT: 'codex' },
+  });
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stderr.match(/Lat suggestion:/g)).toHaveLength(1);
+  expect(result.stderr).toContain('feel free to ignore');
+  expect(git(root, 'status', '--porcelain')).toBe('');
+});
+
+// @lat: [[tests/hook#Review reminders use only staged code churn]]
+it('ignores unstaged work and documentation churn but counts staged deletions', () => {
+  const root = repo();
+  git(root, 'commit', '-qm', 'initial');
+  const path =
+    process.platform === 'win32'
+      ? 'src/space é.ts'
+      : 'src/space é\tline\nbreak.ts';
+  const source = Array.from(
+    { length: 5 },
+    (_, n) => `export const value${n} = ${n};\n`,
+  ).join('');
+  write(root, path, source);
+  write(root, 'lat.md/lat.md', '# Project\n\nUpdated documentation.\n');
+  git(root, 'add', 'lat.md/lat.md');
+  const docsOnly = hook(root);
+  expect(docsOnly.status, docsOnly.stderr).toBe(0);
+  expect(docsOnly.stdout + docsOnly.stderr).toBe('');
+  git(root, 'add', path);
+  const staged = hook(root);
+  expect(staged.status, staged.stderr).toBe(0);
+  expect(staged.stderr).toContain('Lat suggestion:');
+  git(root, 'commit', '-qm', 'source');
+  write(root, path, source.replace('= 0', '= 10'));
+  git(root, 'add', path);
+  // Extra unstaged churn cannot turn a two-line staged edit into a reminder.
+  write(root, path, source + source.replaceAll('value', 'extra'));
+  const small = hook(root);
+  expect(small.status, small.stderr).toBe(0);
+  expect(small.stdout + small.stderr).toBe('');
+  git(root, 'rm', '-f', path);
+  const deleted = hook(root);
+  expect(deleted.status, deleted.stderr).toBe(0);
+  expect(deleted.stderr).toContain('Lat suggestion:');
+  write(root, 'lat.md/lat.md', '# Project\n\n[[missing]]\n');
+  git(root, 'add', 'lat.md/lat.md');
+  const broken = hook(root);
+  expect(broken.status).toBe(1);
+  expect(broken.stderr).toContain('Lat suggestion:');
+  expect(broken.stderr).toContain('staged validation failed');
+});
+
+// @lat: [[tests/hook#Review reminders respect project scope]]
+it('limits review suggestions to opted-in projects outside excluded subtrees', () => {
+  const root = repo();
+  write(
+    root,
+    'lat.md/lat.md',
+    '---\nlat:\n  git-pre-commit:\n    exclude-projects:\n      - tests/cases\n---\n# Project\n\nA project.\n',
+  );
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'initial');
+  const source = 'export const value = 1;\n'.repeat(5);
+  write(root, 'tests/cases/fixture.ts', source);
+  git(root, 'add', '.');
+  const excluded = hook(root);
+  expect(excluded.status, excluded.stderr).toBe(0);
+  expect(excluded.stdout + excluded.stderr).toBe('');
+  writeExperiments(root, { 'commit-hooks': false });
+  write(root, 'packages/app/lat.md/.gitignore', '.cache/\n');
+  write(root, 'packages/app/lat.md/lat.md', '# App\n\nAn app.\n');
+  writeExperiments(join(root, 'packages/app'), { 'commit-hooks': true });
+  write(root, 'src/outside.ts', source);
+  git(root, 'add', '.');
+  const outside = hook(root);
+  expect(outside.status, outside.stderr).toBe(0);
+  expect(outside.stdout + outside.stderr).toBe('');
+  write(root, 'packages/app/source.ts', source);
+  git(root, 'add', '.');
+  const inside = hook(root);
+  expect(inside.status, inside.stderr).toBe(0);
+  expect(inside.stderr.match(/Lat suggestion:/g)).toHaveLength(1);
+});
+
 // @lat: [[tests/hook#Checks deletions and nested projects]]
 it('finds staged nested projects and detects references to deleted source files', () => {
   const root = repo();
