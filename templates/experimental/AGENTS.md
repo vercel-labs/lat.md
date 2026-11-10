@@ -8,7 +8,7 @@ Use Lat's knowledge graph to ground each task before changing code.
 
 Keep `lat.md/` aligned with meaningful implemented behavior, architecture, and tests. Stage relevant documentation together with the code it describes; keep it focused on current state, not a journal or changelog.
 
-Agent commits run staged validation through `lat hook git-pre-commit`. Fix reported errors and stage the fixes before retrying. Do not bypass the hook with `--no-verify`. Use `lat check` while editing to inspect errors; validation is not required after every response or research-only task.
+Agent commits run staged validation through `lat hook git-pre-commit`. Fix relevant errors and stage the fixes before retrying. If Lat is the only failing check and you judge that updating `lat.md/` is not worthwhile for this change, you may commit with `--no-verify`; briefly explain why. Because this skips other Git hooks too, verify that their checks pass separately. Use `lat check` while editing to inspect errors; validation is not required after every response or research-only task.
 
 Plans may be drafted alongside implementation, with the intent that by commit time they describe the implemented state. Otherwise keep proposals and future work outside `lat.md/` unless explicitly requested there.
 

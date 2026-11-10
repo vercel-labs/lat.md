@@ -351,7 +351,7 @@ describe('lat init embedding setup', () => {
     await initCmd(root);
 
     const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
-    expect(agents).toContain(readAgentsTemplate().trim());
+    expect(agents).toContain(readAgentsTemplate(root).trim());
     expect(existsSync(join(root, 'CLAUDE.md'))).toBe(false);
     expect(existsSync(join(root, '.claude/skills/lat-md/SKILL.md'))).toBe(true);
     const settings = JSON.parse(

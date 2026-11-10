@@ -373,7 +373,7 @@ Each project's opt-in comes from its local experiment settings in the committing
 
 Each affected project runs the full checker in an isolated subprocess with Git repository-local environment variables cleared and a staged-file inventory. Errors use original project paths and tell the agent to stage fixes before retrying. The temporary tree and its external checkout caches are removed afterward. No line-ratio heuristic requires documentation churn. External references use the staged canonical configuration; ignored local overrides and caches are not copied, so external checks may require retrieval on a cold snapshot.
 
-Only commits invoking this hook are covered; automatic merge commits need separate pre-merge-commit wiring. Git's normal bypass remains available, but generated instructions tell agents to repair failures instead of bypassing them.
+Only commits invoking this hook are covered; automatic merge commits need separate pre-merge-commit wiring. Generated instructions allow agents to use `--no-verify` when Lat is the only failing check and updating the knowledge graph is not worthwhile for the change. Agents briefly explain the decision and verify other hook checks separately, since the Git flag skips those hooks too.
 
 #### Excluded fixture projects
 
