@@ -100,3 +100,7 @@ Pi and OpenCode callbacks pass quotes, newlines, shell substitutions, and spaces
 ## Initialization confines every write
 
 Every init destination rejects external and dangling symlinks, including linked parent directories. Valid in-project instruction symlinks, user text, and unrelated settings survive setup.
+
+## Migrates installed completion integrations
+
+Initialization installs the Git hook, removes old stop commands from selected and previously installed agents, and refreshes unchanged Pi/OpenCode plugins even when they are not selected again.

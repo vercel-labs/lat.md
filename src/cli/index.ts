@@ -251,13 +251,13 @@ program
 
 program
   .command('hook')
-  .description('Handle agent hook events (called by agent hooks, not directly)')
-  .argument('<agent>', 'agent name (claude, cursor)')
+  .description('Handle Git and agent hooks')
+  .argument('<hook>', 'git-pre-commit or agent name (claude, codex, cursor)')
   .argument(
-    '<event>',
-    'hook event (claude: UserPromptSubmit|Stop, cursor: stop)',
+    '[event]',
+    'agent event (UserPromptSubmit; legacy Stop/stop are no-ops)',
   )
-  .action(async (agent: string, event: string) => {
+  .action(async (agent: string, event?: string) => {
     const { hookCmd } = await import('./hook.js');
     await hookCmd(agent, event);
   });

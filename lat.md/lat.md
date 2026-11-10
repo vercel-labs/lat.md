@@ -1,3 +1,10 @@
+---
+lat:
+  git-pre-commit:
+    exclude-projects:
+      - tests/cases
+---
+
 ![lat.md](logo.svg)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/vercel-labs/lat.md/ci.yml?branch=main&style=flat&label=CI&logo=github&logoColor=white&labelColor=111&color=555)](https://github.com/vercel-labs/lat.md/actions/workflows/ci.yml) [![GitHub stars](https://img.shields.io/github/stars/vercel-labs/lat.md?style=flat&logo=github&logoColor=white&labelColor=111&color=555)](https://github.com/vercel-labs/lat.md)

@@ -1,5 +1,5 @@
 import { type Plugin, tool } from "@opencode-ai/plugin"
-import { execSync, execFileSync } from "child_process"
+import { execFileSync } from "child_process"
 
 /** Executable and prefix arguments, injected by `lat init`. */
 const LAT = __LAT_INVOCATION__
@@ -20,7 +20,7 @@ function tryRun(args: string[]): string {
   }
 }
 
-export const LatPlugin: Plugin = async (ctx) => {
+export const LatPlugin: Plugin = async () => {
   return {
     tool: {
       lat_search: tool({
@@ -107,67 +107,5 @@ export const LatPlugin: Plugin = async (ctx) => {
       }),
     },
 
-    hooks: {
-      "session.idle": async () => {
-        let checkFailed = false
-        let checkOutput = ""
-        try {
-          checkOutput = run(["check"])
-        } catch (err: unknown) {
-          checkFailed = true
-          checkOutput = (err as { stdout?: string }).stdout || ""
-        }
-
-        // Check git diff for lat.md/ sync status
-        let needsSync = false
-        let codeLines = 0
-        try {
-          const numstat = execSync("git diff HEAD --numstat", {
-            encoding: "utf-8",
-            cwd: process.cwd(),
-          })
-
-          let latMdLines = 0
-          for (const line of numstat.split("\n")) {
-            const parts = line.split("\t")
-            if (parts.length < 3) continue
-            const added = parseInt(parts[0], 10) || 0
-            const removed = parseInt(parts[1], 10) || 0
-            const file = parts[2]
-            const changed = added + removed
-            if (file.startsWith("lat.md/")) {
-              latMdLines += changed
-            } else if (/\.(ts|tsx|js|jsx|py|rs|go|c|h)$/.test(file)) {
-              codeLines += changed
-            }
-          }
-
-          if (codeLines >= 5) {
-            const effectiveLatMd =
-              latMdLines === 0 ? 0 : Math.max(latMdLines, 1)
-            needsSync = effectiveLatMd < codeLines * 0.05
-          }
-        } catch {
-          // git not available or no HEAD — skip diff check
-        }
-
-        if (!checkFailed && !needsSync) return
-
-        const message =
-          checkFailed && needsSync
-            ? `lat check failed and lat.md/ may be out of sync (${codeLines} code lines changed). Run lat_check, fix errors, and update only relevant current-state lat.md/ sections. Do not add journal/changelog notes.`
-            : checkFailed
-              ? `lat check failed. Run lat_check and fix the errors.`
-              : `lat.md/ may be out of sync — ${codeLines} code lines changed but lat.md/ was not updated. Review whether current-state lat.md/ sections need updates; do not add journal/changelog notes. Run lat_check.`
-
-        await ctx.client.app.log({
-          body: {
-            service: "lat.md",
-            level: "warn",
-            message,
-          },
-        })
-      },
-    },
   }
 }

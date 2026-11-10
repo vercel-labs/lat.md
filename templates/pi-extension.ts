@@ -237,30 +237,9 @@ export default function (pi: ExtensionAPI) {
     return box;
   });
 
-  pi.registerMessageRenderer("lat-check", (message, { expanded }, theme) => {
-    const box = new Box(1, 1, (t) => theme.bg("customMessageBg", t));
-    if (expanded) {
-      box.addChild(new Text(theme.fg("warning", "lat check"), 0, 0));
-      box.addChild(new Markdown(message.content, 0, 0, getMarkdownTheme()));
-    } else {
-      const hint = keyHint("expandTools", "to expand");
-      const firstLine = message.content.split("\n")[0];
-      box.addChild(new Text(
-        theme.fg("warning", "lat check") + " " +
-        theme.fg("dim", `${firstLine} (${hint})`),
-        0, 0,
-      ));
-    }
-    return box;
-  });
-
   // ── Lifecycle hooks ────────────────────────────────────────────────
 
-  // Guard to prevent agent_end from firing twice per prompt (infinite loop)
-  let agentEndFired = false;
-
   pi.on("before_agent_start", async () => {
-    agentEndFired = false;
 
     const reminder = [
       "Before starting work, run `lat_search` with one or more queries describing the user's intent.",
@@ -268,7 +247,7 @@ export default function (pi: ExtensionAPI) {
       "Use `lat_section` to read the full content of relevant matches.",
       "Do not read files, write code, or run commands until you have searched.",
       "",
-      "Remember: `lat.md/` must stay in sync with meaningful codebase state. If you change implemented behavior, architecture, or tests, update the relevant current-state sections and run `lat_check` before finishing. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Do not use `lat.md/` as a journal/changelog or add notes for insignificant details.",
+      "Remember: `lat.md/` must stay in sync with meaningful codebase state. If you change implemented behavior, architecture, or tests, update the relevant current-state sections and stage relevant documentation before committing. Agent commits run staged validation through `lat hook git-pre-commit`; fix errors and stage the fixes before retrying. Do not bypass the hook with `--no-verify`. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Do not use `lat.md/` as a journal/changelog or add notes for insignificant details.",
     ].join("\n");
 
     return {
@@ -280,77 +259,4 @@ export default function (pi: ExtensionAPI) {
     };
   });
 
-  pi.on("agent_end", async () => {
-    // Don't fire twice per prompt — prevents infinite loop
-    if (agentEndFired) return;
-    agentEndFired = true;
-
-    // Run lat check
-    let checkOutput: string;
-    let checkFailed = false;
-    try {
-      checkOutput = run(["check"]);
-    } catch (err: unknown) {
-      checkFailed = true;
-      checkOutput = (err as { stdout?: string }).stdout || "";
-    }
-
-    // Run git diff --numstat to check if lat.md/ is in sync
-    let needsSync = false;
-    let codeLines = 0;
-    try {
-      const { execSync } = require("child_process") as typeof import("child_process");
-      const numstat = execSync("git diff HEAD --numstat", {
-        encoding: "utf-8",
-        cwd: process.cwd(),
-      });
-
-      let latMdLines = 0;
-      for (const line of numstat.split("\n")) {
-        const parts = line.split("\t");
-        if (parts.length < 3) continue;
-        const added = parseInt(parts[0], 10) || 0;
-        const removed = parseInt(parts[1], 10) || 0;
-        const file = parts[2];
-        const changed = added + removed;
-        if (file.startsWith("lat.md/")) {
-          latMdLines += changed;
-        } else if (/\.(ts|tsx|js|jsx|py|rs|go|c|h)$/.test(file)) {
-          codeLines += changed;
-        }
-      }
-
-      if (codeLines >= 5) {
-        const effectiveLatMd = latMdLines === 0 ? 0 : Math.max(latMdLines, 1);
-        needsSync = effectiveLatMd < codeLines * 0.05;
-      }
-    } catch {
-      // git not available or no HEAD — skip diff check
-    }
-
-    if (!checkFailed && !needsSync) return;
-
-    const parts: string[] = [];
-    if (checkFailed && needsSync) {
-      parts.push(
-        `\`lat check\` found errors AND the codebase has changes (${codeLines} lines) with no updates to \`lat.md/\`. Before finishing:`,
-        "",
-        "1. Update relevant current-state `lat.md/` sections if the changes affect behavior, architecture, tests, or plans; do not add journal/changelog notes.",
-        "2. Run `lat_check` until it passes.",
-      );
-    } else if (checkFailed) {
-      parts.push(
-        "`lat check` failed. Run `lat_check`, fix the errors, and repeat until it passes.",
-      );
-    } else {
-      parts.push(
-        `The codebase has changes (${codeLines} lines) but \`lat.md/\` was not updated. Review whether current-state \`lat.md/\` sections need updates; do not add journal/changelog notes just to satisfy this reminder. Run \`lat_search\` to find relevant sections and \`lat_check\` at the end.`,
-      );
-    }
-
-    pi.sendMessage(
-      { customType: "lat-check", content: parts.join("\n"), display: true },
-      { deliverAs: "followUp", triggerTurn: true },
-    );
-  });
 }

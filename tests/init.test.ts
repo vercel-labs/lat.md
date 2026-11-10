@@ -18,6 +18,7 @@ import xdg from '@folder/xdg';
 import { parse as parseYaml } from 'yaml';
 import { checklistMenu } from '../src/cli/checklist-menu.js';
 import {
+  contentHash,
   INIT_VERSION,
   readInitVersion,
   writeInitMeta,
@@ -356,7 +357,7 @@ describe('lat init embedding setup', () => {
       readFileSync(join(root, '.claude/settings.json'), 'utf8'),
     );
     expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
-    expect(settings.hooks.Stop).toHaveLength(1);
+    expect(settings.hooks.Stop).toBeUndefined();
 
     const legacy =
       'User instructions\n\n%% lat:begin %%\nLegacy guidance\n%% lat:end %%\n';
@@ -369,6 +370,61 @@ describe('lat init embedding setup', () => {
     );
     expect(meta.file_hashes['AGENTS.md']).toBeTruthy();
     expect(meta.file_hashes['CLAUDE.md']).toBeUndefined();
+  });
+
+  // @lat: [[tests/init#Migrates installed completion integrations]]
+  it('installs Git validation and migrates previously installed agents', async () => {
+    createLatDir();
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValue(['codex']);
+    selectMenu.mockResolvedValue('global');
+    expect(
+      spawnSync('git', ['-c', 'init.templateDir=', 'init', '-q'], { cwd: root })
+        .status,
+    ).toBe(0);
+    const legacy = 'legacy completion callback\n';
+    const hashes: Record<string, string> = {};
+    for (const file of ['.pi/extensions/lat.ts', '.opencode/plugins/lat.ts']) {
+      mkdirSync(dirname(join(root, file)), { recursive: true });
+      writeFileSync(join(root, file), legacy);
+      hashes[file] = contentHash(legacy);
+    }
+    writeInitMeta(latDir(), hashes);
+    for (const [file, event, command] of [
+      ['.claude/settings.json', 'Stop', 'lat hook claude Stop'],
+      ['.codex/hooks.json', 'Stop', 'lat hook codex Stop'],
+    ]) {
+      mkdirSync(dirname(join(root, file)), { recursive: true });
+      writeFileSync(
+        join(root, file),
+        JSON.stringify({
+          hooks: { [event]: [{ hooks: [{ type: 'command', command }] }] },
+        }),
+      );
+    }
+    await initCmd(root);
+    expect(readFileSync(join(root, '.git/hooks/pre-commit'), 'utf8')).toContain(
+      'hook git-pre-commit',
+    );
+    expect(
+      JSON.parse(readFileSync(join(root, '.claude/settings.json'), 'utf8'))
+        .hooks.Stop,
+    ).toBeUndefined();
+    expect(
+      JSON.parse(readFileSync(join(root, '.codex/hooks.json'), 'utf8')).hooks
+        .UserPromptSubmit,
+    ).toHaveLength(1);
+    const pi = readFileSync(join(root, '.pi/extensions/lat.ts'), 'utf8');
+    const opencode = readFileSync(
+      join(root, '.opencode/plugins/lat.ts'),
+      'utf8',
+    );
+    expect(pi).toContain('before_agent_start');
+    expect(pi).not.toContain('agent_end');
+    expect(opencode).not.toContain('session.idle');
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).not.toContain(
+      'After EVERY task',
+    );
   });
 
   // @lat: [[tests/init#Initialization confines every write]]

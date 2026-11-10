@@ -1,19 +1,9 @@
-import { execSync } from 'node:child_process';
-import { lstatSync, readFileSync } from 'node:fs';
-import { dirname, extname, join } from 'node:path';
+import { dirname } from 'node:path';
 import { findLatticeDir } from '@lat.md/core/project-discovery';
 import { plainStyler, type CmdContext } from '@lat.md/core/context';
 import { runSearch } from './search.js';
 import { DEFAULT_SEARCH_LIMIT } from '../search/search.js';
 import { getSection, formatSectionOutput } from '@lat.md/core/cli/section';
-import {
-  checkMd,
-  checkCodeRefs,
-  checkIndex,
-  checkSections,
-} from '@lat.md/core/cli/check';
-import { CheckRunContext } from '@lat.md/core/cli/check-context';
-import { isSourceFileExtension } from '@lat.md/core/source-formats';
 import { commandProjectAnalysis } from '@lat.md/core/project-analysis';
 
 function outputPromptSubmit(context: string): void {
@@ -23,23 +13,6 @@ function outputPromptSubmit(context: string): void {
         hookEventName: 'UserPromptSubmit',
         additionalContext: context,
       },
-    }),
-  );
-}
-
-function outputStop(reason: string): void {
-  process.stdout.write(
-    JSON.stringify({
-      decision: 'block',
-      reason,
-    }),
-  );
-}
-
-function outputCursorStop(reason: string): void {
-  process.stdout.write(
-    JSON.stringify({
-      followup_message: reason,
     }),
   );
 }
@@ -121,7 +94,7 @@ async function handleUserPromptSubmit(): Promise<void> {
     'Use `lat section` to read the full content of relevant matches.',
     'Do not read files, write code, or run commands until you have searched.',
     '',
-    'Remember: `lat.md/` must stay in sync with meaningful codebase state. If you change implemented behavior, architecture, or tests, update the relevant current-state sections and run `lat check` before finishing. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Do not use `lat.md/` as a journal/changelog or add notes for insignificant details.',
+    'Remember: `lat.md/` must stay in sync with meaningful codebase state. If you change implemented behavior, architecture, or tests, update the relevant current-state sections and stage the relevant documentation before committing. Agent commits are validated by `lat hook git-pre-commit`; fix reported errors and stage the fixes before retrying. Do not bypass validation with `--no-verify`. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Do not use `lat.md/` as a journal/changelog or add notes for insignificant details.',
   );
 
   const latDir = findLatticeDir();
@@ -142,280 +115,24 @@ async function handleUserPromptSubmit(): Promise<void> {
   outputPromptSubmit(parts.join('\n'));
 }
 
-/** Minimum diff size (in lines) to consider "significant" code change. */
-/** Minimum code change size (lines) before we consider flagging lat.md/ sync. */
-const DIFF_THRESHOLD = 5;
-
-/** lat.md/ changes below this ratio of code changes trigger a sync reminder. */
-const LATMD_RATIO = 0.05;
-
-/** If lat.md/ changes exceed this many lines, skip the ratio check entirely. */
-const LATMD_UPPER_THRESHOLD = 50;
-
-type DiffFileKind = 'code' | 'latMd';
-
-function diffFileKind(file: string): DiffFileKind | null {
-  if (file.startsWith('lat.md/')) return 'latMd';
-  if (isSourceFileExtension(extname(file))) return 'code';
-  return null;
-}
-
-/** Count a regular text file's lines as additions, matching Git numstat. */
-function countUntrackedFileLines(projectRoot: string, file: string): number {
-  try {
-    const path = join(projectRoot, file);
-    if (!lstatSync(path).isFile()) return 0;
-    const text = readFileSync(path, 'utf-8');
-    if (text.length === 0) return 0;
-    return text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * Measure code vs `lat.md/` churn since HEAD, in lines. Combines tracked
- * changes (`git diff HEAD --numstat`) with untracked files
- * (`git ls-files --others --exclude-standard -z`). Counting untracked files is
- * what makes a freshly scaffolded, never-committed `lat.md/` register as
- * updated — otherwise its edits are invisible to `git diff HEAD` and the sync
- * reminder fires on every turn until `lat.md/` is committed (issue #61).
- * Both scans are scoped and made relative to `projectRoot`, so a Lat project
- * nested in a larger worktree neither misses its own `lat.md/` paths nor counts
- * changes from sibling projects.
- * Outside a Git worktree both scans contribute zero churn by design: Git is
- * optional, so the hook still validates the project but skips the sync ratio.
- */
-export function analyzeDiff(projectRoot: string): {
-  codeLines: number;
-  latMdLines: number;
-} {
-  let codeLines = 0;
-  let latMdLines = 0;
-
-  const tally = (kind: DiffFileKind, changed: number): void => {
-    if (kind === 'latMd') {
-      latMdLines += changed;
-    } else {
-      codeLines += changed;
-    }
-  };
-
-  // Tracked changes vs HEAD. Throws when there is no HEAD yet (a repo with no
-  // commits) or no repo at all; the untracked scan below still runs.
-  try {
-    const output = execSync('git diff HEAD --numstat --relative -- .', {
-      cwd: projectRoot,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    // Each line: "added\tremoved\tfile" (e.g. "42\t11\tsrc/cli/hook.ts")
-    for (const line of output.split('\n')) {
-      const parts = line.split('\t');
-      if (parts.length < 3) continue;
-      const added = parseInt(parts[0], 10) || 0;
-      const removed = parseInt(parts[1], 10) || 0;
-      const kind = diffFileKind(parts[2]);
-      if (kind) tally(kind, added + removed);
-    }
-  } catch {
-    // Not a git repo, or no HEAD — fall through to the untracked scan.
-  }
-
-  // NUL-delimited output preserves spaces, non-ASCII names, and newlines.
-  // Classify paths before reading so unrelated untracked files are never read.
-  try {
-    const output = execSync(
-      'git ls-files --others --exclude-standard -z -- .',
-      {
-        cwd: projectRoot,
-        encoding: 'utf-8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      },
-    );
-    for (const file of output.split('\0')) {
-      if (!file) continue;
-      const kind = diffFileKind(file);
-      if (!kind) continue;
-      tally(kind, countUntrackedFileLines(projectRoot, file));
-    }
-  } catch {
-    // Not a Git repo — diff-based sync analysis is intentionally disabled.
-  }
-
-  return { codeLines, latMdLines };
-}
-
-type StopStatus = {
-  checkFailed: boolean;
-  totalErrors: number;
-  needsSync: boolean;
-  codeLines: number;
-  latMdLines: number;
-};
-
-async function getStopStatus(latDir: string): Promise<StopStatus> {
-  const projectRoot = dirname(latDir);
-  const run = new CheckRunContext(latDir, projectRoot);
-  const [md, code, indexErrors, sectionErrors] = await Promise.all([
-    checkMd(latDir, projectRoot, run),
-    checkCodeRefs(latDir, projectRoot, run),
-    checkIndex(latDir, run),
-    checkSections(latDir, projectRoot, run),
-  ]);
-  const totalErrors =
-    md.errors.length +
-    code.errors.length +
-    indexErrors.length +
-    sectionErrors.length;
-  const checkFailed = totalErrors > 0;
-
-  const { codeLines, latMdLines } = analyzeDiff(projectRoot);
-  let needsSync = false;
-  if (codeLines >= DIFF_THRESHOLD && latMdLines < LATMD_UPPER_THRESHOLD) {
-    const effectiveLatMd = latMdLines === 0 ? 0 : Math.max(latMdLines, 1);
-    needsSync = effectiveLatMd < codeLines * LATMD_RATIO;
-  }
-
-  return {
-    checkFailed,
-    totalErrors,
-    needsSync,
-    codeLines,
-    latMdLines,
-  };
-}
-
-function formatStopReason({
-  checkFailed,
-  totalErrors,
-  needsSync,
-  codeLines,
-  latMdLines,
-}: StopStatus): string | null {
-  if (!checkFailed && !needsSync) return null;
-
-  const parts: string[] = [];
-
-  const syncMsg =
-    latMdLines === 0
-      ? 'The codebase has changes (' +
-        codeLines +
-        ' lines) but `lat.md/` was not updated.'
-      : 'The codebase has changes (' +
-        codeLines +
-        ' lines) but `lat.md/` may not be fully in sync (' +
-        latMdLines +
-        ' lines changed).';
-
-  if (checkFailed && needsSync) {
-    parts.push(
-      '`lat check` found errors. ' + syncMsg + ' Before finishing:',
-      '',
-      '1. Update `lat.md/` where changes affect behavior, architecture, tests, or plans; keep it focused on current state rather than journal/changelog notes.',
-      '2. Run `lat check` until it passes.',
-    );
-  } else if (checkFailed) {
-    parts.push(
-      '`lat check` found ' +
-        totalErrors +
-        ' error(s). Run `lat check`, fix the errors, and repeat until it passes.',
-    );
-  } else {
-    parts.push(
-      syncMsg +
-        ' Review whether `lat.md/` needs a current-state update; do not add journal/changelog notes just to satisfy this reminder. Run `lat search` to find relevant sections and `lat check` at the end.',
-    );
-  }
-
-  return parts.join('\n');
-}
-
-async function handleStop(): Promise<void> {
-  const latDir = findLatticeDir();
-  if (!latDir) return;
-
-  // Read stdin to check if we already blocked once
-  let stopHookActive = false;
-  try {
-    const raw = await readStdin();
-    const input = JSON.parse(raw);
-    stopHookActive = input.stop_hook_active ?? false;
-  } catch {
-    // If we can't parse stdin, treat as first attempt
-  }
-
-  const status = await getStopStatus(latDir);
-
-  // Second pass — warn the user but don't block again
-  if (stopHookActive) {
-    if (status.checkFailed) {
-      console.error(
-        `lat check is still failing (${status.totalErrors} error(s)). Run \`lat check\` to see details.`,
-      );
-    }
+/** Old stop commands stay harmless while users migrate their agent settings. */
+export async function hookCmd(hook: string, event?: string): Promise<void> {
+  if (hook === 'git-pre-commit' && event === undefined) {
+    const { gitPreCommit } = await import('./git-hook.js');
+    process.exitCode = await gitPreCommit();
     return;
   }
-
-  const reason = formatStopReason(status);
-  if (!reason) return;
-  outputStop(reason);
-}
-
-async function handleCursorStop(): Promise<void> {
-  const latDir = findLatticeDir();
-  if (!latDir) return;
-
-  const reason = formatStopReason(await getStopStatus(latDir));
-  if (!reason) return;
-  outputCursorStop(reason);
-}
-
-export async function hookCmd(agent: string, event: string): Promise<void> {
-  switch (agent) {
-    case 'claude':
-      switch (event) {
-        case 'UserPromptSubmit':
-          await handleUserPromptSubmit();
-          return;
-        case 'Stop':
-          await handleStop();
-          return;
-        default:
-          console.error(
-            `Unknown hook event for claude: ${event}. Supported: UserPromptSubmit, Stop`,
-          );
-          process.exit(1);
-      }
-    case 'codex':
-      switch (event) {
-        case 'UserPromptSubmit':
-          await handleUserPromptSubmit();
-          return;
-        case 'Stop':
-          await handleStop();
-          return;
-        default:
-          console.error(
-            `Unknown hook event for codex: ${event}. Supported: UserPromptSubmit, Stop`,
-          );
-          process.exit(1);
-      }
-    case 'cursor':
-      switch (event) {
-        case 'stop':
-          await handleCursorStop();
-          return;
-        default:
-          console.error(
-            `Unknown hook event for cursor: ${event}. Supported: stop`,
-          );
-          process.exit(1);
-      }
-    default:
-      console.error(
-        `Unknown agent: ${agent}. Supported: claude, codex, cursor`,
-      );
-      process.exit(1);
+  if ((hook === 'claude' || hook === 'codex') && event === 'UserPromptSubmit') {
+    await handleUserPromptSubmit();
+    return;
   }
+  if (
+    ((hook === 'claude' || hook === 'codex') && event === 'Stop') ||
+    (hook === 'cursor' && event === 'stop')
+  )
+    return;
+  console.error(
+    `Unknown hook: ${hook}${event ? ` ${event}` : ''}. Supported: git-pre-commit, claude UserPromptSubmit, codex UserPromptSubmit`,
+  );
+  process.exitCode = 1;
 }

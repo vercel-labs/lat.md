@@ -1,4 +1,5 @@
-import { agentInvocation } from './agent-invocation.js';
+import { installGitHook } from './git-hook-install.js';
+import { agentInvocation, resolveLatInvocation } from './agent-invocation.js';
 import { projectWritePath, writeProjectFile } from '@lat.md/core/project-write';
 import { existsSync, cpSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -57,54 +58,6 @@ async function confirm(
 
 // ── Binary resolution ────────────────────────────────────────────────
 
-/**
- * Return the loader-related flags from `process.execArgv`, stripping
- * `--eval`/`-e`/`--print`/`-p` and their value arguments (those only
- * appear when the process was started with `node -e`/`-p`).
- */
-function loaderExecArgs(): string[] {
-  const raw = process.execArgv;
-  const args: string[] = [];
-  for (let i = 0; i < raw.length; i++) {
-    if (
-      raw[i] === '--eval' ||
-      raw[i] === '-e' ||
-      raw[i] === '--print' ||
-      raw[i] === '-p'
-    ) {
-      i++; // skip the value argument
-    } else {
-      args.push(raw[i]);
-    }
-  }
-  return args;
-}
-
-/**
- * Reconstruct the executable and arguments used to invoke this process.
- *
- * Node script entry points must keep their Node launcher. Build output from
- * `tsc` is not executable by default, even when it retains a shebang.
- *
- * When running via a TypeScript loader like tsx, the script itself can't be
- * executed directly — we need to replay the same node flags that loaded tsx.
- * Wrapper scripts and standalone binaries are already executable and can be
- * invoked directly.
- */
-function resolveLatInvocation(): { command: string; args: string[] } {
-  const script = resolve(process.argv[1]);
-  const isTypeScript = /\.[cm]?ts$/.test(script);
-  const isJavaScript = /\.[cm]?js$/.test(script);
-  if (!isTypeScript && !isJavaScript) {
-    return { command: script, args: [] };
-  }
-
-  return {
-    command: process.execPath,
-    args: [...(isTypeScript ? loaderExecArgs() : []), script],
-  };
-}
-
 /** Format the current invocation for command-string based integrations. */
 function resolveLatBin(): string {
   const { command, args } = resolveLatInvocation();
@@ -146,74 +99,41 @@ function latHookCommand(
   return `${latBinString(style)} hook ${agent} ${event}`;
 }
 
-type HookEntry = { hooks?: { type?: string; command?: string }[] };
-
-/** True if any command in this entry looks like it was installed by lat. */
-function isLatHookEntry(entry: HookEntry): boolean {
-  const bin = resolve(process.argv[1]);
+/** Recognize Lat's lifecycle command, not unrelated commands mentioning Lat. */
+function isLatHookCommand(command: unknown): boolean {
   return (
-    entry.hooks?.some(
-      (h) =>
-        typeof h.command === 'string' &&
-        (/\blat\b/.test(h.command) ||
-          h.command.includes('hook claude ') ||
-          h.command.includes('hook codex ') ||
-          h.command.startsWith(bin + ' ')),
-    ) ?? false
+    typeof command === 'string' &&
+    /\bhook\s+(?:claude|codex|cursor)\s+(?:UserPromptSubmit|Stop|stop)(?:\s|$)/.test(
+      command,
+    )
   );
 }
 
-/**
- * Remove all lat-owned hook entries from settings, then add fresh ones.
- * Preserves any non-lat hooks the user may have configured.
- */
-export function syncLatHooks(
+/** Remove only Lat commands, preserving mixed entries and unrelated metadata. */
+export function removeLatStopHooks(
   settingsPath: string,
-  style: LatCommandStyle,
-  agent: 'claude' | 'codex' = 'claude',
-  root = dirname(dirname(settingsPath)),
+  root: string,
+  cursor = false,
 ): void {
   projectWritePath(root, settingsPath);
-  let settings: Record<string, unknown> = {};
-  if (existsSync(settingsPath)) {
-    const raw = readFileSync(settingsPath, 'utf-8');
-    try {
-      settings = JSON.parse(raw);
-    } catch (e) {
-      throw new Error(`Cannot parse ${settingsPath}: ${(e as Error).message}`);
-    }
-  }
-
-  if (!settings.hooks || typeof settings.hooks !== 'object') {
-    settings.hooks = {};
-  }
-  const hooks = settings.hooks as Record<string, unknown>;
-
-  // Strip lat-owned entries from ALL event types (cleans up stale events too)
-  for (const [event, entries] of Object.entries(hooks)) {
-    if (!Array.isArray(entries)) continue;
-    const filtered = entries.filter(
-      (entry: HookEntry) => !isLatHookEntry(entry),
-    );
-    if (filtered.length > 0) {
-      hooks[event] = filtered;
-    } else {
-      delete hooks[event];
-    }
-  }
-
-  // Add fresh hooks for current events
-  for (const event of ['UserPromptSubmit', 'Stop']) {
-    if (!Array.isArray(hooks[event])) {
-      hooks[event] = [];
-    }
-    (hooks[event] as unknown[]).push({
-      hooks: [
-        { type: 'command', command: latHookCommand(style, agent, event) },
-      ],
-    });
-  }
-
+  if (!existsSync(settingsPath)) return;
+  const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+  const event = cursor ? 'stop' : 'Stop';
+  const entries = settings.hooks?.[event];
+  if (!Array.isArray(entries)) return;
+  const filtered = cursor
+    ? entries.filter(
+        (entry: { command?: unknown }) => !isLatHookCommand(entry.command),
+      )
+    : entries.flatMap((entry: { hooks?: { command?: unknown }[] }) => {
+        if (!Array.isArray(entry.hooks)) return [entry];
+        const hooks = entry.hooks.filter((h) => !isLatHookCommand(h.command));
+        if (hooks.length === entry.hooks.length) return [entry];
+        return hooks.length ? [{ ...entry, hooks }] : [];
+      });
+  if (JSON.stringify(entries) === JSON.stringify(filtered)) return;
+  if (filtered.length) settings.hooks[event] = filtered;
+  else delete settings.hooks[event];
   writeProjectFile(
     root,
     settingsPath,
@@ -221,18 +141,45 @@ export function syncLatHooks(
   );
 }
 
-function cursorHooksTemplate(style: LatCommandStyle): string {
-  return (
-    JSON.stringify(
+/** Refresh prompt hooks and remove legacy stop commands without touching others. */
+export function syncLatHooks(
+  settingsPath: string,
+  style: LatCommandStyle,
+  agent: 'claude' | 'codex' = 'claude',
+  root = dirname(dirname(settingsPath)),
+): void {
+  removeLatStopHooks(settingsPath, root);
+  projectWritePath(root, settingsPath);
+  const settings = existsSync(settingsPath)
+    ? JSON.parse(readFileSync(settingsPath, 'utf8'))
+    : {};
+  settings.hooks ??= {};
+  for (const [event, entries] of Object.entries(settings.hooks)) {
+    if (!Array.isArray(entries)) continue;
+    const filtered = entries.flatMap((entry) => {
+      if (!Array.isArray(entry.hooks)) return [entry];
+      const hooks = entry.hooks.filter(
+        (h: { command?: unknown }) => !isLatHookCommand(h.command),
+      );
+      if (hooks.length === entry.hooks.length) return [entry];
+      return hooks.length ? [{ ...entry, hooks }] : [];
+    });
+    if (filtered.length) settings.hooks[event] = filtered;
+    else delete settings.hooks[event];
+  }
+  settings.hooks.UserPromptSubmit ??= [];
+  settings.hooks.UserPromptSubmit.push({
+    hooks: [
       {
-        version: 1,
-        hooks: {
-          stop: [{ command: latHookCommand(style, 'cursor', 'stop') }],
-        },
+        type: 'command',
+        command: latHookCommand(style, agent, 'UserPromptSubmit'),
       },
-      null,
-      2,
-    ) + '\n'
+    ],
+  });
+  writeProjectFile(
+    root,
+    settingsPath,
+    JSON.stringify(settings, null, 2) + '\n',
   );
 }
 
@@ -669,16 +616,19 @@ async function setupClaudeCode(
   ask: (message: string) => Promise<boolean>,
   style: LatCommandStyle,
 ): Promise<void> {
-  // Hooks — UserPromptSubmit (lat.md reminders + [[ref]] expansion) and Stop (update reminder)
+  // Prompt context stays active; validation runs at commit time.
   console.log('');
   console.log(
     styleText(
       'dim',
-      '  Hooks inject lat.md workflow reminders into every prompt and remind',
+      '  Prompt hooks inject lat.md workflow reminders and relevant context.',
     ),
   );
   console.log(
-    styleText('dim', '  the agent to update lat.md/ before finishing.'),
+    styleText(
+      'dim',
+      '  Agent commits are validated by the Git pre-commit hook.',
+    ),
   );
 
   const claudeDir = projectWritePath(root, join(root, '.claude'));
@@ -687,7 +637,8 @@ async function setupClaudeCode(
   mkdirSync(claudeDir, { recursive: true });
   syncLatHooks(settingsPath, style, 'claude', root);
   console.log(
-    styleText('green', '  Hooks') + ' synced (UserPromptSubmit + Stop)',
+    styleText('green', '  Hooks') +
+      ' synced (UserPromptSubmit; legacy Stop removed)',
   );
 
   // .claude/skills/lat-md/SKILL.md — skill for authoring lat.md files
@@ -764,32 +715,7 @@ async function setupCursor(
   );
   if (hash) hashes['.cursor/rules/lat.md'] = hash;
 
-  // .cursor/hooks.json
-  console.log('');
-  console.log(
-    styleText(
-      'dim',
-      '  Cursor hooks can enforce the lat.md/ stop check, while prompt guidance',
-    ),
-  );
-  console.log(
-    styleText(
-      'dim',
-      '  stays in rules + MCP because Cursor cannot reliably inject prompt-specific context.',
-    ),
-  );
-
-  const hooksHash = await writeTemplateFile(
-    root,
-    latDir,
-    '.cursor/hooks.json',
-    cursorHooksTemplate(style),
-    null,
-    'Hooks (.cursor/hooks.json)',
-    '  ',
-    ask,
-  );
-  if (hooksHash) hashes['.cursor/hooks.json'] = hooksHash;
+  removeLatStopHooks(join(root, '.cursor', 'hooks.json'), root, true);
 
   // .cursor/mcp.json
   console.log('');
@@ -898,7 +824,7 @@ async function setupPi(
   console.log(
     styleText(
       'dim',
-      '  to inject search context and validate lat.md/ before finishing.',
+      '  to inject search context. Validation runs at commit time.',
     ),
   );
 
@@ -957,15 +883,12 @@ async function setupOpenCode(
   // .opencode/plugins/lat.ts — plugin that registers tools + lifecycle hooks
   console.log('');
   console.log(
-    styleText(
-      'dim',
-      '  The OpenCode plugin registers lat tools and hooks into the session',
-    ),
+    styleText('dim', '  The OpenCode plugin registers native lat tools.'),
   );
   console.log(
     styleText(
       'dim',
-      '  lifecycle to validate lat.md/ when the agent finishes.',
+      '  Agent commits are validated by the Git pre-commit hook.',
     ),
   );
 
@@ -1003,16 +926,19 @@ async function setupCodex(
   // AGENTS.md — Codex reads this natively
   // (already created in the shared step if any non-Claude agent is selected)
 
-  // Hooks — UserPromptSubmit (lat.md reminders + [[ref]] expansion) and Stop (update reminder)
+  // Prompt context stays active; validation runs at commit time.
   console.log('');
   console.log(
     styleText(
       'dim',
-      '  Hooks inject lat.md workflow reminders into every prompt and remind',
+      '  Prompt hooks inject lat.md workflow reminders and relevant context.',
     ),
   );
   console.log(
-    styleText('dim', '  the agent to update lat.md/ before finishing.'),
+    styleText(
+      'dim',
+      '  Agent commits are validated by the Git pre-commit hook.',
+    ),
   );
 
   const codexDir = projectWritePath(root, join(root, '.codex'));
@@ -1020,7 +946,8 @@ async function setupCodex(
   mkdirSync(codexDir, { recursive: true });
   syncLatHooks(hooksPath, style, 'codex', root);
   console.log(
-    styleText('green', '  Hooks') + ' synced (UserPromptSubmit + Stop)',
+    styleText('green', '  Hooks') +
+      ' synced (UserPromptSubmit; legacy Stop removed)',
   );
 
   // .codex/config.toml — MCP server registration
@@ -1486,11 +1413,48 @@ export async function initCmd(targetDir?: string): Promise<void> {
       });
     }
 
+    removeLatStopHooks(join(root, '.claude', 'settings.json'), root);
+    removeLatStopHooks(join(root, '.codex', 'hooks.json'), root);
+    removeLatStopHooks(join(root, '.cursor', 'hooks.json'), root, true);
+
+    const fileHashes: Record<string, string> = {};
+    for (const [selected, path, read, templateName] of [
+      [
+        usePi,
+        '.pi/extensions/lat.ts',
+        readPiExtensionTemplate,
+        'pi-extension.ts',
+      ],
+      [
+        useOpenCode,
+        '.opencode/plugins/lat.ts',
+        readOpenCodePluginTemplate,
+        'opencode-plugin.ts',
+      ],
+    ] as const) {
+      projectWritePath(root, join(root, path));
+      if (selected || !existsSync(join(root, path))) continue;
+      const template = read().replace('__LAT_INVOCATION__', () =>
+        JSON.stringify(agentInvocation(commandStyle, resolveLatInvocation())),
+      );
+      const hash = await writeTemplateFile(
+        root,
+        latDir,
+        path,
+        template,
+        templateName,
+        path,
+        '  ',
+        ask,
+      );
+      if (hash) fileHashes[path] = hash;
+    }
+
     if (!anySelected) {
       // Embedding setup is complete even when the user does not configure an
       // agent. Stamp the version so future non-interactive runs do not reapply
       // fresh/outdated defaults and overwrite the chosen backend.
-      writeInitMeta(latDir, {});
+      writeInitMeta(latDir, fileHashes);
       if (interactive) writeInitAgents(latDir, selectedAgents);
       console.log('');
       console.log(
@@ -1503,8 +1467,6 @@ export async function initCmd(targetDir?: string): Promise<void> {
 
     console.log('');
     const template = readAgentsTemplate();
-    const fileHashes: Record<string, string> = {};
-
     // Step 5: AGENTS.md (shared by all selected agents)
     await setupAgentsMd(root, latDir, template, fileHashes, ask);
 
@@ -1544,6 +1506,9 @@ export async function initCmd(targetDir?: string): Promise<void> {
       console.log(styleText('bold', 'Setting up Codex...'));
       await setupCodex(root, latDir, fileHashes, ask, commandStyle);
     }
+
+    const gitHook = installGitHook(root, resolveLatInvocation());
+    console.log(`\nGit pre-commit: ${gitHook.status}. ${gitHook.detail}`);
 
     // Record init version and file hashes so `lat check` can detect stale setups
     writeInitMeta(latDir, fileHashes);
