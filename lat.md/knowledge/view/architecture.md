@@ -6,7 +6,7 @@ Lat UI has one browser and three portable targets: a local live server, a fully 
 
 `lat ui` is shorthand for `lat ui run`. [[src/cli/ui.ts#uiCommand]] starts [[src/view/server.ts#startViewServer]] on loopback port 4242 and launches the browser without a shell. An occupied default advances to the next available port; an explicit `--port` is strict.
 
-[[packages/server/src/index.ts#createLatServerApp]] owns the shared Express stack, security policy, static delivery, and Node listener used by both live and exported servers. [[src/view/server.ts#createViewApp]] adds the live project APIs, while `startViewServer` selects the loopback port through the shared listener.
+[[packages/server/src/index.ts#createLatServerApp]] owns the shared Express stack, security policy, static delivery, and Node listener used by both live and exported servers. [[src/view/server.ts#createViewApp]] adds the live project APIs, while [[src/view/server.ts#startViewServer]] selects the port through the shared listener. Both `lat ui` and `lat ui run` accept `--host <address>` to override the loopback default, including `0.0.0.0` for all IPv4 interfaces. [[src/view/request-security.ts#trustedLiveRequest]] continues to validate the listener authority and same-origin requests.
 
 `--no-git` disables working-tree discovery and presentation without changing document, source, graph, search, or editing behavior.
 

@@ -3187,6 +3187,36 @@ describe('lat ui', () => {
     expect(openBrowser).toHaveBeenCalledTimes(1);
     await started!.close();
   });
+
+  // @lat: [[lat.md/knowledge/view/specs#View Tests#Binds the requested host]]
+  it('binds the requested host and accepts requests to a local interface', async () => {
+    let started: ViewServer | undefined;
+    const openBrowser = vi.fn(async () => {});
+    try {
+      const result = await uiCommand(testContext(), {
+        clientDir,
+        host: '0.0.0.0',
+        port: 0,
+        openBrowser,
+        onStarted(server) {
+          started = server;
+        },
+      });
+      expect(started!.server.address()).toMatchObject({ address: '0.0.0.0' });
+      expect(new URL(started!.url).hostname).toBe('0.0.0.0');
+      expect(openBrowser).toHaveBeenCalledWith(started!.url);
+      expect(result.output).toContain(started!.url);
+      const localUrl = new URL('/api/index', started!.url);
+      localUrl.hostname = '127.0.0.1';
+      expect((await fetch(localUrl)).status).toBe(200);
+      expect(
+        (await fetch(localUrl, { headers: { Origin: 'https://example.com' } }))
+          .status,
+      ).toBe(403);
+    } finally {
+      await started?.close();
+    }
+  });
 });
 
 describe('lat ui validation diagnostics', () => {

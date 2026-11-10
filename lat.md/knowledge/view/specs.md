@@ -431,6 +431,10 @@ The document API rejects traversal and non-Markdown targets so browser requests 
 
 An explicit `--port <number>` accepts 1–65535 and fails clearly rather than selecting another port when occupied. Startup reports the URL and points users to both deployment build targets.
 
+## Binds the requested host
+
+`lat ui` and `lat ui run` expose `--host <address>`. An explicit wildcard IPv4 address binds all interfaces, reports the selected address, and accepts local interface requests while rejecting foreign origins.
+
 ## Live request and resource isolation
 
 The live server validates Host and Origin against its listener, rejects cross-origin edits, and isolates raw resources with sandbox CSP and attachment responses for active HTML and script formats.

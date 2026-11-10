@@ -622,7 +622,7 @@ export async function createViewApp(
   };
 }
 
-/** Start the loopback server used by `lat ui`. */
+/** Start the `lat ui` server, defaulting to loopback. */
 export async function startViewServer(
   ctx: CmdContext,
   options: ViewServerOptions = {},
