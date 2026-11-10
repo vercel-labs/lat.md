@@ -32,6 +32,9 @@ importers:
       '@tursodatabase/database':
         specifier: 0.8.2
         version: 0.8.2
+      '@vercel/detect-agent':
+        specifier: ^1.2.7
+        version: 1.2.7
       '@vercel/nft':
         specifier: ^1.10.0
         version: 1.11.0(rollup@4.59.0)
@@ -1771,6 +1774,10 @@ packages:
 
   '@upsetjs/venn.js@2.0.0':
     resolution: {integrity: sha512-WbBhLrooyePuQ1VZxrJjtLvTc4NVfpOyKx0sKqioq9bX1C1m7Jgykkn8gLrtwumBioXIqam8DLxp88Adbue6Hw==}
+
+  '@vercel/detect-agent@1.2.7':
+    resolution: {integrity: sha512-5tWaC9V+u4SHcSMKBz9FQb3Dhl/1A2lQ6QqHovu8uQeb8dTyjEevpJMANm/uQEn/usYB63fpdjWYjkJ8/bGtjA==}
+    engines: {node: '>=14'}
 
   '@vercel/nft@1.11.0':
     resolution: {integrity: sha512-m1QFg+U+3yPOnP1xSYJ73UIRxLOXdts1JOhiOiyPYqEsALgrXFFINvgUaD6R6iNvaBFAjHllBCbkfx4FuOdpaA==}
@@ -4909,6 +4916,8 @@ snapshots:
     optionalDependencies:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
+
+  '@vercel/detect-agent@1.2.7': {}
 
   '@vercel/nft@1.11.0(rollup@4.59.0)':
     dependencies:

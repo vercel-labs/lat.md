@@ -109,6 +109,7 @@
     "@changesets/cli": "^3.0.3"
   },
   "dependencies": {
+    "@vercel/detect-agent": "^1.2.7",
     "@asciidoctor/core": "4.0.6",
     "@lat.md/embed": "workspace:*",
     "@lat.md/embed-minilm-fp16": "workspace:*",

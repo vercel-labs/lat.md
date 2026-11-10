@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { join, delimiter } from 'node:path';
 import {
@@ -12,17 +13,11 @@ import {
 import { tmpdir } from 'node:os';
 import { rmDirBestEffort } from './util.js';
 import { syncLatHooks } from '../src/cli/init.js';
+import { writeExperiments } from '../src/cli/experiments.js';
 import { analyzeDiff } from '../src/cli/hook.js';
 
 const casesDir = join(import.meta.dirname, 'cases');
-const cliPath = join(
-  import.meta.dirname,
-  '..',
-  'dist',
-  'src',
-  'cli',
-  'index.js',
-);
+const cliPath = join(import.meta.dirname, '..', 'src', 'cli', 'index.ts');
 
 /** Build a numstat string from [added, removed, file] tuples. */
 function numstat(files: [number, number, string][]): string {
@@ -95,12 +90,25 @@ function runHook(
     env.PATH = opts.fakeBinDir + delimiter + orig;
   }
 
-  const result = spawnSync('node', [cliPath, 'hook', agent, event], {
-    cwd: caseDir,
-    encoding: 'utf-8',
-    input: stdinJson,
-    env,
-  });
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--import',
+      pathToFileURL(
+        join(import.meta.dirname, '../node_modules/tsx/dist/loader.mjs'),
+      ).href,
+      cliPath,
+      'hook',
+      agent,
+      event,
+    ],
+    {
+      cwd: caseDir,
+      encoding: 'utf-8',
+      input: stdinJson,
+      env,
+    },
+  );
 
   return {
     stdout: result.stdout ?? '',
@@ -479,3 +487,41 @@ describe('analyzeDiff', () => {
     }
   });
 });
+
+// @lat: [[tests/hook#Legacy stop hooks are silent]]
+it.each([
+  ['claude', 'Stop'],
+  ['codex', 'Stop'],
+  ['cursor', 'stop'],
+])('silences %s %s for an opted-in project', (agent, event) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lat-opted-hook-'));
+  try {
+    cpSync(broken, dir, { recursive: true });
+    writeExperiments(dir, { 'commit-hooks': true });
+    const result = runHook(agent, event, dir);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout + result.stderr).toBe('');
+  } finally {
+    rmDirBestEffort(dir);
+  }
+});
+
+// @lat: [[tests/hook#Prompt guidance follows the selected workflow]]
+it.each([false, true])(
+  'uses saved prompt guidance (commit-hooks=%s)',
+  (enabled) => {
+    const dir = mkdtempSync(join(tmpdir(), 'lat-prompt-mode-'));
+    try {
+      cpSync(clean, dir, { recursive: true });
+      writeExperiments(dir, { 'commit-hooks': enabled });
+      const result = runHook('codex', 'UserPromptSubmit', dir);
+      expect(result.exitCode).toBe(0);
+      const context = JSON.parse(result.stdout).hookSpecificOutput
+        .additionalContext;
+      expect(context.includes('before finishing')).toBe(!enabled);
+      expect(context.includes('git-pre-commit')).toBe(enabled);
+    } finally {
+      rmDirBestEffort(dir);
+    }
+  },
+);

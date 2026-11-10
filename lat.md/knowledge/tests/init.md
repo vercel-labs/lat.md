@@ -100,3 +100,37 @@ Pi and OpenCode callbacks pass quotes, newlines, shell substitutions, and spaces
 ## Initialization confines every write
 
 Every init destination rejects external and dangling symlinks, including linked parent directories. Valid in-project instruction symlinks, user text, and unrelated settings survive setup.
+
+## Migrates installed completion integrations
+
+Opted-in initialization installs the Git hook, removes old stop commands from selected and previously installed agents, and refreshes unchanged Pi/OpenCode plugins even when they are not selected again.
+
+## Experiment choices persist and remain editable
+
+Interactive experiment selection records enabled and disabled choices, preserves unknown IDs, and reuses saved choices on ordinary init. Disabling commit hooks restores completion integrations, including agents not selected again.
+
+Experiment setup leaves the root ignore file unchanged when cache files are already covered by `lat.md/.gitignore`; Git still ignores the saved experiment choices through that existing rule.
+
+## Experiment selection requires confirmation
+
+Noninteractive experimental selection and canceled setup preserve existing choices, preventing accidental opt-in or opt-out without confirmation.
+
+## Experiment settings are local and reloadable
+
+Experiments default off and reload independently for each project. Unknown boolean IDs survive storage, and deleting the settings resets all opt-ins.
+
+## Malformed experiment settings fail safely
+
+Invalid JSON, unsupported versions, and nonboolean choices report errors without overwriting local settings or silently enabling features.
+
+## Generated templates follow project experiments
+
+Generated instructions and Pi/OpenCode callbacks follow the explicit project's persisted choices. Both sets of Markdown templates satisfy graph validation.
+
+## CLI generation honors the selected project
+
+The CLI's `--dir` option selects the saved experiment choices used by template generation, even when invoked from outside that project.
+
+## Experiments preserve unrelated agent settings
+
+Enabling and disabling experiments does not add Lat hooks to unselected agents whose existing settings contain only unrelated handlers.

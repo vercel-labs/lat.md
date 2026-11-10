@@ -5,13 +5,13 @@ Use Lat's knowledge graph to ground each task before changing code.
 
 - Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
 
-# Post-task checklist (REQUIRED — do not skip)
+# Before committing
 
-After EVERY task, before responding to the user:
+Keep `lat.md/` aligned with meaningful implemented behavior, architecture, and tests. Stage relevant documentation together with the code it describes; keep it focused on current state, not a journal or changelog.
 
-- [ ] Update `lat.md/` if you added or changed meaningful implemented functionality, architecture, tests, or behavior. Keep it a focused snapshot of the current implemented state, not a journal/changelog. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there.
-- [ ] Run `lat check` — all validations must pass
-- [ ] Do not skip these steps. Do not consider your task done until both are complete.
+Agent commits run staged validation through `lat hook git-pre-commit`. Fix validation errors and stage the fixes before retrying. The hook may also stop a commit to request a review of Lat coverage. After reviewing, you may retry with `LAT_BYPASS_COMMIT_HOOK=1 git commit ...` if no documentation update is needed or the changes are already covered. If coverage is missing, update and stage the relevant documentation first, then retry with the flag. This flag skips only the review reminder; staged validation and other Git hooks still run. Use `lat check` while editing to inspect errors; validation is not required after every response or research-only task.
+
+Plans may be drafted alongside implementation, with the intent that by commit time they describe the implemented state. Otherwise keep proposals and future work outside `lat.md/` unless explicitly requested there.
 
 ---
 

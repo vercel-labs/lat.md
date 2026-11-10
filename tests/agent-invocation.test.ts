@@ -30,7 +30,12 @@ it('runs every generated query tool without shell evaluation', async () => {
   );
   const marker = join(directory, 'injected');
   const input = `quotes " ' spaces\n$(touch '${marker}') \`touch '${marker}'\` \\`;
-  for (const name of ['pi-extension.ts', 'opencode-plugin.ts']) {
+  for (const name of [
+    'pi-extension.ts',
+    'opencode-plugin.ts',
+    'experimental/pi-extension.ts',
+    'experimental/opencode-plugin.ts',
+  ]) {
     let template = readFileSync(
       join(import.meta.dirname, '..', 'templates', name),
       'utf8',
@@ -71,7 +76,7 @@ it('runs every generated query tool without shell evaluation', async () => {
       },
     };
     const code = stripTypeScriptTypes(template);
-    if (name.startsWith('pi'))
+    if (name.endsWith('pi-extension.ts'))
       runInNewContext(code + '\nregister(pi);', sandbox);
     else
       Object.assign(
@@ -80,7 +85,7 @@ it('runs every generated query tool without shell evaluation', async () => {
       );
     for (const command of ['search', 'section', 'locate', 'expand', 'refs']) {
       const args = command === 'expand' ? { text: input } : { query: input };
-      const result = name.startsWith('pi')
+      const result = name.endsWith('pi-extension.ts')
         ? (await callbacks[`lat_${command}`].execute('test', args)).content[0]
             .text
         : await callbacks[`lat_${command}`].execute(args);
