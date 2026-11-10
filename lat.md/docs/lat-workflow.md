@@ -49,6 +49,8 @@ After validation passes, substantial staged code changes stop the commit with a 
 
 Choices are stored locally in `lat.md/.cache/experiments.json`. Normal `lat init` runs preserve them. Rerun `lat init --experimental` and uncheck the experiment to restore completion checks. Choosing experiments requires an interactive terminal. Deleting the cache resets the choices; rerun init afterward to synchronize installed integrations.
 
+The cache is already excluded by the `.cache` rule in the scaffolded `lat.md/.gitignore`. Experiment setup does not add a duplicate cache rule to the repository's root `.gitignore`.
+
 ## Existing Git hooks
 
 

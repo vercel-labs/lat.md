@@ -109,6 +109,8 @@ Opted-in initialization installs the Git hook, removes old stop commands from se
 
 Interactive experiment selection records enabled and disabled choices, preserves unknown IDs, and reuses saved choices on ordinary init. Disabling commit hooks restores completion integrations, including agents not selected again.
 
+Experiment setup leaves the root ignore file unchanged when cache files are already covered by `lat.md/.gitignore`; Git still ignores the saved experiment choices through that existing rule.
+
 ## Experiment selection requires confirmation
 
 Noninteractive experimental selection and canceled setup preserve existing choices, preventing accidental opt-in or opt-out without confirmation.

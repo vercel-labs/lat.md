@@ -376,6 +376,7 @@ describe('lat init embedding setup', () => {
   // @lat: [[tests/init#Experiment choices persist and remain editable]]
   it('prompts for experiments, preserves choices on normal init, and restores disabled integrations', async () => {
     createLatDir();
+    writeFileSync(join(latDir(), '.gitignore'), '.cache\n');
     setInteractive(true);
     const agents = ['claude', 'codex', 'cursor', 'pi', 'opencode'];
     vi.mocked(checklistMenu).mockResolvedValue(agents);
@@ -394,10 +395,24 @@ describe('lat init embedding setup', () => {
         .Stop,
     ).toHaveLength(1);
     writeExperiments(root, { 'future-experiment': true });
+    const gitignoreBefore = readFileSync(join(root, '.gitignore'), 'utf8');
     vi.mocked(checklistMenu)
       .mockResolvedValueOnce(['commit-hooks'])
       .mockResolvedValueOnce(agents);
     await initCmd(root, { experimental: true });
+    expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe(
+      gitignoreBefore,
+    );
+    const ignored = spawnSync(
+      'git',
+      ['check-ignore', '-v', 'lat.md/.cache/experiments.json'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+      },
+    );
+    expect(ignored.status, ignored.stderr).toBe(0);
+    expect(ignored.stdout).toContain('lat.md/.gitignore:1:.cache');
     expect(readExperiments(root)).toEqual({
       'future-experiment': true,
       'commit-hooks': true,

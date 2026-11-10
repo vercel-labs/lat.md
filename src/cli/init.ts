@@ -1493,7 +1493,6 @@ export async function initCmd(
     }
 
     if (options.experimental) {
-      ensureGitignored(root, 'lat.md/.cache/');
       writeExperiments(root, experiments);
     }
     const commitHooks = isExperimentEnabled('commit-hooks', root);
