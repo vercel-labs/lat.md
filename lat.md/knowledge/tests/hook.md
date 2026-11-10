@@ -143,14 +143,18 @@ Prompt hooks read each project's saved experiment choices and describe completio
 
 Missing or disabled project choices make the Git hook skip even broken staged graphs. Linked worktrees retain independent opt-ins despite sharing the installed launcher.
 
-## Staged code review reminders are advisory
+## Staged code review requires acknowledgment
 
-An initial agent commit with enough staged code prints one optional review reminder and succeeds, even when substantial Lat changes are already staged. Documentation churn does not prove semantic coverage.
+An initial agent commit with enough staged code stops for review even when Lat changes are staged. Only an explicit retry with the bypass value `1` succeeds; other values do not acknowledge review.
 
 ## Review reminders use only staged code churn
 
-Suggestions ignore untracked code, unstaged edits, documentation-only changes, and small staged edits. Staged additions and deletions count, unusual filenames remain intact, and reminders do not hide validation failures.
+Suggestions ignore untracked code, unstaged edits, documentation-only changes, and small staged edits. Staged additions and deletions count, unusual filenames remain intact, and validation failures take precedence over review reminders.
 
 ## Review reminders respect project scope
 
 Suggestions count only source changes within affected opted-in projects and outside excluded fixture subtrees. A root project’s opt-out prevents unrelated root changes from triggering reminders for an opted-in nested project.
+
+## Review bypass preserves validation and other hooks
+
+Real Git commits with the review bypass still reject broken staged documentation and run other Git hooks. The flag acknowledges semantic review without weakening structural validation or unrelated checks.

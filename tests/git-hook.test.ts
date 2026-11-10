@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -51,7 +52,10 @@ const agentKeys = [
 const cleanEnv = () =>
   Object.fromEntries(
     Object.entries(process.env).filter(
-      ([key]) => !agentKeys.includes(key) && !key.startsWith('GIT_'),
+      ([key]) =>
+        !agentKeys.includes(key) &&
+        !key.startsWith('GIT_') &&
+        key !== 'LAT_BYPASS_COMMIT_HOOK',
     ),
   );
 const git = (root: string, ...args: string[]) =>
@@ -171,8 +175,8 @@ it('validates real git commit -a and path-specific temporary indexes', () => {
   expect(result.status, result.stderr).toBe(0);
 });
 
-// @lat: [[tests/hook#Staged code review reminders are advisory]]
-it('suggests review even with Lat edits and allows a real initial commit', () => {
+// @lat: [[tests/hook#Staged code review requires acknowledgment]]
+it('stops a real initial commit for review and allows an explicit retry', () => {
   const root = repo();
   write(
     root,
@@ -186,18 +190,56 @@ it('suggests review even with Lat edits and allows a real initial commit', () =>
   );
   git(root, 'add', '.');
   expect(installGitHook(root, invocation).status).toBe('installed');
-  const result = spawnSync('git', ['commit', '-qm', 'initial'], {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...cleanEnv(), AI_AGENT: 'codex' },
-  });
-  expect(result.status, result.stderr).toBe(0);
+  const commit = (bypass: string) =>
+    spawnSync('git', ['commit', '-qm', 'initial'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...cleanEnv(), AI_AGENT: 'codex', LAT_BYPASS_COMMIT_HOOK: bypass },
+    });
+  const result = commit('');
+  expect(result.status, result.stderr).toBe(1);
   expect(
     result.stderr.match(/IMPORTANT: lat precommit hook suggests/g),
   ).toHaveLength(1);
-  expect(result.stderr).toContain('feel free to ignore');
-  expect(result.stderr).toContain('it does not block the commit.\n\n\n');
+  expect(result.stderr).toContain('This commit was stopped for review.');
+  expect(result.stderr).toContain('LAT_BYPASS_COMMIT_HOOK=1 git commit ...');
+  expect(result.stderr).toContain('other Git hooks still run.\n\n\n');
+  expect(() => git(root, 'rev-parse', '--verify', 'HEAD')).toThrow();
+  expect(commit('0').status).toBe(1);
+  expect(commit('true').status).toBe(1);
+  const retry = commit('1');
+  expect(retry.status, retry.stderr).toBe(0);
+  expect(retry.stderr).not.toContain('IMPORTANT:');
   expect(git(root, 'status', '--porcelain')).toBe('');
+});
+
+// @lat: [[tests/hook#Review bypass preserves validation and other hooks]]
+it('keeps staged validation and other Git hooks active with the bypass flag', () => {
+  const root = repo();
+  expect(installGitHook(root, invocation).status).toBe('installed');
+  const commit = () =>
+    spawnSync('git', ['commit', '-qm', 'initial'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...cleanEnv(), AI_AGENT: 'codex', LAT_BYPASS_COMMIT_HOOK: '1' },
+    });
+  write(root, 'lat.md/lat.md', '# Broken\n\n[[missing]]\n');
+  git(root, 'add', '.');
+  const broken = commit();
+  expect(broken.status).toBe(1);
+  expect(broken.stderr).toContain('staged validation failed');
+  write(root, 'lat.md/lat.md', '# Project\n\nValid documentation.\n');
+  git(root, 'add', '.');
+  const otherHook = join(root, '.git/hooks/commit-msg');
+  writeFileSync(
+    otherHook,
+    '#!/bin/sh\necho "Other hook still runs" >&2\nexit 1\n',
+  );
+  chmodSync(otherHook, 0o755);
+  const other = commit();
+  expect(other.status).toBe(1);
+  expect(other.stderr).toContain('Other hook still runs');
+  expect(() => git(root, 'rev-parse', '--verify', 'HEAD')).toThrow();
 });
 
 // @lat: [[tests/hook#Review reminders use only staged code churn]]
@@ -220,7 +262,7 @@ it('ignores unstaged work and documentation churn but counts staged deletions', 
   expect(docsOnly.stdout + docsOnly.stderr).toBe('');
   git(root, 'add', path);
   const staged = hook(root);
-  expect(staged.status, staged.stderr).toBe(0);
+  expect(staged.status, staged.stderr).toBe(1);
   expect(staged.stderr).toContain('IMPORTANT: lat precommit hook suggests');
   git(root, 'commit', '-qm', 'source');
   write(root, path, source.replace('= 0', '= 10'));
@@ -232,13 +274,13 @@ it('ignores unstaged work and documentation churn but counts staged deletions', 
   expect(small.stdout + small.stderr).toBe('');
   git(root, 'rm', '-f', path);
   const deleted = hook(root);
-  expect(deleted.status, deleted.stderr).toBe(0);
+  expect(deleted.status, deleted.stderr).toBe(1);
   expect(deleted.stderr).toContain('IMPORTANT: lat precommit hook suggests');
   write(root, 'lat.md/lat.md', '# Project\n\n[[missing]]\n');
   git(root, 'add', 'lat.md/lat.md');
   const broken = hook(root);
   expect(broken.status).toBe(1);
-  expect(broken.stderr).toContain('IMPORTANT: lat precommit hook suggests');
+  expect(broken.stderr).not.toContain('IMPORTANT: lat precommit hook suggests');
   expect(broken.stderr).toContain('staged validation failed');
 });
 
@@ -270,7 +312,7 @@ it('limits review suggestions to opted-in projects outside excluded subtrees', (
   write(root, 'packages/app/source.ts', source);
   git(root, 'add', '.');
   const inside = hook(root);
-  expect(inside.status, inside.stderr).toBe(0);
+  expect(inside.status, inside.stderr).toBe(1);
   expect(
     inside.stderr.match(/IMPORTANT: lat precommit hook suggests/g),
   ).toHaveLength(1);

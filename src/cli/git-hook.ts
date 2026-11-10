@@ -52,12 +52,13 @@ type Entry = { mode: string; oid: string; path: string };
 /** Avoid reminders for very small edits without imposing a documentation ratio. */
 const REVIEW_CODE_LINES = 5;
 
-/** Advisory only: inspect Git's staged index, never unstaged or untracked work. */
-function suggestDocumentationReview(
+/** Request review of staged code, allowing an explicit acknowledgment on retry. */
+function requestDocumentationReview(
   root: string,
   projects: Set<string>,
   excluded: string[],
-): void {
+): boolean {
+  if (process.env.LAT_BYPASS_COMMIT_HOOK === '1') return false;
   try {
     const records = git(root, [
       'diff',
@@ -85,14 +86,15 @@ function suggestDocumentationReview(
       codeLines += Number(match[1]) + Number(match[2]);
       if (codeLines >= REVIEW_CODE_LINES) {
         console.error(
-          'IMPORTANT: lat precommit hook suggests reviewing the staged code and lat.md changes to check that important behavior, architecture, and test changes are covered. If this commit needs no documentation update, feel free to ignore this reminder; it does not block the commit.\n\n',
+          'IMPORTANT: lat precommit hook suggests reviewing the staged code and lat.md changes to check that important behavior, architecture, and test changes are covered. This commit was stopped for review. If no Lat update is needed, or the changes are already covered, you may retry with LAT_BYPASS_COMMIT_HOOK=1 git commit ... (using your original commit arguments). If coverage is missing, update and stage the relevant Lat documentation, then retry with the same flag. The flag skips this review reminder only; staged validation and other Git hooks still run.\n\n',
         );
-        return;
+        return true;
       }
     }
   } catch {
-    // An unavailable advisory diff must not prevent an otherwise valid commit.
+    // An unavailable heuristic diff must not prevent an otherwise valid commit.
   }
+  return false;
 }
 
 function inside(root: string, path: string): boolean {
@@ -283,7 +285,6 @@ export async function gitPreCommit(cwd = process.cwd()): Promise<number> {
         projects.delete(project);
     }
     if (!projects.size) return 0;
-    suggestDocumentationReview(root, projects, excluded);
     temporary = mkdtempSync(join(tmpdir(), 'lat-staged-'));
     const snapshot = join(temporary, 'tree');
     mkdirSync(snapshot);
@@ -343,11 +344,13 @@ export async function gitPreCommit(cwd = process.cwd()): Promise<number> {
         `Lat staged validation failed (${project || '.'}):\n${output.split(snapshot).join(root)}`,
       );
     }
-    if (failed)
+    if (failed) {
       console.error(
         'Fix the errors and stage the fixes before committing again. Run `lat check` while editing.',
       );
-    return failed ? 1 : 0;
+      return 1;
+    }
+    return requestDocumentationReview(root, projects, excluded) ? 1 : 0;
   } catch (error) {
     console.error(
       `Lat could not validate the staged commit: ${(error as Error).message}`,

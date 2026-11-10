@@ -365,7 +365,7 @@ Reads the hook input from stdin (Claude JSON with `user_prompt` or Codex JSON wi
 
 ### git-pre-commit
 
-[[src/cli/git-hook.ts#gitPreCommit]] validates the staged contents of affected Lat projects that opted into `commit-hooks`, for detected agents, with optional review suggestions and no checks for ordinary manual commits.
+[[src/cli/git-hook.ts#gitPreCommit]] validates the staged contents of affected Lat projects that opted into `commit-hooks`, for detected agents, with a review acknowledgment for substantial staged code churn and no checks for ordinary manual commits.
 
 [[src/cli/git-hook.ts#isAgentCommit]] uses `@vercel/detect-agent`. Claude and Cowork additionally need an explicit `AI_AGENT` identity or the child-session marker, because broad Claude IDE markers can appear in manual terminals. Unknown identities skip checks. This is a workflow guardrail, not tamper-proof enforcement.
 
@@ -373,11 +373,13 @@ Each project's opt-in comes from its local experiment settings in the committing
 
 Each affected project runs the full checker in an isolated subprocess with Git repository-local environment variables cleared and a staged-file inventory. Errors use original project paths and tell the agent to stage fixes before retrying. The temporary tree and its external checkout caches are removed afterward. No line-ratio heuristic requires documentation churn. External references use the staged canonical configuration; ignored local overrides and caches are not copied, so external checks may require retrieval on a cold snapshot.
 
-[[src/cli/git-hook.ts#suggestDocumentationReview]] prints one non-blocking suggestion when staged source additions and deletions total at least [[src/cli/git-hook.ts#REVIEW_CODE_LINES|the review threshold]] across affected opted-in projects. It asks the agent to review whether important behavior, architecture, and test changes are covered in Lat, and explicitly permits ignoring the suggestion when no documentation update is needed.
+[[src/cli/git-hook.ts#requestDocumentationReview]] stops an otherwise valid commit when staged source additions and deletions total at least [[src/cli/git-hook.ts#REVIEW_CODE_LINES|the review threshold]] across affected opted-in projects. Its message asks the agent to review whether important behavior, architecture, and test changes are covered in Lat.
 
-The suggestion uses Git’s active index, including initial and partial commits. It ignores unstaged and untracked work, binary diffs, documentation paths, and excluded fixture subtrees. Existing Lat edits do not suppress it: line counts cannot establish semantic coverage. It never changes validation’s exit status, and failure to read the advisory diff is ignored. No bypass flag is needed to disregard this reminder.
+After review, the agent may retry the original commit command with `LAT_BYPASS_COMMIT_HOOK=1` when no documentation update is needed or coverage is already sufficient. If coverage is missing, the agent updates and stages the relevant documentation before retrying with that flag. Only the exact value `1` skips the review reminder; staged validation and other Git hooks still run. Nothing is persisted between attempts.
 
-Only commits invoking this hook are covered; automatic merge commits need separate pre-merge-commit wiring. Generated instructions allow agents to use `--no-verify` when Lat is the only failing check and updating the knowledge graph is not worthwhile for the change. Agents briefly explain the decision and verify other hook checks separately, since the Git flag skips those hooks too.
+The review heuristic uses Git’s active index, including initial and partial commits. It ignores unstaged and untracked work, binary diffs, documentation paths, and excluded fixture subtrees. Existing Lat edits do not suppress it: line counts cannot establish semantic coverage. Validation failures take precedence and are reported without the review reminder. Failure to read the heuristic diff is ignored.
+
+Only commits invoking this hook are covered; automatic merge commits need separate pre-merge-commit wiring. Generated instructions describe the scoped environment flag for review acknowledgment instead of Git’s general `--no-verify` bypass.
 
 #### Excluded fixture projects
 
