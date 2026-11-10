@@ -2,6 +2,23 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
+## 0.13.4
+
+This release adds read-only network sharing with Git diffs for public, linked project files.
+
+### Patch Changes
+
+Network sharing options and access restrictions in this release.
+
+- 271595d: Add `--host <address>` to `lat ui` and `lat ui run`. Use `--host 0.0.0.0` to
+  listen on all IPv4 interfaces; the default remains `127.0.0.1`.
+
+  Network listeners use read-only sharing restricted to public vault Markdown and
+  explicitly linked public files. Hidden, ignored, untracked, and unlinked project
+  files remain private. Git diffs and change indicators remain available for shared
+  Markdown. Editing, search, and section-command output are available only in the
+  private loopback UI.
+
 ## 0.13.3
 
 This patch fixes code references to section headings containing brackets.
