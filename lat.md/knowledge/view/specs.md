@@ -439,6 +439,16 @@ An explicit `--port <number>` accepts 1–65535 and fails clearly rather than se
 
 The live server validates Host and Origin against its listener, rejects cross-origin edits, and isolates raw resources with sandbox CSP and attachment responses for active HTML and script formats.
 
+## Read-only network sharing
+
+Non-loopback servers expose only public vault Markdown and transitively linked public files. Direct requests, backlinks, edits, and external documents cannot grant access to private or unlinked files.
+
+Coverage exercises Git and non-Git projects, nested Markdown cycles, source/resource previews, ignored Markdown and raw routes, hidden and untracked files, foreign URLs, edit rejection, and disabled private queries. Removed links and new ignore rules revoke access after refresh, refresh failures fail closed, and symlink replacements cannot expose unlinked files. Linked externals use pinned content rather than local overrides; loopback retains private browsing.
+
+## Shared UI controls
+
+The shared browser hides editing, search, and section-command controls while keeping published Markdown readable, matching the server's read-only request boundary.
+
 ## Export publication boundaries
 
 Exports reject private, ignored, and untracked source/resource files before reading their content, including backlink snippets and symlink aliases. Foreign origins and encoded path separators cannot trigger local reads or escaping output writes.

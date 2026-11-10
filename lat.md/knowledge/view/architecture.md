@@ -266,8 +266,18 @@ Repository resources use a sandbox CSP without script or same-origin privileges.
 
 ## Publication scope
 
-Static and server builds publish linked source and resource files only within an explicit file inventory. Interactive browsing retains its broader project-contained read behavior.
+Static and server builds publish linked source and resource files only within an explicit file inventory. Loopback browsing retains its broader project-contained read behavior; [[architecture#Network sharing]] adds a reachable-file boundary.
 
 In Git projects, publication requires a tracked regular file that is not ignored. Outside Git, the ordinary walker applies `.gitignore` rules. Dot paths, dependency trees, and `config.local.yaml` are always excluded, including through symlink aliases. Add intended public files to Git and remove ignore rules before building; excluded links fail the build while preserving the previous output.
 
 The same policy filters code-reference files before snippets enter documents or graph data. External documents do not authorize local source collection. Foreign-origin links are not local routes, and decoded paths and route writes remain confined to the export payload.
+
+## Network sharing
+
+Non-loopback listeners share a read-only view of public vault Markdown and files explicitly reachable through its links. Local editing remains available only on literal loopback addresses.
+
+[[src/view/sharing.ts#createSharingPolicy]] starts with the [[src/view/publication.ts#createPublicationPolicy|publication inventory]], follows rendered Markdown links recursively through project previews, and collects explicitly linked source and resource files. Cycles are deduplicated; foreign URLs and code backlinks do not grant access. Hidden, ignored, untracked Git files, local configuration, dependency directories, and aliases to excluded or unlinked files stay private even when linked.
+
+[[src/view/store.ts#createViewStore]] filters shared Markdown before building its index, diagnostics, graph, and reference snippets. Source and resource readers check the same reachable inventory. External previews must be linked, resolve pinned content without local overrides, and cannot authorize local files. Filesystem refreshes rebuild the sharing policy and snapshot together; failed rebuilds block requests until a successful refresh.
+
+[[src/view/server.ts#createViewApp]] disables edits, Git history, semantic search, and section-command APIs for shared listeners because those operations use private project-wide state. [[src/view/sharing.ts#isLoopbackHost]] treats hostnames conservatively as shared; Host and Origin checks remain additional request validation, not authentication. The browser hides unavailable controls through [[view/src/static-mode.ts#isSharedView]].

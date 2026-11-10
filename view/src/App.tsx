@@ -56,6 +56,7 @@ import { sourceLineId, SourceView } from './SourceView';
 import latLogoUrl from './logo.svg?url';
 import {
   isStaticView,
+  isSharedView,
   staticViewAssetUrl,
   staticViewBasePath,
   staticViewSearchApi,
@@ -285,7 +286,9 @@ function errorMessage(reason: unknown): string {
 
 export function App() {
   const staticView = isStaticView();
-  const searchEnabled = !staticView || staticViewSearchApi() !== null;
+  const privateView = !staticView && !isSharedView();
+  const searchEnabled =
+    !isSharedView() && (!staticView || staticViewSearchApi() !== null);
   const graphModeKey = graphModeStorageKey(staticViewBasePath());
   const [location, setLocation] = useState(currentLocation);
   const [index, setIndex] = useState<ViewIndex | null>(null);
@@ -383,7 +386,7 @@ export function App() {
         );
   const activePath = route?.kind === 'markdown' ? route.path : null;
   const editingDocument =
-    !staticView &&
+    privateView &&
     route?.kind === 'markdown' &&
     !route.path.startsWith('@/') &&
     documentMode === 'edit';
@@ -940,7 +943,7 @@ export function App() {
             instanceId={projectChange.instanceId}
             markdownGeneration={projectChange.markdownGeneration}
             onNavigate={navigate}
-            onShowSectionOutput={staticView ? undefined : setSectionOutputId}
+            onShowSectionOutput={privateView ? setSectionOutputId : undefined}
             searchEnabled={searchEnabled}
             selectedNodeId={graphSelectedNodeId}
             target={graphSelectionTarget}
@@ -1080,7 +1083,7 @@ export function App() {
                       </button>
                     )}
                   </div>
-                  {!staticView &&
+                  {privateView &&
                     route?.kind === 'markdown' &&
                     !route.path.startsWith('@/') && (
                       <DocumentModeSwitch
@@ -1127,7 +1130,7 @@ export function App() {
                   }
                   onShowSectionOutput={setSectionOutputId}
                   sectionOutputEnabled={
-                    !staticView &&
+                    privateView &&
                     !(route?.kind === 'markdown' && route.path.startsWith('@/'))
                   }
                   tree={documentTree}

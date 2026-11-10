@@ -8,6 +8,13 @@ type LatStaticViewConfig = {
 
 const STATIC_VIEW_META_NAME = 'lat-static-view';
 
+export function isSharedView(): boolean {
+  return (
+    typeof document !== 'undefined' &&
+    document.querySelector('meta[name="lat-shared-view"]') !== null
+  );
+}
+
 function staticViewConfig(): LatStaticViewConfig | null {
   if (typeof document === 'undefined') return null;
   const content = document.querySelector<HTMLMetaElement>(

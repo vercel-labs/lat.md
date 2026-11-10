@@ -14,6 +14,10 @@ lat ui
 
 Use `lat ui --host 0.0.0.0` to listen on all IPv4 interfaces, or pass a specific address with `--host <address>`. The default is `127.0.0.1`. Choose a port with `--port <number>`; other machines connect using the server machine's address and that port.
 
+Non-loopback addresses and hostnames enable read-only sharing: public vault Markdown and explicitly linked public source files, project Markdown, and resources are available. In Git projects, add those files to Git first. Hidden, ignored, untracked, and unlinked files remain private, including local configuration and source files mentioned only by backlinks. Linked external sources use pinned content instead of local overrides.
+
+Sharing disables editing, Git diffs, semantic search, and `lat section` output. Use the default loopback listener for the full local workflow. Removing links or adding ignore rules updates sharing permissions when the server refreshes.
+
 Use the sidebar and table of contents to navigate, or follow references between explanations, source definitions, and tests. Validation errors and Git diffs appear beside the affected content.
 
 You can edit local Markdown and save explicitly; conflicting changes are reported instead of silently overwritten. Source files and [[external_sources|external sources]] are read-only. Code highlighting, math, diagrams, maps, and 3D models render within documents.

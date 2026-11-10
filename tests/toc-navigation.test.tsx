@@ -112,6 +112,25 @@ describe('document TOC navigation', () => {
     vi.unstubAllGlobals();
   });
 
+  // @lat: [[view/specs#Shared UI controls]]
+  it('hides editing and private query controls in shared mode', async () => {
+    expect(container.querySelector('.document-mode-switch')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Search"]')).not.toBeNull();
+    const meta = document.createElement('meta');
+    meta.name = 'lat-shared-view';
+    meta.content = 'true';
+    document.head.append(meta);
+    try {
+      await act(async () => root.render(createElement(App)));
+      expect(container.querySelector('.document-mode-switch')).toBeNull();
+      expect(container.querySelector('[aria-label="Search"]')).toBeNull();
+      expect(container.textContent).not.toContain('lat section');
+      expect(container.querySelector('.markdown')).not.toBeNull();
+    } finally {
+      meta.remove();
+    }
+  });
+
   // @lat: [[view/specs#View Tests#TOC navigation from search results]]
   it('prioritizes clicked headings over highlights, including repeated clicks, without remounting or refetching', async () => {
     const article = container.querySelector('.markdown');
