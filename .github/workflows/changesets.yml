@@ -1,0 +1,29 @@
+name: Changesets
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  changesets:
+    name: Changesets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # checkout uses a detached PR merge commit; Changesets status needs main.
+      - run: git update-ref refs/heads/main "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      - run: pnpm changeset:check "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}

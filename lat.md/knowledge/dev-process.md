@@ -63,6 +63,8 @@ pnpm exec lat check
 
 Keep pull requests focused and explain user-visible behavior and rationale. Do not commit generated `dist/`, `model/`, `wasm-dist/`, `.cargo-tools/`, or Cargo `target/` artifacts. Version bumps are reserved for maintainer-led releases.
 
+Every PR adds a new Changeset using `pnpm changeset`, or an empty Changeset with an explanation when no release is needed. See [[dev-process#Publishing#Changeset enforcement]] for the merge check and [[dev-process#Publishing#Release Process]] for versioning.
+
 ## Development Commands
 
 The root scripts provide focused checks and builds as well as the complete CI-equivalent workflow.
@@ -114,6 +116,12 @@ CI (`.github/workflows/ci.yml`) runs the full `pnpm buildall` + `vitest` suite o
 The separate graph-validation workflow installs and builds the workspace, then runs `lat check` through the checkout's built CLI. This lets unreleased parser and validation behavior verify the repository without third-party actions or the last npm release.
 
 Cross-platform correctness relies on two conventions: stored paths are always POSIX ([[packages/core/src/path.ts#toPosix]]), and a repo-root `.gitattributes` (`eol=lf`) keeps Windows checkouts from rewriting line endings and breaking the markdown roundtrip. Functional init tests run the built CLI and database seeding in child processes so native database handles close before temp cleanup. Lower-level tests that retain handles or spawn a fake `git` use [[tests/util.ts#rmDirBestEffort]].
+
+### Release automation tests
+
+[[tests/changesets.test.ts]] exercises changeset enforcement and actual Changesets versioning in temporary Git repositories, including dependency propagation and public changelog generation.
+
+Coverage rejects missing notes despite pre-existing pending changesets, unexplained empty files, invalid bump types, and unknown packages. Real versioning must bump an exact workspace dependent, preserve the workspace protocol, and pass the release-only exception. Source changes cannot use that exception, and consuming a release note requires its package bump. Public changelog synchronization preserves earlier releases, adds section descriptions, and is idempotent.
 
 ## Site Development
 
@@ -168,17 +176,27 @@ The supporting `@lat.md/*` packages are runtime `dependencies` of the root, decl
 
 ### Release Process
 
-Step-by-step procedure for cutting a release: version bump, changelog, PR, and npm publish.
+Maintainers prepare releases locally with Changesets, review the generated version and changelog changes in a PR, and publish through the existing main-branch workflow.
 
-1. **Compile changelog** — run `git log --oneline` since the last version bump commit (look for commits matching `Bump to X.Y.Z`) and summarize notable changes as bullet points. Only include user-facing features, fixes, and behavioral changes — skip doc-only updates, refactors, and other commits that don't affect functionality
-2. **Sync main** — `git fetch` and rebase/merge to ensure local `main` is up to date with the remote before branching
-3. **Create a release branch** — branch off `main`, e.g. `release/0.1.5`
-4. **Bump versions** — update `version` in the root `package.json`. **Also bump any `@lat.md/*` workspace package whose source changed since its last publish** (compare `npm view <pkg> version` against the local `version`; inspect the published tarball if unsure). The [[dev-process#Publishing#Publish Workflow]] only republishes a package whose version is not already on npm, so a changed-but-unbumped package would silently ship stale to users while the root pins the old version. Commit message: `Bump to X.Y.Z`
-5. **Switch back to main** — check out `main` so the working tree is not left on the release branch
-6. **Push main and open a PR** — push `main` first (so the release branch diff is clean), then push the release branch and create a PR with the changelog as the body
-7. **Merge** — once CI passes and the PR is merged to `main`, the [[dev-process#Publishing#Publish Workflow]] takes over
+1. **Sync main and branch** — start from current `main` and create a release branch, such as `release/0.14.0`.
+2. **Review pending changesets** — `pnpm changeset status` previews package bumps. Each user-facing change names every affected published package, including `lat.md` when the full CLI exposes the change so its public notes include the explanation. While pre-1.0, use patch for fixes and minor for features or breaking changes; packages remain independently versioned.
+3. **Generate the release** — run `pnpm release:version`. Changesets consumes pending files, bumps packages and their exact workspace dependents, and writes package `CHANGELOG.md` files. The command refreshes the pnpm lockfile and runs [[scripts/sync-changelog.mjs]] to prepend new root-package releases to [[lat.md/changelog]], preserving earlier history and adding Lat-required section descriptions.
+4. **Validate and review** — run the normal build, tests, graph validation, and `pnpm changeset:check main`. Review package versions and notes; keep unrelated source or manifest changes out of the release PR. Commit the generated changes and deleted fragments together.
+5. **Open and merge a release PR** — once CI passes and the release is merged to `main`, the [[dev-process#Publishing#Publish Workflow]] publishes new versions. Version preparation itself does not publish or create commits.
 
-Version numbers follow semver. While pre-1.0, bump the patch for fixes and the minor for features/breaking changes. Each `@lat.md/*` package is versioned independently under the same rule.
+[[.changeset/config.json]] keeps public packages independently versioned and excludes private packages from versioning and tagging. [[CHANGELOG.md]] holds generated root-package entries; [[lat.md/changelog]] is the public history, including releases predating Changesets. Empty changesets are consumed without creating release notes or package bumps.
+
+### Changeset enforcement
+
+Every PR must add a new changeset or consist solely of release metadata consuming existing changesets. [[.github/workflows/changesets.yml]] exposes this policy as the `Changesets` status check.
+
+Run `pnpm changeset` to record affected packages, bump types, and a user-facing summary. For docs, tests, or tooling that need no release, run `pnpm changeset --empty` and add a sentence explaining the decision. [[.changeset/README.md]] documents the contributor workflow.
+
+[[scripts/check-changesets.mjs]] compares the branch with its merge base and requires a new Markdown fragment; existing pending notes cannot satisfy another PR. New fragments need explanatory text and valid bump types, and the Changesets CLI validates package names and the release plan. Locally, `pnpm changeset:check main` also considers untracked changeset files.
+
+Release-only PRs may delete consumed fragments while changing only package versions, package changelogs, the lockfile, and the public changelog. Consumed notes with package bumps require those packages' versions to increase. Manifest changes other than versions and source edits require a separate PR with a new changeset.
+
+To block merges, configure GitHub's branch rules to require the `Changesets` check after the workflow is available. The workflow alone reports failures; it cannot configure merge protection. Reviewers still verify that all affected packages are named and that empty changesets are appropriate.
 
 ### Publish Workflow
 

@@ -55,7 +55,10 @@
     "build:core": "pnpm --filter @lat.md/core build",
     "build:action-test": "pnpm build:core && node scripts/build-action-test.mjs",
     "test:core": "node --test scripts/test-core-distribution.js",
-    "test:action": "node --test scripts/test-check-action.js"
+    "test:action": "node --test scripts/test-check-action.js",
+    "changeset": "changeset",
+    "changeset:check": "node scripts/check-changesets.mjs",
+    "release:version": "changeset version && pnpm install --lockfile-only && node scripts/sync-changelog.mjs"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.11.0",
@@ -102,7 +105,8 @@
     "micromark-extension-gfm-table": "^2.1.1",
     "mdast-util-gfm-table": "^2.0.0",
     "remark-math": "^6.0.0",
-    "@folder/xdg": "^4.0.1"
+    "@folder/xdg": "^4.0.1",
+    "@changesets/cli": "^3.0.3"
   },
   "dependencies": {
     "@asciidoctor/core": "4.0.6",
