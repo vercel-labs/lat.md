@@ -19,6 +19,7 @@ function parsePort(value: string): number {
 
 type UiRunOptions = {
   git: boolean;
+  host?: string;
   logoText?: string;
   port?: number;
 };
@@ -36,6 +37,7 @@ function configureUiRun(command: Command): Command {
   return command
     .option('--logo-text <text>', 'top-left logo text')
     .option('--no-git', 'disable Git working-tree integration')
+    .option('--host <address>', 'server listen address (default: 127.0.0.1)')
     .option(
       '--port <number>',
       'server port (default: 4242; explicit ports are strict)',
@@ -64,6 +66,7 @@ async function runUi(opts: UiRunOptions): Promise<void> {
   handleResult(
     await uiCommand(ctx, {
       git: opts.git,
+      host: opts.host ?? ui.opts<UiRunOptions>().host,
       logoText: opts.logoText,
       port: opts.port,
     }),

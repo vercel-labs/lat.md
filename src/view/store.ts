@@ -68,6 +68,7 @@ import {
   getViewSource,
   ViewDocumentNotFoundError,
   ViewSourceNotFoundError,
+  ViewExternalNotFoundError,
 } from './repository.js';
 import {
   buildViewReferenceIndex,
@@ -97,9 +98,17 @@ export type ViewProjectSnapshot = {
   external: ExternalResolver;
 };
 
+export type ViewSharingPolicy = {
+  publishable: (path: string) => Promise<boolean>;
+  externalTargets: ReadonlySet<string>;
+};
+
 export type ViewStoreOptions = {
-  /** Export-only allowlist, applied before source/backlink/resource reads. */
+  /** Publication allowlist, applied before source/backlink/resource reads. */
   publishable?: (path: string) => Promise<boolean>;
+  filterMarkdown?: boolean;
+  sharingPolicy?: () => Promise<ViewSharingPolicy>;
+  externalTargets?: ReadonlySet<string>;
   codeExcludePaths?: string[];
   debounceMs?: number;
   git?: boolean;
@@ -367,6 +376,7 @@ export class ViewStore {
   private refreshTail: Promise<void> = Promise.resolve();
   private editTail: Promise<void> = Promise.resolve();
   private closed = false;
+  private sharingError: unknown;
 
   constructor(
     readonly latDir: string,
@@ -389,6 +399,11 @@ export class ViewStore {
 
   get markdownGeneration(): number {
     return this.snapshotValue.markdownGeneration;
+  }
+
+  async ready(): Promise<void> {
+    await this.refreshTail;
+    if (this.sharingError) throw this.sharingError;
   }
 
   startWatching(): void {
@@ -549,6 +564,13 @@ export class ViewStore {
     if (!file) {
       throw new ViewDocumentNotFoundError('Markdown document not found');
     }
+    if (
+      this.options.filterMarkdown &&
+      !(await this.options.publishable!(
+        projectPath(this.projectRoot, resolve(this.latDir, requestedPath)),
+      ))
+    )
+      throw new ViewDocumentNotFoundError('Markdown document not found');
     const resolver = await createMarkdownWikiLinkResolver(
       this.latDir,
       requestedPath,
@@ -634,6 +656,13 @@ export class ViewStore {
 
   private async editableDocumentPath(requestedPath: string): Promise<string> {
     if (
+      this.options.filterMarkdown &&
+      !(await this.options.publishable!(
+        projectPath(this.projectRoot, resolve(this.latDir, requestedPath)),
+      ))
+    )
+      throw new ViewDocumentNotFoundError('Markdown document not found');
+    if (
       !requestedPath ||
       requestedPath.includes('\\') ||
       isAbsolute(requestedPath) ||
@@ -701,6 +730,8 @@ export class ViewStore {
     baseContent: string,
     editedContent: string,
   ): Promise<ViewDocumentEditResponse> {
+    if (this.options.sharingPolicy)
+      return Promise.reject(new Error('Shared documents are read-only'));
     const operation = this.editTail.then(async () => {
       const path = await this.editableDocumentPath(requestedPath);
       for (let attempt = 0; attempt < DOCUMENT_EDIT_WRITE_ATTEMPTS; attempt++) {
@@ -773,6 +804,17 @@ export class ViewStore {
 
   getExternal(target: string): Promise<ViewExternalDocument> {
     const snapshot = this.snapshotValue;
+    if (this.options.externalTargets) {
+      const parsed = snapshot.external.parse(target);
+      if (
+        !parsed ||
+        !this.options.externalTargets.has(parsed.identity.split('#')[0])
+      ) {
+        return Promise.reject(
+          new ViewExternalNotFoundError('External document not shared'),
+        );
+      }
+    }
     return getViewExternal(
       this.latDir,
       this.projectRoot,
@@ -879,6 +921,38 @@ export class ViewStore {
   }
 
   private async applyRefresh(paths: string[], pollGit: boolean): Promise<void> {
+    if (this.options.sharingPolicy && !pollGit) {
+      try {
+        const next = await createViewStore(this.latDir, this.projectRoot, {
+          ...this.options,
+          watch: false,
+        });
+        try {
+          const generation = this.snapshotValue.generation + 1;
+          const markdownGeneration = this.snapshotValue.markdownGeneration + 1;
+          this.options.publishable = next.options.publishable;
+          this.options.externalTargets = next.options.externalTargets;
+          this.codeFiles = next.codeFiles;
+          this.codeScope = next.codeScope;
+          this.snapshotValue = {
+            ...next.snapshotValue,
+            generation,
+            markdownGeneration,
+            graph: { ...next.snapshotValue.graph, generation },
+          };
+          this.sharingError = undefined;
+          for (const listener of this.listeners)
+            listener({ generation, markdownGeneration });
+        } finally {
+          await next.close();
+        }
+      } catch (error) {
+        // Never serve the old permissions after a failed policy refresh.
+        this.sharingError = error;
+        throw error;
+      }
+      return;
+    }
     const fullRefresh = paths.includes('');
     const latPath = projectPath(this.projectRoot, this.latDir);
     const externalChanged =
@@ -1052,6 +1126,14 @@ export async function createViewStore(
   projectRoot: string,
   options: ViewStoreOptions = {},
 ): Promise<ViewStore> {
+  if (options.sharingPolicy) {
+    options = {
+      ...options,
+      ...(await options.sharingPolicy()),
+      filterMarkdown: true,
+      externalIgnoreLocal: true,
+    };
+  }
   const [realLatDir, markdownPaths, codeState, gitRepository] =
     await Promise.all([
       realpath(latDir),
@@ -1068,6 +1150,11 @@ export async function createViewStore(
   const markdownFiles = new Map<string, ViewParsedMarkdownFile>();
   await Promise.all(
     markdownPaths.map(async (absolutePath) => {
+      if (
+        options.filterMarkdown &&
+        !(await options.publishable!(projectPath(projectRoot, absolutePath)))
+      )
+        return;
       const realFile = await realpath(absolutePath);
       if (!isInside(realLatDir, realFile)) return;
       const parsed = await analyzeMarkdownPath(

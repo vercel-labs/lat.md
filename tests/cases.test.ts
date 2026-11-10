@@ -95,11 +95,13 @@ describe('cli command surface', () => {
     expect(ui.stdout).toContain('--logo-text <text>');
     expect(ui.stdout).toContain('--no-git');
     expect(ui.stdout).toContain('--port <number>');
+    expect(ui.stdout).toContain('--host <address>');
 
     const run = runCli('basic-project', ['ui', 'run', '--help']);
     expect(run.exitCode).toBe(0);
     expect(run.stdout).toContain('Usage: lat ui run');
     expect(run.stdout).toContain('--no-git');
+    expect(run.stdout).toContain('--host <address>');
 
     const build = runCli('basic-project', ['ui', 'build', '--help']);
     expect(build.exitCode).toBe(0);

@@ -6,7 +6,7 @@ Lat UI has one browser and three portable targets: a local live server, a fully 
 
 `lat ui` is shorthand for `lat ui run`. [[src/cli/ui.ts#uiCommand]] starts [[src/view/server.ts#startViewServer]] on loopback port 4242 and launches the browser without a shell. An occupied default advances to the next available port; an explicit `--port` is strict.
 
-[[packages/server/src/index.ts#createLatServerApp]] owns the shared Express stack, security policy, static delivery, and Node listener used by both live and exported servers. [[src/view/server.ts#createViewApp]] adds the live project APIs, while `startViewServer` selects the loopback port through the shared listener.
+[[packages/server/src/index.ts#createLatServerApp]] owns the shared Express stack, security policy, static delivery, and Node listener used by both live and exported servers. [[src/view/server.ts#createViewApp]] adds the live project APIs, while [[src/view/server.ts#startViewServer]] selects the port through the shared listener. Both `lat ui` and `lat ui run` accept `--host <address>` to override the loopback default, including `0.0.0.0` for all IPv4 interfaces. [[src/view/request-security.ts#trustedLiveRequest]] continues to validate the listener authority and same-origin requests.
 
 `--no-git` disables working-tree discovery and presentation without changing document, source, graph, search, or editing behavior.
 
@@ -266,8 +266,20 @@ Repository resources use a sandbox CSP without script or same-origin privileges.
 
 ## Publication scope
 
-Static and server builds publish linked source and resource files only within an explicit file inventory. Interactive browsing retains its broader project-contained read behavior.
+Static and server builds publish linked source and resource files only within an explicit file inventory. Loopback browsing retains its broader project-contained read behavior; [[architecture#Network sharing]] adds a reachable-file boundary.
 
 In Git projects, publication requires a tracked regular file that is not ignored. Outside Git, the ordinary walker applies `.gitignore` rules. Dot paths, dependency trees, and `config.local.yaml` are always excluded, including through symlink aliases. Add intended public files to Git and remove ignore rules before building; excluded links fail the build while preserving the previous output.
 
 The same policy filters code-reference files before snippets enter documents or graph data. External documents do not authorize local source collection. Foreign-origin links are not local routes, and decoded paths and route writes remain confined to the export payload.
+
+## Network sharing
+
+Non-loopback listeners share a read-only view of public vault Markdown and files explicitly reachable through its links. Local editing remains available only on literal loopback addresses.
+
+[[src/view/sharing.ts#createSharingPolicy]] starts with the [[src/view/publication.ts#createPublicationPolicy|publication inventory]], follows rendered Markdown links recursively through project previews, and collects explicitly linked source and resource files. Cycles are deduplicated; foreign URLs and code backlinks do not grant access. Hidden, ignored, untracked Git files, local configuration, dependency directories, and aliases to excluded or unlinked files stay private even when linked.
+
+[[src/view/store.ts#createViewStore]] filters shared Markdown before building its index, diagnostics, graph, and reference snippets. Source and resource readers check the same reachable inventory. External previews must be linked, resolve pinned content without local overrides, and cannot authorize local files. Filesystem refreshes rebuild the sharing policy and snapshot together; failed rebuilds block requests until a successful refresh.
+
+Shared views retain [[architecture#Git working tree|Git diffs and change indicators]] for the filtered Markdown files, including commit polling and `--no-git`. [[src/view/sharing.ts#createSharingPolicy]] follows current document content only, so links in removed text do not grant additional file access.
+
+[[src/view/server.ts#createViewApp]] disables edits, semantic search, and section-command APIs for shared listeners because those operations use private project-wide state. [[src/view/sharing.ts#isLoopbackHost]] treats hostnames conservatively as shared; Host and Origin checks remain additional request validation, not authentication. The browser hides unavailable controls through [[view/src/static-mode.ts#isSharedView]].

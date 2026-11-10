@@ -89,7 +89,7 @@ describe('document TOC navigation', () => {
       externalFiles: [],
       entry: 'guide.md',
       errorCounts: {},
-      git: null,
+      git: { files: { 'guide.md': 'modified' } },
       logoText: 'lat.md',
     };
     fetchViewJson
@@ -110,6 +110,30 @@ describe('document TOC navigation', () => {
     container.remove();
     delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
     vi.unstubAllGlobals();
+  });
+
+  // @lat: [[view/specs#Shared UI controls]]
+  it('hides editing and private query controls in shared mode', async () => {
+    expect(container.querySelector('.document-mode-switch')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Search"]')).not.toBeNull();
+    const meta = document.createElement('meta');
+    meta.name = 'lat-shared-view';
+    meta.content = 'true';
+    document.head.append(meta);
+    try {
+      await act(async () => root.render(createElement(App)));
+      expect(container.querySelector('.document-mode-switch')).toBeNull();
+      expect(
+        container
+          .querySelector('.sidebar-git')
+          ?.getAttribute('data-has-changes'),
+      ).toBe('true');
+      expect(container.querySelector('[aria-label="Search"]')).toBeNull();
+      expect(container.textContent).not.toContain('lat section');
+      expect(container.querySelector('.markdown')).not.toBeNull();
+    } finally {
+      meta.remove();
+    }
   });
 
   // @lat: [[view/specs#View Tests#TOC navigation from search results]]

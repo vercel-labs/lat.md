@@ -431,9 +431,27 @@ The document API rejects traversal and non-Markdown targets so browser requests 
 
 An explicit `--port <number>` accepts 1–65535 and fails clearly rather than selecting another port when occupied. Startup reports the URL and points users to both deployment build targets.
 
+## Binds the requested host
+
+`lat ui` and `lat ui run` expose `--host <address>`. An explicit wildcard IPv4 address binds all interfaces, reports the selected address, and accepts local interface requests while rejecting foreign origins.
+
 ## Live request and resource isolation
 
 The live server validates Host and Origin against its listener, rejects cross-origin edits, and isolates raw resources with sandbox CSP and attachment responses for active HTML and script formats.
+
+## Read-only network sharing
+
+Non-loopback servers expose only public vault Markdown and transitively linked public files. Direct requests, backlinks, edits, and external documents cannot grant access to private or unlinked files.
+
+Coverage exercises Git and non-Git projects, nested Markdown cycles, source/resource previews, ignored Markdown and raw routes, hidden and untracked files, foreign URLs, edit rejection, and disabled private queries. Removed links and new ignore rules revoke access after refresh, refresh failures fail closed, and symlink replacements cannot expose unlinked files. Linked externals use pinned content rather than local overrides; loopback retains private browsing.
+
+## Shared UI controls
+
+The shared browser hides editing, search, and section-command controls while retaining the Git toggle and change indicator for published Markdown, matching the server's read-only request boundary.
+
+## Shared Git diffs
+
+Shared views show HEAD-to-working-tree diffs and change markers for public Markdown only. Commit polling clears stale diffs, `--no-git` disables them, and links in deleted text cannot authorize other files.
 
 ## Export publication boundaries
 
