@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isAgentCommit } from '../src/cli/git-hook.js';
 import { installGitHook } from '../src/cli/git-hook-install.js';
+import { writeExperiments } from '../src/cli/experiments.js';
 import { removeLatStopHooks, syncLatHooks } from '../src/cli/init.js';
 
 const directories: string[] = [];
@@ -79,6 +80,8 @@ function repo(): string {
     'lat.md/lat.md',
     '# Project\n\nA project with [[src/feature.ts#feature]].\n',
   );
+  write(root, 'lat.md/.gitignore', '.cache/\n');
+  writeExperiments(root, { 'commit-hooks': true });
   write(root, 'src/feature.ts', 'export function feature() { return 1; }\n');
   git(root, 'add', '.');
   return root;
@@ -90,7 +93,11 @@ function hook(root: string, extra: Record<string, string> = {}, agent = true) {
     {
       cwd: root,
       encoding: 'utf8',
-      env: { ...cleanEnv(), ...(agent ? { AI_AGENT: 'codex' } : {}), ...extra },
+      env: {
+        ...cleanEnv(),
+        ...(agent ? { AI_AGENT: 'codex' } : {}),
+        ...extra,
+      },
     },
   );
 }
@@ -173,6 +180,8 @@ it('finds staged nested projects and detects references to deleted source files'
     'packages/app/lat.md/lat.md',
     '# App\n\nSee [[source.ts#run]].\n',
   );
+  write(root, 'packages/app/lat.md/.gitignore', '.cache/\n');
+  writeExperiments(join(root, 'packages/app'), { 'commit-hooks': true });
   write(root, 'packages/app/source.ts', 'export function run() {}\n');
   git(root, 'add', '.');
   expect(hook(root).status).toBe(0);
@@ -219,6 +228,8 @@ it('excludes configured fixture subtrees without excluding sibling projects', ()
   const configured =
     '---\nlat:\n  git-pre-commit:\n    exclude-projects:\n      - tests/cases\n---\n' +
     original;
+  write(root, 'tests/cases/broken/lat.md/.gitignore', '.cache/\n');
+  writeExperiments(join(root, 'tests/cases/broken'), { 'commit-hooks': true });
   write(root, 'tests/cases/broken/lat.md/lat.md', '# Fixture\n\n[[missing]]\n');
   git(root, 'add', '.');
   write(root, 'lat.md/lat.md', configured);
@@ -229,6 +240,8 @@ it('excludes configured fixture subtrees without excluding sibling projects', ()
   const excluded = hook(root);
   expect(excluded.status, excluded.stderr).toBe(0);
   // The similarly named sibling is still an independent validation target.
+  write(root, 'tests/cases-other/lat.md/.gitignore', '.cache/\n');
+  writeExperiments(join(root, 'tests/cases-other'), { 'commit-hooks': true });
   write(root, 'tests/cases-other/lat.md/lat.md', '# App\n\n[[missing]]\n');
   git(root, 'add', 'tests/cases-other');
   const sibling = hook(root);
@@ -306,6 +319,8 @@ it('uses the active worktree instead of capturing the installation directory', (
   installGitHook(root, invocation);
   const worktree = join(temporary(), 'worktree');
   git(root, 'worktree', 'add', '-q', '-b', 'other', worktree);
+  writeExperiments(worktree, { 'commit-hooks': true });
+  writeExperiments(root, { 'commit-hooks': false });
   expect(installGitHook(worktree, invocation).status).toBe(
     'already configured',
   );
@@ -324,6 +339,7 @@ it('uses the active worktree instead of capturing the installation directory', (
 // @lat: [[tests/hook#Migrates lifecycle hooks without collateral changes]]
 it('removes Lat stop commands from mixed entries and preserves custom handlers', () => {
   const root = temporary();
+  writeExperiments(root, { 'commit-hooks': true });
   const path = join(root, 'hooks.json');
   writeFileSync(
     path,
@@ -381,5 +397,21 @@ it.skipIf(process.platform === 'win32')(
     });
     expect(result.status, result.stderr).toBe(0);
     expect(result.stderr).toContain('lat init');
+  },
+);
+
+// @lat: [[tests/hook#Git validation requires explicit opt-in]]
+it.each(['missing', 'disabled'])(
+  'skips Git validation when experiment choices are %s',
+  (state) => {
+    const root = repo();
+    if (state === 'missing')
+      rmSync(join(root, 'lat.md/.cache/experiments.json'));
+    else writeExperiments(root, { 'commit-hooks': false });
+    write(root, 'lat.md/lat.md', '# Broken\n\n[[missing]]\n');
+    git(root, 'add', '.');
+    const result = hook(root);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout + result.stderr).toBe('');
   },
 );

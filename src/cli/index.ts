@@ -237,26 +237,26 @@ program
   )
   .action(async (target: string) => {
     const { genCmd } = await import('./gen.js');
-    await genCmd(target);
+    await genCmd(target, program.opts().dir);
   });
 
 program
   .command('init')
   .description('Initialize a lat.md directory')
   .argument('[dir]', 'target directory (default: cwd)')
-  .action(async (dir?: string) => {
-    const { initCmd } = await import('./init.js');
-    await initCmd(dir);
-  });
+  .option('--experimental', 'choose experimental features for this project')
+  .action(
+    async (dir: string | undefined, options: { experimental?: boolean }) => {
+      const { initCmd } = await import('./init.js');
+      await initCmd(dir, options);
+    },
+  );
 
 program
   .command('hook')
   .description('Handle Git and agent hooks')
   .argument('<hook>', 'git-pre-commit or agent name (claude, codex, cursor)')
-  .argument(
-    '[event]',
-    'agent event (UserPromptSubmit; legacy Stop/stop are no-ops)',
-  )
+  .argument('[event]', 'agent event (UserPromptSubmit, Stop, or stop)')
   .action(async (agent: string, event?: string) => {
     const { hookCmd } = await import('./hook.js');
     await hookCmd(agent, event);

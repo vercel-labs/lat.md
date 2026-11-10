@@ -11,7 +11,7 @@ Tests use real temporary Git repositories and invoke the source CLI, including a
 
 ## Legacy stop hooks are silent
 
-Legacy Claude, Codex, and Cursor stop commands exit successfully without reading stdin or validating broken projects, so stale settings do not interrupt agents.
+In opted-in projects, Claude, Codex, and Cursor stop commands exit successfully without reading stdin or validating broken projects, so stale settings do not interrupt agents.
 
 ## Prompt hooks do not expand references
 
@@ -19,7 +19,7 @@ Claude and Codex prompt hooks retain search guidance without expanding wiki link
 
 ## Codex hook setup preserves non-lat hooks
 
-Syncing Codex hooks installs prompt context and removes Lat stop commands while preserving unrelated handlers and metadata.
+Syncing Codex hooks installs the selected workflow while preserving unrelated handlers and metadata. Stable setup includes Stop validation; opted-in projects retain only prompt context.
 
 ## Local JavaScript hook commands retain Node
 
@@ -76,3 +76,69 @@ Migration removes Lat commands within mixed hook entries while retaining unrelat
 ## Missing runtime does not strand commits
 
 If an installed runtime disappears, the launcher permits commits and prints a repair instruction instead of leaving the repository unusable.
+
+## Exits silently when check passes and no diff
+
+When `lat check` passes and there is no git diff output, the hook produces no stdout and no stderr — the agent stops cleanly.
+
+## Supports projects outside Git
+
+Git version control is optional. Outside a Git worktree, the Stop hook skips diff-based sync analysis but still runs `lat check`; valid projects exit silently, while validation errors still block.
+
+## Blocks when lat check fails
+
+When `lat check` finds errors, the hook outputs a block decision with a reason mentioning `lat check` and the error count.
+
+## Blocks when code diff is large but lat.md/ not updated
+
+When check passes but `git diff --numstat` shows code changes above the threshold with no `lat.md/` changes, the hook blocks with a reminder to update `lat.md/`.
+
+## Exits silently when lat.md/ changes are proportional
+
+When code changes are large but `lat.md/` changes exceed the 5% ratio, the hook exits silently.
+
+## Exits silently when code diff is below threshold
+
+When code changes are below 5 lines, the ratio check is skipped and the hook exits silently.
+
+## Blocks with both messages when check fails and diff needs sync
+
+When `lat check` fails and the diff also needs sync, the block reason covers both updating `lat.md/` and running `lat check` until it passes.
+
+## Exits silently on second pass when check passes
+
+On the second pass (`stop_hook_active: true`), if `lat check` passes, the hook exits silently with no output.
+
+## Prints stderr warning on second pass when check still fails
+
+On the second pass, if `lat check` still fails, the hook prints a warning to stderr but does not block — the loop stops.
+
+## Ignores non-code files in diff
+
+Files that don't match `SOURCE_FILE_EXTENSIONS` (e.g. `.md`) are not counted toward code lines, so a large markdown-only diff does not trigger a sync reminder.
+
+## Cursor stop hook returns follow-up work instead of a Claude block
+
+When Cursor needs more work at stop time, the hook returns a `followup_message` payload instead of Claude's `decision: "block"` shape so the agent keeps going in Cursor's native hook format.
+
+## Codex stop hook returns a block decision
+
+When Codex needs more work at stop time, the hook returns the same guarded `decision: "block"` continuation payload used for Claude.
+
+## Counts tracked and untracked files together
+
+Diff analysis combines tracked churn with relevant untracked `lat.md/` and supported source files while respecting nested `.gitignore` rules and safely skipping unrelated paths.
+
+The integration fixture nests the Lat project inside a larger worktree, verifies sibling changes are excluded, and covers spaces and non-ASCII characters in untracked paths.
+
+## Counts untracked files before the first commit
+
+When `HEAD` does not exist yet, tracked diff analysis may fail but untracked `lat.md/` and supported source files still contribute their complete line counts.
+
+## Prompt guidance follows the selected workflow
+
+Prompt hooks read each project's saved experiment choices and describe completion checks by default or staged commit checks when opted in.
+
+## Git validation requires explicit opt-in
+
+Missing or disabled project choices make the Git hook skip even broken staged graphs. Linked worktrees retain independent opt-ins despite sharing the installed launcher.

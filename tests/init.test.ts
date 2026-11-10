@@ -93,6 +93,7 @@ vi.mock('../src/search/db.js', () => ({
 }));
 
 import { initCmd } from '../src/cli/init.js';
+import { readExperiments, writeExperiments } from '../src/cli/experiments.js';
 
 describe('generated Markdown templates', () => {
   // @lat: [[init#Generated instructions#Templates satisfy graph validation]]
@@ -357,7 +358,7 @@ describe('lat init embedding setup', () => {
       readFileSync(join(root, '.claude/settings.json'), 'utf8'),
     );
     expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
-    expect(settings.hooks.Stop).toBeUndefined();
+    expect(settings.hooks.Stop).toHaveLength(1);
 
     const legacy =
       'User instructions\n\n%% lat:begin %%\nLegacy guidance\n%% lat:end %%\n';
@@ -372,9 +373,138 @@ describe('lat init embedding setup', () => {
     expect(meta.file_hashes['CLAUDE.md']).toBeUndefined();
   });
 
+  // @lat: [[tests/init#Experiment choices persist and remain editable]]
+  it('prompts for experiments, preserves choices on normal init, and restores disabled integrations', async () => {
+    createLatDir();
+    setInteractive(true);
+    const agents = ['claude', 'codex', 'cursor', 'pi', 'opencode'];
+    vi.mocked(checklistMenu).mockResolvedValue(agents);
+    selectMenu.mockResolvedValue('global');
+    expect(
+      spawnSync('git', ['-c', 'init.templateDir=', 'init', '-q'], { cwd: root })
+        .status,
+    ).toBe(0);
+    await initCmd(root);
+    expect(existsSync(join(root, '.git/hooks/pre-commit'))).toBe(false);
+    expect(readFileSync(join(root, '.pi/extensions/lat.ts'), 'utf8')).toContain(
+      'agent_end',
+    );
+    expect(
+      JSON.parse(readFileSync(join(root, '.codex/hooks.json'), 'utf8')).hooks
+        .Stop,
+    ).toHaveLength(1);
+    writeExperiments(root, { 'future-experiment': true });
+    vi.mocked(checklistMenu)
+      .mockResolvedValueOnce(['commit-hooks'])
+      .mockResolvedValueOnce(agents);
+    await initCmd(root, { experimental: true });
+    expect(readExperiments(root)).toEqual({
+      'future-experiment': true,
+      'commit-hooks': true,
+    });
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
+      'Validate staged content when an agent commits',
+    );
+    expect(existsSync(join(root, '.git/hooks/pre-commit'))).toBe(true);
+    expect(
+      JSON.parse(readFileSync(join(root, '.codex/hooks.json'), 'utf8')).hooks
+        .Stop,
+    ).toBeUndefined();
+    expect(
+      readFileSync(join(root, '.pi/extensions/lat.ts'), 'utf8'),
+    ).not.toContain('agent_end');
+    await initCmd(root);
+    expect(readExperiments(root)['commit-hooks']).toBe(true);
+    expect(
+      JSON.parse(readFileSync(join(root, '.codex/hooks.json'), 'utf8')).hooks
+        .Stop,
+    ).toBeUndefined();
+    // Disabling also restores integrations not reselected in the agent checklist.
+    vi.mocked(checklistMenu)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    await initCmd(root, { experimental: true });
+    expect(readExperiments(root)).toEqual({
+      'future-experiment': true,
+      'commit-hooks': false,
+    });
+    expect(checklistMenu).toHaveBeenCalledWith(
+      expect.any(Array),
+      'Which experiments would you like to enable?',
+      ['commit-hooks'],
+    );
+    for (const file of ['.claude/settings.json', '.codex/hooks.json']) {
+      expect(
+        JSON.parse(readFileSync(join(root, file), 'utf8')).hooks.Stop,
+      ).toHaveLength(1);
+    }
+    expect(
+      JSON.parse(readFileSync(join(root, '.cursor/hooks.json'), 'utf8')).hooks
+        .stop,
+    ).toHaveLength(1);
+    expect(readFileSync(join(root, '.pi/extensions/lat.ts'), 'utf8')).toContain(
+      'agent_end',
+    );
+    expect(
+      readFileSync(join(root, '.opencode/plugins/lat.ts'), 'utf8'),
+    ).toContain('session.idle');
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      'After EVERY task',
+    );
+  });
+
+  // @lat: [[tests/init#Experiment selection requires confirmation]]
+  it('preserves choices when noninteractive or canceled before setup', async () => {
+    createLatDir();
+    writeExperiments(root, { 'commit-hooks': true });
+    await expect(initCmd(root, { experimental: true })).rejects.toThrow(
+      'interactive terminal',
+    );
+    expect(readExperiments(root)).toEqual({ 'commit-hooks': true });
+    setInteractive(true);
+    vi.mocked(checklistMenu)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(['codex']);
+    selectMenu.mockResolvedValue(null);
+    await initCmd(root, { experimental: true });
+    expect(readExperiments(root)).toEqual({ 'commit-hooks': true });
+  });
+
+  // @lat: [[tests/init#Experiments preserve unrelated agent settings]]
+  it('does not install Lat into unselected agents with unrelated settings', async () => {
+    createLatDir();
+    setInteractive(true);
+    vi.mocked(checklistMenu)
+      .mockResolvedValueOnce(['commit-hooks'])
+      .mockResolvedValueOnce([]);
+    const files = [
+      '.claude/settings.json',
+      '.codex/hooks.json',
+      '.cursor/hooks.json',
+    ];
+    const content = JSON.stringify({
+      hooks: {
+        Stop: [{ hooks: [{ command: 'custom-handler' }] }],
+        stop: [{ command: 'custom-handler' }],
+      },
+    });
+    for (const file of files) {
+      mkdirSync(dirname(join(root, file)), { recursive: true });
+      writeFileSync(join(root, file), content);
+    }
+    await initCmd(root, { experimental: true });
+    vi.mocked(checklistMenu)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    await initCmd(root, { experimental: true });
+    for (const file of files)
+      expect(readFileSync(join(root, file), 'utf8')).toBe(content);
+  });
+
   // @lat: [[tests/init#Migrates installed completion integrations]]
   it('installs Git validation and migrates previously installed agents', async () => {
     createLatDir();
+    writeExperiments(root, { 'commit-hooks': true });
     setInteractive(true);
     vi.mocked(checklistMenu).mockResolvedValue(['codex']);
     selectMenu.mockResolvedValue('global');
@@ -443,6 +573,7 @@ describe('lat init embedding setup', () => {
     '.opencode/plugins/lat.ts',
     '.agents/skills/lat-md/SKILL.md',
     'lat.md/config.local.yaml',
+    'lat.md/.cache/experiments.json',
     'lat.md/.cache/lat_init.json',
     '.gitignore',
     'lat.md/.gitignore',

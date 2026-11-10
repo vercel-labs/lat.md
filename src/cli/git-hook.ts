@@ -14,6 +14,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { resolveLatInvocation } from './agent-invocation.js';
+import { isExperimentEnabled } from './experiments.js';
 
 /** Environment detection is a workflow guard, not an authorization boundary. */
 export async function isAgentCommit(): Promise<boolean> {
@@ -203,21 +204,28 @@ export async function gitPreCommit(cwd = process.cwd()): Promise<number> {
       .filter(Boolean);
     if (!changed.length) return 0;
     const entries = indexEntries(root);
-    const excluded = excludedProjects(root, entries);
     const projects = new Set<string>();
     for (const entry of entries) {
       const parts = entry.path.split('/');
       const index = parts.indexOf('lat.md');
       if (index < 0 || index === parts.length - 1) continue;
       const prefix = parts.slice(0, index).join('/');
-      if (
-        excluded.some(
-          (path) => prefix === path || prefix.startsWith(path + '/'),
-        )
-      )
-        continue;
       if (changed.some((path) => !prefix || path.startsWith(prefix + '/')))
         projects.add(prefix);
+    }
+    for (const project of projects) {
+      if (!isExperimentEnabled('commit-hooks', join(root, project)))
+        projects.delete(project);
+    }
+    if (!projects.size) return 0;
+    const excluded = excludedProjects(root, entries);
+    for (const project of projects) {
+      if (
+        excluded.some(
+          (path) => project === path || project.startsWith(path + '/'),
+        )
+      )
+        projects.delete(project);
     }
     if (!projects.size) return 0;
     temporary = mkdtempSync(join(tmpdir(), 'lat-staged-'));

@@ -1,4 +1,10 @@
 import { installGitHook } from './git-hook-install.js';
+import {
+  EXPERIMENTS,
+  isExperimentEnabled,
+  readExperiments,
+  writeExperiments,
+} from './experiments.js';
 import { agentInvocation, resolveLatInvocation } from './agent-invocation.js';
 import { projectWritePath, writeProjectFile } from '@lat.md/core/project-write';
 import { existsSync, cpSync, mkdirSync, readFileSync } from 'node:fs';
@@ -109,6 +115,25 @@ function isLatHookCommand(command: unknown): boolean {
   );
 }
 
+/** Existing agent settings alone do not mean Lat was installed for that agent. */
+function hasLatHooks(root: string, path: string): boolean {
+  projectWritePath(root, path);
+  if (!existsSync(path)) return false;
+  const settings = JSON.parse(readFileSync(path, 'utf8'));
+  return Object.values(settings.hooks ?? {}).some(
+    (entries) =>
+      Array.isArray(entries) &&
+      entries.some(
+        (entry) =>
+          isLatHookCommand(entry?.command) ||
+          (Array.isArray(entry?.hooks) &&
+            entry.hooks.some((hook: { command?: unknown }) =>
+              isLatHookCommand(hook.command),
+            )),
+      ),
+  );
+}
+
 /** Remove only Lat commands, preserving mixed entries and unrelated metadata. */
 export function removeLatStopHooks(
   settingsPath: string,
@@ -141,7 +166,7 @@ export function removeLatStopHooks(
   );
 }
 
-/** Refresh prompt hooks and remove legacy stop commands without touching others. */
+/** Refresh Lat's hooks for the selected workflow, preserving unrelated commands. */
 export function syncLatHooks(
   settingsPath: string,
   style: LatCommandStyle,
@@ -167,15 +192,16 @@ export function syncLatHooks(
     if (filtered.length) settings.hooks[event] = filtered;
     else delete settings.hooks[event];
   }
-  settings.hooks.UserPromptSubmit ??= [];
-  settings.hooks.UserPromptSubmit.push({
-    hooks: [
-      {
-        type: 'command',
-        command: latHookCommand(style, agent, 'UserPromptSubmit'),
-      },
-    ],
-  });
+  for (const event of isExperimentEnabled('commit-hooks', root)
+    ? ['UserPromptSubmit']
+    : ['UserPromptSubmit', 'Stop']) {
+    settings.hooks[event] ??= [];
+    settings.hooks[event].push({
+      hooks: [
+        { type: 'command', command: latHookCommand(style, agent, event) },
+      ],
+    });
+  }
   writeProjectFile(
     root,
     settingsPath,
@@ -616,7 +642,7 @@ async function setupClaudeCode(
   ask: (message: string) => Promise<boolean>,
   style: LatCommandStyle,
 ): Promise<void> {
-  // Prompt context stays active; validation runs at commit time.
+  // Prompt and completion hooks follow the saved experiment choices.
   console.log('');
   console.log(
     styleText(
@@ -627,7 +653,9 @@ async function setupClaudeCode(
   console.log(
     styleText(
       'dim',
-      '  Agent commits are validated by the Git pre-commit hook.',
+      isExperimentEnabled('commit-hooks', root)
+        ? '  Agent commits are validated by the Git pre-commit hook.'
+        : '  Completion hooks validate lat.md/ when the agent finishes.',
     ),
   );
 
@@ -638,7 +666,9 @@ async function setupClaudeCode(
   syncLatHooks(settingsPath, style, 'claude', root);
   console.log(
     styleText('green', '  Hooks') +
-      ' synced (UserPromptSubmit; legacy Stop removed)',
+      (isExperimentEnabled('commit-hooks', root)
+        ? ' synced (UserPromptSubmit; legacy Stop removed)'
+        : ' synced (UserPromptSubmit + Stop)'),
   );
 
   // .claude/skills/lat-md/SKILL.md — skill for authoring lat.md files
@@ -695,6 +725,24 @@ async function setupClaudeCode(
   ensureGitignored(root, '.mcp.json');
 }
 
+function syncCursorHooks(root: string, style: LatCommandStyle): void {
+  if (isExperimentEnabled('commit-hooks', root)) {
+    removeLatStopHooks(join(root, '.cursor', 'hooks.json'), root, true);
+  } else {
+    const path = projectWritePath(root, join(root, '.cursor', 'hooks.json'));
+    removeLatStopHooks(path, root, true);
+    const settings = existsSync(path)
+      ? JSON.parse(readFileSync(path, 'utf8'))
+      : { version: 1 };
+    settings.hooks ??= {};
+    settings.hooks.stop ??= [];
+    settings.hooks.stop.push({
+      command: latHookCommand(style, 'cursor', 'stop'),
+    });
+    writeProjectFile(root, path, JSON.stringify(settings, null, 2) + '\n');
+  }
+}
+
 async function setupCursor(
   root: string,
   latDir: string,
@@ -707,7 +755,7 @@ async function setupCursor(
     root,
     latDir,
     '.cursor/rules/lat.md',
-    readCursorRulesTemplate(),
+    readCursorRulesTemplate(root),
     'cursor-rules.md',
     'Rules (.cursor/rules/lat.md)',
     '  ',
@@ -715,7 +763,7 @@ async function setupCursor(
   );
   if (hash) hashes['.cursor/rules/lat.md'] = hash;
 
-  removeLatStopHooks(join(root, '.cursor', 'hooks.json'), root, true);
+  syncCursorHooks(root, style);
 
   // .cursor/mcp.json
   console.log('');
@@ -767,7 +815,7 @@ async function setupCopilot(
     root,
     latDir,
     '.github/copilot-instructions.md',
-    readAgentsTemplate(),
+    readAgentsTemplate(root),
     'Instructions (.github/copilot-instructions.md)',
     '  ',
     ask,
@@ -824,12 +872,15 @@ async function setupPi(
   console.log(
     styleText(
       'dim',
-      '  to inject search context. Validation runs at commit time.',
+      isExperimentEnabled('commit-hooks', root)
+        ? '  to inject search context. Validation runs at commit time.'
+        : '  to inject search context and validate lat.md/ before finishing.',
     ),
   );
 
-  const template = readPiExtensionTemplate().replace('__LAT_INVOCATION__', () =>
-    JSON.stringify(agentInvocation(style, resolveLatInvocation())),
+  const template = readPiExtensionTemplate(root).replace(
+    '__LAT_INVOCATION__',
+    () => JSON.stringify(agentInvocation(style, resolveLatInvocation())),
   );
 
   const hash = await writeTemplateFile(
@@ -888,11 +939,13 @@ async function setupOpenCode(
   console.log(
     styleText(
       'dim',
-      '  Agent commits are validated by the Git pre-commit hook.',
+      isExperimentEnabled('commit-hooks', root)
+        ? '  Agent commits are validated by the Git pre-commit hook.'
+        : '  Completion hooks validate lat.md/ when the agent finishes.',
     ),
   );
 
-  const template = readOpenCodePluginTemplate().replace(
+  const template = readOpenCodePluginTemplate(root).replace(
     '__LAT_INVOCATION__',
     () => JSON.stringify(agentInvocation(style, resolveLatInvocation())),
   );
@@ -926,7 +979,7 @@ async function setupCodex(
   // AGENTS.md — Codex reads this natively
   // (already created in the shared step if any non-Claude agent is selected)
 
-  // Prompt context stays active; validation runs at commit time.
+  // Prompt and completion hooks follow the saved experiment choices.
   console.log('');
   console.log(
     styleText(
@@ -937,7 +990,9 @@ async function setupCodex(
   console.log(
     styleText(
       'dim',
-      '  Agent commits are validated by the Git pre-commit hook.',
+      isExperimentEnabled('commit-hooks', root)
+        ? '  Agent commits are validated by the Git pre-commit hook.'
+        : '  Completion hooks validate lat.md/ when the agent finishes.',
     ),
   );
 
@@ -947,7 +1002,9 @@ async function setupCodex(
   syncLatHooks(hooksPath, style, 'codex', root);
   console.log(
     styleText('green', '  Hooks') +
-      ' synced (UserPromptSubmit; legacy Stop removed)',
+      (isExperimentEnabled('commit-hooks', root)
+        ? ' synced (UserPromptSubmit; legacy Stop removed)'
+        : ' synced (UserPromptSubmit + Stop)'),
   );
 
   // .codex/config.toml — MCP server registration
@@ -1267,9 +1324,11 @@ export function ensureLatLocalConfigIgnored(latDir: string): void {
   writeProjectFile(root, path, `${prefix}${entry}\n`);
 }
 
-export async function initCmd(targetDir?: string): Promise<void> {
+export async function initCmd(
+  targetDir?: string,
+  options: { experimental?: boolean } = {},
+): Promise<void> {
   console.log(styleText('cyan', readLogo()));
-
   // Upfront version check — let the user upgrade before proceeding
   process.stdout.write(styleText('dim', 'Checking latest version...'));
   const latest = await fetchLatestVersion();
@@ -1297,6 +1356,13 @@ export async function initCmd(targetDir?: string): Promise<void> {
   const storedInitVersion = readInitVersion(latDir);
 
   const interactive = process.stdin.isTTY ?? false;
+  if (options.experimental && !interactive) {
+    throw new Error(
+      'lat init --experimental requires an interactive terminal to choose experiments. Existing choices were not changed.',
+    );
+  }
+  const previousExperiments = readExperiments(root);
+  const experiments = { ...previousExperiments };
 
   // Readline is created AFTER the selectMenu loop below.
   // selectMenu puts stdin into raw mode with its own 'data' listener;
@@ -1347,6 +1413,19 @@ export async function initCmd(targetDir?: string): Promise<void> {
       interactive,
       storedInitVersion === null || storedInitVersion < INIT_VERSION,
     );
+
+    if (options.experimental) {
+      console.log('');
+      for (const experiment of EXPERIMENTS) {
+        console.log(`${experiment.label}: ${experiment.description}`);
+      }
+      const selected = await checklistMenu(
+        EXPERIMENTS.map(({ id, label }) => ({ value: id, label })),
+        'Which experiments would you like to enable?',
+        EXPERIMENTS.filter(({ id }) => experiments[id]).map(({ id }) => id),
+      );
+      for (const { id } of EXPERIMENTS) experiments[id] = selected.includes(id);
+    }
 
     // Step 3: Which coding agents do you use? (interactive select menu)
     console.log('');
@@ -1413,41 +1492,122 @@ export async function initCmd(targetDir?: string): Promise<void> {
       });
     }
 
-    removeLatStopHooks(join(root, '.claude', 'settings.json'), root);
-    removeLatStopHooks(join(root, '.codex', 'hooks.json'), root);
-    removeLatStopHooks(join(root, '.cursor', 'hooks.json'), root, true);
+    if (options.experimental) {
+      ensureGitignored(root, 'lat.md/.cache/');
+      writeExperiments(root, experiments);
+    }
+    const commitHooks = isExperimentEnabled('commit-hooks', root);
+    const workflowChanged =
+      Boolean(previousExperiments['commit-hooks']) !== commitHooks;
+    if (commitHooks) {
+      console.log(
+        'Experimental commit hooks enabled: validation runs on staged agent commits instead of at the end of each turn.',
+      );
+    } else if (workflowChanged) {
+      console.log(
+        'Commit-hook experiment disabled: restoring end-of-turn validation.',
+      );
+    }
 
     const fileHashes: Record<string, string> = {};
-    for (const [selected, path, read, templateName] of [
-      [
-        usePi,
-        '.pi/extensions/lat.ts',
-        readPiExtensionTemplate,
-        'pi-extension.ts',
-      ],
-      [
-        useOpenCode,
-        '.opencode/plugins/lat.ts',
-        readOpenCodePluginTemplate,
-        'opencode-plugin.ts',
-      ],
-    ] as const) {
-      projectWritePath(root, join(root, path));
-      if (selected || !existsSync(join(root, path))) continue;
-      const template = read().replace('__LAT_INVOCATION__', () =>
-        JSON.stringify(agentInvocation(commandStyle, resolveLatInvocation())),
-      );
-      const hash = await writeTemplateFile(
-        root,
-        latDir,
-        path,
-        template,
-        templateName,
-        path,
-        '  ',
-        ask,
-      );
-      if (hash) fileHashes[path] = hash;
+    if (commitHooks || workflowChanged) {
+      for (const [selected, agent, path] of [
+        [useClaudeCode, 'claude', '.claude/settings.json'],
+        [useCodex, 'codex', '.codex/hooks.json'],
+      ] as const) {
+        projectWritePath(root, join(root, path));
+        if (!selected && hasLatHooks(root, join(root, path)))
+          syncLatHooks(join(root, path), commandStyle, agent, root);
+      }
+      if (
+        !useCursor &&
+        (hasLatHooks(root, join(root, '.cursor/hooks.json')) ||
+          readFileHash(latDir, '.cursor/rules/lat.md') !== null)
+      ) {
+        syncCursorHooks(root, commandStyle);
+      }
+      if (
+        !useCursor &&
+        existsSync(projectWritePath(root, join(root, '.cursor/rules/lat.md')))
+      ) {
+        const hash = await writeTemplateFile(
+          root,
+          latDir,
+          '.cursor/rules/lat.md',
+          readCursorRulesTemplate(root),
+          'cursor-rules.md',
+          'Cursor rules',
+          '  ',
+          ask,
+        );
+        if (hash) fileHashes['.cursor/rules/lat.md'] = hash;
+      }
+      if (
+        !useCopilot &&
+        existsSync(
+          projectWritePath(root, join(root, '.github/copilot-instructions.md')),
+        )
+      ) {
+        const hash = await appendTemplateSection(
+          root,
+          latDir,
+          '.github/copilot-instructions.md',
+          readAgentsTemplate(root),
+          'Copilot instructions',
+          '  ',
+          ask,
+        );
+        if (hash) fileHashes['.github/copilot-instructions.md'] = hash;
+      }
+      if (
+        !anySelected &&
+        existsSync(projectWritePath(root, join(root, 'AGENTS.md')))
+      ) {
+        await setupAgentsMd(
+          root,
+          latDir,
+          readAgentsTemplate(root),
+          fileHashes,
+          ask,
+        );
+      }
+
+      for (const [selected, path, read, templateName] of [
+        [
+          usePi,
+          '.pi/extensions/lat.ts',
+          readPiExtensionTemplate,
+          'pi-extension.ts',
+        ],
+        [
+          useOpenCode,
+          '.opencode/plugins/lat.ts',
+          readOpenCodePluginTemplate,
+          'opencode-plugin.ts',
+        ],
+      ] as const) {
+        projectWritePath(root, join(root, path));
+        if (selected || !existsSync(join(root, path))) continue;
+        const template = read(root).replace('__LAT_INVOCATION__', () =>
+          JSON.stringify(agentInvocation(commandStyle, resolveLatInvocation())),
+        );
+        const hash = await writeTemplateFile(
+          root,
+          latDir,
+          path,
+          template,
+          templateName,
+          path,
+          '  ',
+          ask,
+        );
+        if (hash) fileHashes[path] = hash;
+      }
+    }
+
+    if (isExperimentEnabled('commit-hooks', root)) {
+      const gitHook = installGitHook(root, resolveLatInvocation());
+      console.log(`\nGit pre-commit: ${gitHook.status}. ${gitHook.detail}`);
     }
 
     if (!anySelected) {
@@ -1466,7 +1626,7 @@ export async function initCmd(targetDir?: string): Promise<void> {
     }
 
     console.log('');
-    const template = readAgentsTemplate();
+    const template = readAgentsTemplate(root);
     // Step 5: AGENTS.md (shared by all selected agents)
     await setupAgentsMd(root, latDir, template, fileHashes, ask);
 
@@ -1506,9 +1666,6 @@ export async function initCmd(targetDir?: string): Promise<void> {
       console.log(styleText('bold', 'Setting up Codex...'));
       await setupCodex(root, latDir, fileHashes, ask, commandStyle);
     }
-
-    const gitHook = installGitHook(root, resolveLatInvocation());
-    console.log(`\nGit pre-commit: ${gitHook.status}. ${gitHook.detail}`);
 
     // Record init version and file hashes so `lat check` can detect stale setups
     writeInitMeta(latDir, fileHashes);

@@ -12,7 +12,7 @@ cd your-project
 lat init
 ```
 
-Lat creates `lat.md/` and configures your selected agent to consult the graph before work, keep it current, and validate staged changes before agent commits. It should now use Lat automatically; you do not need to write the initial Markdown yourself.
+Lat creates `lat.md/` and configures your selected agent to consult the graph before work, keep it current, and validate it before finishing. It should now use Lat automatically; you do not need to write the initial Markdown yourself.
 
 For a new project, you're all set—start building. For an existing project, copy this prompt into your coding agent to seed the graph:
 
@@ -60,6 +60,6 @@ Keep a concise knowledge graph of intent that evolves with the code, helping hum
 - Use the installed `lat-md` skill. Search and read relevant knowledge before making changes.
 - Capture semantics: what the system does, why, its important constraints, and test intent. Link concepts to each other and to code.
 - Be selective. Do not dump code, file inventories, session logs, or trivia into Lat; link to implementation details instead of duplicating them.
-- Update the graph as meaningful behavior or decisions change. Stage relevant documentation with code changes and fix any commit-hook errors before retrying. Use `lat check` while editing.
+- Update the graph as meaningful behavior or decisions change. Always run `lat check` before finishing and fix any errors.
 
 See [[lat-workflow]] for more guidance and [[concepts]] for the knowledge model.
