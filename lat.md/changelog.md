@@ -2,6 +2,13 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
+## 0.13.6
+
+Experimental agent commit checks now use repository-configured hooks on Git 2.54 and newer.
+
+- Preserve existing hook scripts, hook managers, and custom hook paths while registering Lat separately. Older Git versions retain the existing installer. [#221](https://github.com/vercel-labs/lat.md/pull/221)
+- Migrate unchanged Lat-owned hooks automatically, preserving edited launchers and user configuration. Normalize filesystem aliases so linked worktrees recognize the shared hook on Windows and macOS.
+
 ## 0.13.5
 
 This release adds opt-in staged commit checks for agents and improves table readability.
