@@ -86,7 +86,7 @@ function requestDocumentationReview(
       codeLines += Number(match[1]) + Number(match[2]);
       if (codeLines >= REVIEW_CODE_LINES) {
         console.error(
-          'IMPORTANT: lat precommit hook suggests reviewing the staged code and lat.md changes to check that important behavior, architecture, and test changes are covered. This commit was stopped for review. If no Lat update is needed, or the changes are already covered, you may retry with LAT_BYPASS_COMMIT_HOOK=1 git commit ... (using your original commit arguments). If coverage is missing, update and stage the relevant Lat documentation, then retry with the same flag. The flag skips this review reminder only; staged validation and other Git hooks still run.\n\n',
+          'IMPORTANT: lat precommit hook suggests reviewing the staged code and lat.md changes to check that important behavior, architecture, and test changes are covered. This commit was stopped for review. If no Lat update is needed, or the changes are already covered, you may retry with LAT_BYPASS_COMMIT_HOOK=1 git commit ... (using your original commit arguments). If coverage is missing, update and stage the relevant Lat documentation, then retry with the same flag. The flag skips this review reminder only; validation and other Git hooks still run.\n\n',
         );
         return true;
       }
@@ -122,21 +122,28 @@ function indexEntries(root: string): Entry[] {
     });
 }
 
-/** Read repository-wide fixture exclusions from the staged root document only. */
-function excludedProjects(root: string, entries: Entry[]): string[] {
+type HookConfig = {
+  validation: 'staged' | 'working-tree';
+  'exclude-projects': string[];
+};
+
+/** Read repository-wide hook settings from the staged root document only. */
+function readHookConfig(root: string, entries: Entry[]): HookConfig {
+  const defaults: HookConfig = { validation: 'staged', 'exclude-projects': [] };
   const entry = entries.find((entry) => entry.path === 'lat.md/lat.md');
-  if (!entry) return [];
+  if (!entry) return defaults;
   if (entry.mode !== '100644' && entry.mode !== '100755')
     throw new Error('Staged lat.md/lat.md must be a regular file.');
   const content = git(root, ['cat-file', 'blob', entry.oid]);
   const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
-  if (!frontmatter) return [];
+  if (!frontmatter) return defaults;
   const config = z
     .object({
       lat: z
         .object({
           'git-pre-commit': z
             .object({
+              validation: z.enum(['staged', 'working-tree']).default('staged'),
               'exclude-projects': z
                 .array(
                   z
@@ -161,7 +168,7 @@ function excludedProjects(root: string, entries: Entry[]): string[] {
         .optional(),
     })
     .parse(parseYaml(frontmatter[1]) ?? {});
-  return config.lat?.['git-pre-commit']?.['exclude-projects'] ?? [];
+  return config.lat?.['git-pre-commit'] ?? defaults;
 }
 
 /** Export raw index blobs, without checkout filters or changing the real index. */
@@ -275,7 +282,8 @@ export async function gitPreCommit(cwd = process.cwd()): Promise<number> {
         projects.delete(project);
     }
     if (!projects.size) return 0;
-    const excluded = excludedProjects(root, entries);
+    const config = readHookConfig(root, entries);
+    const excluded = config['exclude-projects'];
     for (const project of projects) {
       if (
         excluded.some(
@@ -285,11 +293,7 @@ export async function gitPreCommit(cwd = process.cwd()): Promise<number> {
         projects.delete(project);
     }
     if (!projects.size) return 0;
-    temporary = mkdtempSync(join(tmpdir(), 'lat-staged-'));
-    const snapshot = join(temporary, 'tree');
-    mkdirSync(snapshot);
-    await exportIndex(root, snapshot, entries);
-    // Validation and external-source Git operations must not inherit the real index/worktree.
+    // Run check like a normal invocation, without commit-specific Git overrides.
     const localGitVariables = new Set(
       git(root, ['rev-parse', '--local-env-vars']).trim().split('\n'),
     );
@@ -299,29 +303,36 @@ export async function gitPreCommit(cwd = process.cwd()): Promise<number> {
       ),
     );
     env.NO_COLOR = '1';
-    // External checkout caches are disposable too, and must live outside the project.
-    env.XDG_CACHE_HOME = join(temporary, 'cache');
-    // Supply the staged inventory to source scanners, including tracked ignored files.
-    execFileSync(
-      'git',
-      [
-        '-c',
-        'init.templateDir=',
-        'init',
-        '--quiet',
-        `--object-format=${git(root, ['rev-parse', '--show-object-format']).trim()}`,
-        snapshot,
-      ],
-      { env, stdio: 'pipe' },
-    );
-    execFileSync('git', ['update-index', '-z', '--index-info'], {
-      cwd: snapshot,
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      input: entries
-        .map((entry) => `${entry.mode} ${entry.oid}\t${entry.path}\0`)
-        .join(''),
-    });
+    let checkRoot = root;
+    if (config.validation === 'staged') {
+      temporary = mkdtempSync(join(tmpdir(), 'lat-staged-'));
+      checkRoot = join(temporary, 'tree');
+      mkdirSync(checkRoot);
+      await exportIndex(root, checkRoot, entries);
+      // External checkout caches are disposable too, outside the staged project.
+      env.XDG_CACHE_HOME = join(temporary, 'cache');
+      // Supply the staged inventory to source scanners, including tracked ignored files.
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'init.templateDir=',
+          'init',
+          '--quiet',
+          `--object-format=${git(root, ['rev-parse', '--show-object-format']).trim()}`,
+          checkRoot,
+        ],
+        { env, stdio: 'pipe' },
+      );
+      execFileSync('git', ['update-index', '-z', '--index-info'], {
+        cwd: checkRoot,
+        env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        input: entries
+          .map((entry) => `${entry.mode} ${entry.oid}\t${entry.path}\0`)
+          .join(''),
+      });
+    }
     const invocation = resolveLatInvocation();
     let failed = false;
     for (const project of projects) {
@@ -329,7 +340,7 @@ export async function gitPreCommit(cwd = process.cwd()): Promise<number> {
         invocation.command,
         [...invocation.args, 'check', '--', 'lat.md'],
         {
-          cwd: join(snapshot, project),
+          cwd: join(checkRoot, project),
           env,
           encoding: 'utf8',
           maxBuffer: 16 * 1024 * 1024,
@@ -341,19 +352,21 @@ export async function gitPreCommit(cwd = process.cwd()): Promise<number> {
         .filter(Boolean)
         .join('\n');
       console.error(
-        `Lat staged validation failed (${project || '.'}):\n${output.split(snapshot).join(root)}`,
+        `Lat ${config.validation} validation failed (${project || '.'}):\n${output.split(checkRoot).join(root)}`,
       );
     }
     if (failed) {
       console.error(
-        'Fix the errors and stage the fixes before committing again. Run `lat check` while editing.',
+        config.validation === 'staged'
+          ? 'Fix the errors and stage the fixes before committing again. Run `lat check` while editing.'
+          : 'Fix the working-tree errors before committing again. Run `lat check` in the project directory.',
       );
       return 1;
     }
     return requestDocumentationReview(root, projects, excluded) ? 1 : 0;
   } catch (error) {
     console.error(
-      `Lat could not validate the staged commit: ${(error as Error).message}`,
+      `Lat could not validate the commit: ${(error as Error).message}`,
     );
     return 1;
   } finally {

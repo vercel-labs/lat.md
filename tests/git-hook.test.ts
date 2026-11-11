@@ -182,94 +182,214 @@ it('checks staged content in an initial commit and preserves partial staging', (
 });
 
 // @lat: [[tests/hook#Uses Git commit indexes]]
-it('validates real git commit -a and path-specific temporary indexes', () => {
+it.each(['staged', 'working-tree'])(
+  'validates commit-all and path-specific commits in %s mode',
+  (validation) => {
+    const root = repo();
+    const config = `---\nlat:\n  git-pre-commit:\n    validation: ${validation}\n---\n`;
+    write(
+      root,
+      'lat.md/lat.md',
+      config + '# Project\n\nA project with [[src/feature.ts#feature]].\n',
+    );
+    git(root, 'add', 'lat.md/lat.md');
+    expect(installGitHook(root, invocation).status).toBe('installed');
+    const commit = (...args: string[]) =>
+      spawnSync('git', ['commit', '-qm', 'test', ...args], {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...cleanEnv(), AI_AGENT: 'codex' },
+      });
+    expect(commit().status).toBe(0);
+    write(root, 'src/feature.ts', 'export function renamed() { return 1; }\n');
+    expect(commit('-a').status).not.toBe(0);
+    expect(commit('--', 'src/feature.ts').status).not.toBe(0);
+    write(
+      root,
+      'lat.md/lat.md',
+      config + '# Project\n\nA project with [[src/feature.ts#renamed]].\n',
+    );
+    const result = commit('-a');
+    expect(result.status, result.stderr).toBe(0);
+  },
+);
+
+// @lat: [[tests/hook#Working-tree validation resolves local targets]]
+it.each(['staged', 'working-tree'])(
+  'validates local checkout and untracked targets in %s mode',
+  (validation) => {
+    const root = repo();
+    const config = `---\nlat:\n  git-pre-commit:\n    validation: ${validation}\n---\n`;
+    write(root, '.git/info/exclude', 'vendor/\n');
+    write(root, '.gitignore', '.pi/\n');
+    write(
+      root,
+      'vendor/cpython/Python/runtime.c',
+      'int run(void) { return 1; }\n',
+    );
+    git(join(root, 'vendor/cpython'), '-c', 'init.templateDir=', 'init', '-q');
+    write(root, 'pyperformance/README.md', '# Local benchmark checkout\n');
+    write(root, '.pi/notes.md', '# Local notes\n');
+    write(
+      root,
+      'lat.md/lat.md',
+      config +
+        '# Project\n\nSee [[vendor/cpython/Python/runtime.c#run]], [[pyperformance/README.md]], and [[.pi/notes.md]].\n',
+    );
+    git(root, 'add', 'lat.md/lat.md', '.gitignore');
+    const check = spawnSync(
+      invocation.command,
+      [...invocation.args, 'check', '--', 'lat.md'],
+      {
+        cwd: root,
+        env: cleanEnv(),
+        encoding: 'utf8',
+      },
+    );
+    expect(check.status, check.stdout + check.stderr).toBe(0);
+    const index = readFileSync(join(root, '.git/index'));
+    const result = hook(root, { LAT_BYPASS_COMMIT_HOOK: '1' });
+    expect(result.status, result.stderr).toBe(
+      validation === 'working-tree' ? 0 : 1,
+    );
+    if (validation === 'staged') expect(result.stderr).toContain('runtime.c');
+    expect(readFileSync(join(root, '.git/index'))).toEqual(index);
+    expect(
+      readFileSync(join(root, 'vendor/cpython/Python/runtime.c'), 'utf8'),
+    ).toContain('int run');
+  },
+);
+
+// @lat: [[tests/hook#Working-tree validation uses current file contents]]
+it('accepts unstaged repairs and rejects unstaged errors without changing the index', () => {
   const root = repo();
-  expect(installGitHook(root, invocation).status).toBe('installed');
-  const commit = (...args: string[]) =>
-    spawnSync('git', ['commit', '-qm', 'test', ...args], {
-      cwd: root,
-      encoding: 'utf8',
-      env: { ...cleanEnv(), AI_AGENT: 'codex' },
-    });
-  expect(commit().status).toBe(0);
-  write(root, 'src/feature.ts', 'export function renamed() { return 1; }\n');
-  expect(commit('-a').status).not.toBe(0);
-  expect(commit('--', 'src/feature.ts').status).not.toBe(0);
+  const config =
+    '---\nlat:\n  git-pre-commit:\n    validation: working-tree\n---\n';
   write(
     root,
     'lat.md/lat.md',
-    '# Project\n\nA project with [[src/feature.ts#renamed]].\n',
+    config + '# Project\n\nSee [[src/feature.ts#feature]].\n',
   );
-  const result = commit('-a');
-  expect(result.status, result.stderr).toBe(0);
+  write(root, 'src/feature.ts', 'export function gone() {}\n');
+  git(root, 'add', '.');
+  // Tracked contents on disk, including repairs not yet staged, govern this mode.
+  write(root, 'src/feature.ts', 'export function feature() {}\n');
+  const index = readFileSync(join(root, '.git/index'));
+  expect(hook(root).status).toBe(0);
+  write(root, 'lat.md/lat.md', config + '# Broken\n\n[[missing]]\n');
+  const result = hook(root, { LAT_BYPASS_COMMIT_HOOK: '1' });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('working-tree validation failed');
+  expect(result.stderr).toContain('missing');
+  expect(readFileSync(join(root, '.git/index'))).toEqual(index);
+});
+
+// @lat: [[tests/hook#Validation mode comes from staged configuration]]
+it('requires staging the validation choice and rejects invalid modes', () => {
+  const root = repo();
+  write(root, 'src/feature.ts', 'export function gone() {}\n');
+  git(root, 'add', 'src/feature.ts');
+  write(root, 'src/feature.ts', 'export function feature() {}\n');
+  const config = (value: string) =>
+    `---\nlat:\n  git-pre-commit:\n    validation: ${value}\n---\n# Project\n\nSee [[src/feature.ts#feature]].\n`;
+  write(root, 'lat.md/lat.md', config('working-tree'));
+  expect(hook(root).stderr).toContain('staged validation failed');
+  git(root, 'add', 'lat.md/lat.md');
+  // Unstaged config cannot change which data gets checked.
+  write(root, 'lat.md/lat.md', config('staged'));
+  const working = hook(root);
+  expect(working.status, working.stderr).toBe(0);
+  for (const invalid of ['disabled', 'false', 'null']) {
+    write(root, 'lat.md/lat.md', config(invalid));
+    git(root, 'add', 'lat.md/lat.md');
+    const result = hook(root, { LAT_BYPASS_COMMIT_HOOK: '1' });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('validation');
+  }
 });
 
 // @lat: [[tests/hook#Staged code review requires acknowledgment]]
-it('stops a real initial commit for review and allows an explicit retry', () => {
-  const root = repo();
-  write(
-    root,
-    'src/feature.ts',
-    'export function feature() {\n  const value = 1;\n  return value;\n}\n\n',
-  );
-  write(
-    root,
-    'lat.md/lat.md',
-    '# Project\n\nFeature behavior is documented here.\n' + '\n'.repeat(60),
-  );
-  git(root, 'add', '.');
-  expect(installGitHook(root, invocation).status).toBe('installed');
-  const commit = (bypass: string) =>
-    spawnSync('git', ['commit', '-qm', 'initial'], {
-      cwd: root,
-      encoding: 'utf8',
-      env: { ...cleanEnv(), AI_AGENT: 'codex', LAT_BYPASS_COMMIT_HOOK: bypass },
-    });
-  const result = commit('');
-  expect(result.status, result.stderr).toBe(1);
-  expect(
-    result.stderr.match(/IMPORTANT: lat precommit hook suggests/g),
-  ).toHaveLength(1);
-  expect(result.stderr).toContain('This commit was stopped for review.');
-  expect(result.stderr).toContain('LAT_BYPASS_COMMIT_HOOK=1 git commit ...');
-  expect(result.stderr).toContain('other Git hooks still run.\n\n\n');
-  expect(() => git(root, 'rev-parse', '--verify', 'HEAD')).toThrow();
-  expect(commit('0').status).toBe(1);
-  expect(commit('true').status).toBe(1);
-  const retry = commit('1');
-  expect(retry.status, retry.stderr).toBe(0);
-  expect(retry.stderr).not.toContain('IMPORTANT:');
-  expect(git(root, 'status', '--porcelain')).toBe('');
-});
+it.each(['staged', 'working-tree'])(
+  'stops a real initial commit for review in %s mode and allows an explicit retry',
+  (validation) => {
+    const root = repo();
+    write(
+      root,
+      'src/feature.ts',
+      'export function feature() {\n  const value = 1;\n  return value;\n}\n\n',
+    );
+    write(
+      root,
+      'lat.md/lat.md',
+      `---\nlat:\n  git-pre-commit:\n    validation: ${validation}\n---\n# Project\n\nFeature behavior is documented here.\n` +
+        '\n'.repeat(60),
+    );
+    git(root, 'add', '.');
+    expect(installGitHook(root, invocation).status).toBe('installed');
+    const commit = (bypass: string) =>
+      spawnSync('git', ['commit', '-qm', 'initial'], {
+        cwd: root,
+        encoding: 'utf8',
+        env: {
+          ...cleanEnv(),
+          AI_AGENT: 'codex',
+          LAT_BYPASS_COMMIT_HOOK: bypass,
+        },
+      });
+    const result = commit('');
+    expect(result.status, result.stderr).toBe(1);
+    expect(
+      result.stderr.match(/IMPORTANT: lat precommit hook suggests/g),
+    ).toHaveLength(1);
+    expect(result.stderr).toContain('This commit was stopped for review.');
+    expect(result.stderr).toContain('LAT_BYPASS_COMMIT_HOOK=1 git commit ...');
+    expect(result.stderr).toContain('other Git hooks still run.\n\n\n');
+    expect(() => git(root, 'rev-parse', '--verify', 'HEAD')).toThrow();
+    expect(commit('0').status).toBe(1);
+    expect(commit('true').status).toBe(1);
+    const retry = commit('1');
+    expect(retry.status, retry.stderr).toBe(0);
+    expect(retry.stderr).not.toContain('IMPORTANT:');
+    expect(git(root, 'status', '--porcelain')).toBe('');
+  },
+);
 
 // @lat: [[tests/hook#Review bypass preserves validation and other hooks]]
-it('keeps staged validation and other Git hooks active with the bypass flag', () => {
-  const root = repo();
-  expect(installGitHook(root, invocation).status).toBe('installed');
-  const commit = () =>
-    spawnSync('git', ['commit', '-qm', 'initial'], {
-      cwd: root,
-      encoding: 'utf8',
-      env: { ...cleanEnv(), AI_AGENT: 'codex', LAT_BYPASS_COMMIT_HOOK: '1' },
-    });
-  write(root, 'lat.md/lat.md', '# Broken\n\n[[missing]]\n');
-  git(root, 'add', '.');
-  const broken = commit();
-  expect(broken.status).toBe(1);
-  expect(broken.stderr).toContain('staged validation failed');
-  write(root, 'lat.md/lat.md', '# Project\n\nValid documentation.\n');
-  git(root, 'add', '.');
-  const otherHook = join(root, '.git/hooks/commit-msg');
-  writeFileSync(
-    otherHook,
-    '#!/bin/sh\necho "Other hook still runs" >&2\nexit 1\n',
-  );
-  chmodSync(otherHook, 0o755);
-  const other = commit();
-  expect(other.status).toBe(1);
-  expect(other.stderr).toContain('Other hook still runs');
-  expect(() => git(root, 'rev-parse', '--verify', 'HEAD')).toThrow();
-});
+it.each(['staged', 'working-tree'])(
+  'keeps %s validation and other Git hooks active with the bypass flag',
+  (validation) => {
+    const root = repo();
+    const config = `---\nlat:\n  git-pre-commit:\n    validation: ${validation}\n---\n`;
+    expect(installGitHook(root, invocation).status).toBe('installed');
+    const commit = () =>
+      spawnSync('git', ['commit', '-qm', 'initial'], {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...cleanEnv(), AI_AGENT: 'codex', LAT_BYPASS_COMMIT_HOOK: '1' },
+      });
+    write(root, 'lat.md/lat.md', config + '# Broken\n\n[[missing]]\n');
+    git(root, 'add', '.');
+    const broken = commit();
+    expect(broken.status).toBe(1);
+    expect(broken.stderr).toContain(`${validation} validation failed`);
+    write(
+      root,
+      'lat.md/lat.md',
+      config + '# Project\n\nValid documentation.\n',
+    );
+    git(root, 'add', '.');
+    const otherHook = join(root, '.git/hooks/commit-msg');
+    writeFileSync(
+      otherHook,
+      '#!/bin/sh\necho "Other hook still runs" >&2\nexit 1\n',
+    );
+    chmodSync(otherHook, 0o755);
+    const other = commit();
+    expect(other.status).toBe(1);
+    expect(other.stderr).toContain('Other hook still runs');
+    expect(() => git(root, 'rev-parse', '--verify', 'HEAD')).toThrow();
+  },
+);
 
 // @lat: [[tests/hook#Review reminders use only staged code churn]]
 it('ignores unstaged work and documentation churn but counts staged deletions', () => {
@@ -348,26 +468,35 @@ it('limits review suggestions to opted-in projects outside excluded subtrees', (
 });
 
 // @lat: [[tests/hook#Checks deletions and nested projects]]
-it('finds staged nested projects and detects references to deleted source files', () => {
-  const root = repo();
-  git(root, 'commit', '-qm', 'initial');
-  write(
-    root,
-    'packages/app/lat.md/lat.md',
-    '# App\n\nSee [[source.ts#run]].\n',
-  );
-  write(root, 'packages/app/lat.md/.gitignore', '.cache/\n');
-  writeExperiments(join(root, 'packages/app'), { 'commit-hooks': true });
-  write(root, 'packages/app/source.ts', 'export function run() {}\n');
-  git(root, 'add', '.');
-  expect(hook(root).status).toBe(0);
-  git(root, 'commit', '-qm', 'nested');
-  git(root, 'rm', 'packages/app/source.ts');
-  const result = hook(root);
-  expect(result.status).toBe(1);
-  expect(result.stderr).toContain('packages/app');
-  expect(result.stderr).toContain('source.ts');
-});
+it.each(['staged', 'working-tree'])(
+  'checks nested projects and deletions in %s mode',
+  (validation) => {
+    const root = repo();
+    write(
+      root,
+      'lat.md/lat.md',
+      `---\nlat:\n  git-pre-commit:\n    validation: ${validation}\n---\n# Project\n\nSee [[src/feature.ts#feature]].\n`,
+    );
+    git(root, 'add', 'lat.md/lat.md');
+    git(root, 'commit', '-qm', 'initial');
+    write(
+      root,
+      'packages/app/lat.md/lat.md',
+      '# App\n\nSee [[source.ts#run]].\n',
+    );
+    write(root, 'packages/app/lat.md/.gitignore', '.cache/\n');
+    writeExperiments(join(root, 'packages/app'), { 'commit-hooks': true });
+    write(root, 'packages/app/source.ts', 'export function run() {}\n');
+    git(root, 'add', '.');
+    expect(hook(root).status).toBe(0);
+    git(root, 'commit', '-qm', 'nested');
+    git(root, 'rm', 'packages/app/source.ts');
+    const result = hook(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('packages/app');
+    expect(result.stderr).toContain('source.ts');
+  },
+);
 
 // @lat: [[tests/hook#Contains staged symlinks]]
 it.skipIf(process.platform === 'win32')(
@@ -398,39 +527,48 @@ it.skipIf(process.platform === 'win32')(
 );
 
 // @lat: [[tests/hook#Excludes fixture projects using staged configuration]]
-it('excludes configured fixture subtrees without excluding sibling projects', () => {
-  const root = repo();
-  const original = readFileSync(join(root, 'lat.md/lat.md'), 'utf8');
-  const configured =
-    '---\nlat:\n  git-pre-commit:\n    exclude-projects:\n      - tests/cases\n---\n' +
-    original;
-  write(root, 'tests/cases/broken/lat.md/.gitignore', '.cache/\n');
-  writeExperiments(join(root, 'tests/cases/broken'), { 'commit-hooks': true });
-  write(root, 'tests/cases/broken/lat.md/lat.md', '# Fixture\n\n[[missing]]\n');
-  git(root, 'add', '.');
-  write(root, 'lat.md/lat.md', configured);
-  // Working-tree exclusions cannot hide a staged error.
-  expect(hook(root).status).toBe(1);
-  git(root, 'add', 'lat.md/lat.md');
-  write(root, 'lat.md/lat.md', original);
-  const excluded = hook(root);
-  expect(excluded.status, excluded.stderr).toBe(0);
-  // The similarly named sibling is still an independent validation target.
-  write(root, 'tests/cases-other/lat.md/.gitignore', '.cache/\n');
-  writeExperiments(join(root, 'tests/cases-other'), { 'commit-hooks': true });
-  write(root, 'tests/cases-other/lat.md/lat.md', '# App\n\n[[missing]]\n');
-  git(root, 'add', 'tests/cases-other');
-  const sibling = hook(root);
-  expect(sibling.status).toBe(1);
-  expect(sibling.stderr).toContain('tests/cases-other');
-  git(root, 'rm', '-rf', 'tests/cases-other');
-  // Exclusions do not suppress validation of the owning root project.
-  write(root, 'src/feature.ts', 'export function renamed() {}\n');
-  git(root, 'add', 'src/feature.ts');
-  const owning = hook(root);
-  expect(owning.status).toBe(1);
-  expect(owning.stderr).toContain('feature');
-});
+it.each(['staged', 'working-tree'])(
+  'excludes fixtures without excluding sibling projects in %s mode',
+  (validation) => {
+    const root = repo();
+    const original = readFileSync(join(root, 'lat.md/lat.md'), 'utf8');
+    const configured =
+      `---\nlat:\n  git-pre-commit:\n    validation: ${validation}\n    exclude-projects:\n      - tests/cases\n---\n` +
+      original;
+    write(root, 'tests/cases/broken/lat.md/.gitignore', '.cache/\n');
+    writeExperiments(join(root, 'tests/cases/broken'), {
+      'commit-hooks': true,
+    });
+    write(
+      root,
+      'tests/cases/broken/lat.md/lat.md',
+      '# Fixture\n\n[[missing]]\n',
+    );
+    git(root, 'add', '.');
+    write(root, 'lat.md/lat.md', configured);
+    // Working-tree exclusions cannot hide a staged error.
+    expect(hook(root).status).toBe(1);
+    git(root, 'add', 'lat.md/lat.md');
+    write(root, 'lat.md/lat.md', original);
+    const excluded = hook(root);
+    expect(excluded.status, excluded.stderr).toBe(0);
+    // The similarly named sibling is still an independent validation target.
+    write(root, 'tests/cases-other/lat.md/.gitignore', '.cache/\n');
+    writeExperiments(join(root, 'tests/cases-other'), { 'commit-hooks': true });
+    write(root, 'tests/cases-other/lat.md/lat.md', '# App\n\n[[missing]]\n');
+    git(root, 'add', 'tests/cases-other');
+    const sibling = hook(root);
+    expect(sibling.status).toBe(1);
+    expect(sibling.stderr).toContain('tests/cases-other');
+    git(root, 'rm', '-rf', 'tests/cases-other');
+    // Exclusions do not suppress validation of the owning root project.
+    write(root, 'src/feature.ts', 'export function renamed() {}\n');
+    git(root, 'add', 'src/feature.ts');
+    const owning = hook(root);
+    expect(owning.status).toBe(1);
+    expect(owning.stderr).toContain('feature');
+  },
+);
 
 // @lat: [[tests/hook#Rejects invalid project exclusions]]
 it.each(['tests/cases', '["."]', '["../outside"]', '["/absolute"]'])(

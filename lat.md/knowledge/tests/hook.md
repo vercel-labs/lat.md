@@ -37,11 +37,23 @@ An initial commit validates staged blobs, rejects staged errors even when workin
 
 ## Uses Git commit indexes
 
-Real Git commits verify that the installed hook respects indexes supplied for commit-all and path-specific commits, blocking source changes until matching documentation is included.
+Real commit-all and path-specific commits validate correctly in both modes. Staged mode checks Git's supplied index; working-tree mode checks the project directory despite temporary commit index overrides.
+
+## Working-tree validation resolves local targets
+
+Working-tree mode resolves symbols in ignored nested checkouts and links to untracked or ignored files just like regular validation. Staged mode rejects those absent targets, and neither mode modifies the real index or source contents.
+
+## Working-tree validation uses current file contents
+
+Unstaged source repairs can satisfy working-tree validation, while unstaged documentation errors still block it even with the review bypass. Validation leaves the real index unchanged.
+
+## Validation mode comes from staged configuration
+
+The mode defaults to staged validation until an explicit working-tree choice is staged. Unstaged configuration cannot change that choice, and invalid modes fail even with the review bypass.
 
 ## Checks deletions and nested projects
 
-Staged nested Lat projects are discovered from the index; deleting a referenced source file fails validation in the owning project.
+Nested Lat projects are discovered from the index in both modes; deleting a referenced source file fails validation in the owning project.
 
 ## Contains staged symlinks
 
@@ -53,7 +65,7 @@ A temporary directory with a symlink ancestor accepts staged links whose targets
 
 ## Excludes fixture projects using staged configuration
 
-Staged exclusions allow deliberately broken fixtures while unstaged exclusions have no effect. Directory boundaries preserve similarly named siblings, and ancestor projects still validate their own graph and source references.
+Both modes honor staged exclusions for deliberately broken fixtures; unstaged exclusions have no effect. Directory boundaries preserve similarly named siblings, and ancestor projects still validate their own graph and source references.
 
 ## Rejects invalid project exclusions
 
@@ -169,7 +181,7 @@ Missing or disabled project choices make the Git hook skip even broken staged gr
 
 ## Staged code review requires acknowledgment
 
-An initial agent commit with enough staged code stops for review even when Lat changes are staged. Only an explicit retry with the bypass value `1` succeeds; other values do not acknowledge review.
+In both validation modes, an initial agent commit with enough staged code stops for review even when Lat changes are staged. Only an explicit retry with bypass value `1` succeeds; other values do not acknowledge review.
 
 ## Review reminders use only staged code churn
 
@@ -181,4 +193,4 @@ Suggestions count only source changes within affected opted-in projects and outs
 
 ## Review bypass preserves validation and other hooks
 
-Real Git commits with the review bypass still reject broken staged documentation and run other Git hooks. The flag acknowledges semantic review without weakening structural validation or unrelated checks.
+Real Git commits with the review bypass still reject validation errors and run other Git hooks in both modes. The flag acknowledges semantic review without weakening structural validation or unrelated checks.

@@ -9,7 +9,7 @@ export const EXPERIMENTS = [
     id: 'commit-hooks',
     label: 'Replace end-of-turn checks with Git commit checks',
     description:
-      'Validate staged content when an agent commits, remove Lat Stop hooks, and refresh Pi/OpenCode completion integrations. Prompt context stays enabled; manual commits skip validation. Custom Git hooks require manual integration.',
+      'Validate documentation when an agent commits (staged by default, optionally the working tree), remove Lat Stop hooks, and refresh Pi/OpenCode completion integrations. Prompt context stays enabled; manual commits skip validation. Custom Git hooks require manual integration.',
   },
 ] as const;
 
