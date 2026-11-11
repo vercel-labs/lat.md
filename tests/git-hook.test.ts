@@ -15,9 +15,33 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setImmediate } from 'node:timers/promises';
 import { isAgentCommit } from '../src/cli/git-hook.js';
-import { installGitHook } from '../src/cli/git-hook-install.js';
+import {
+  installGitHook,
+  supportsConfiguredHooks,
+} from '../src/cli/git-hook-install.js';
 import { writeExperiments } from '../src/cli/experiments.js';
 import { removeLatStopHooks, syncLatHooks } from '../src/cli/init.js';
+
+const gitVersion = vi.hoisted(() => ({
+  value: undefined as string | undefined,
+}));
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  const exec: typeof actual.execFileSync = (...args: unknown[]) => {
+    if (
+      args[0] === 'git' &&
+      Array.isArray(args[1]) &&
+      args[1][0] === '--version' &&
+      gitVersion.value !== undefined
+    )
+      return gitVersion.value;
+    return Reflect.apply(actual.execFileSync, undefined, args);
+  };
+  return { ...actual, execFileSync: exec };
+});
+const nativeConfiguredHooks = supportsConfiguredHooks(
+  execFileSync('git', ['--version'], { encoding: 'utf8' }),
+);
 
 const directories: string[] = [];
 const cli = join(import.meta.dirname, '../src/cli/index.ts');
@@ -107,6 +131,7 @@ function hook(root: string, extra: Record<string, string> = {}, agent = true) {
   );
 }
 afterEach(async () => {
+  gitVersion.value = undefined;
   vi.unstubAllEnvs();
   for (const dir of directories.splice(0))
     rmSync(dir, { recursive: true, force: true });
@@ -426,6 +451,7 @@ it.each(['tests/cases', '["."]', '["../outside"]', '["/absolute"]'])(
 
 // @lat: [[tests/hook#Installs only owned Git hooks]]
 it('installs and updates its hook without replacing custom or edited hooks', () => {
+  gitVersion.value = 'git version 2.53.0';
   const root = repo();
   mkdirSync(join(root, 'nested'), { recursive: true });
   const path = join(root, '.git/hooks/pre-commit');
@@ -457,6 +483,7 @@ it.each([
   'lefthook.yml',
   'custom',
 ])('preserves %s', (path) => {
+  gitVersion.value = 'git version 2.53.0';
   const root = repo();
   if (path === 'custom') git(root, 'config', 'core.hooksPath', temporary());
   else write(root, path, 'user configuration\n');
@@ -468,29 +495,168 @@ it.each([
     expect(readFileSync(join(root, path), 'utf8')).toBe('user configuration\n');
 });
 
-// @lat: [[tests/hook#Shares hooks across worktrees]]
-it('uses the active worktree instead of capturing the installation directory', () => {
+// @lat: [[tests/hook#Detects configuration hook support]]
+it.each([
+  ['git version 2.53.9', false],
+  ['git version 2.54.0', true],
+  ['git version 2.54.0.windows.1', true],
+  ['git version 2.54.0 (Apple Git-200)', true],
+  ['git version 2.56.0', true],
+  ['git version 3.0.0', true],
+  ['unknown', false],
+])('selects the installation format for %s', (version, configured) => {
+  expect(supportsConfiguredHooks(version)).toBe(configured);
+  gitVersion.value = version;
   const root = repo();
-  git(root, 'commit', '-qm', 'initial');
-  installGitHook(root, invocation);
-  const worktree = join(temporary(), 'worktree');
-  git(root, 'worktree', 'add', '-q', '-b', 'other', worktree);
-  writeExperiments(worktree, { 'commit-hooks': true });
-  writeExperiments(root, { 'commit-hooks': false });
-  expect(installGitHook(worktree, invocation).status).toBe(
-    'already configured',
-  );
-  write(worktree, 'src/feature.ts', 'export function gone() {}\n');
-  git(worktree, 'add', '.');
-  const result = spawnSync('git', ['commit', '-qm', 'broken'], {
-    cwd: worktree,
-    encoding: 'utf8',
-    env: { ...cleanEnv(), AI_AGENT: 'codex' },
-  });
-  expect(result.status).not.toBe(0);
-  expect(result.stderr).toContain('staged validation failed');
-  expect(git(root, 'status', '--porcelain')).toBe('');
+  expect(installGitHook(root, invocation).status).toBe('installed');
+  expect(existsSync(join(root, '.git/hooks/pre-commit'))).toBe(!configured);
+  expect(existsSync(join(root, '.git/hooks/lat-pre-commit'))).toBe(configured);
+  if (configured)
+    expect(
+      git(root, 'config', '--local', '--get-all', 'hook.lat-md.event'),
+    ).toBe('pre-commit\n');
 });
+
+// @lat: [[tests/hook#Migrates owned hooks to repository configuration]]
+it('migrates only an unchanged launcher and refreshes configuration idempotently', () => {
+  const root = repo();
+  const legacy = join(root, '.git/hooks/pre-commit');
+  const launcher = join(root, '.git/hooks/lat-pre-commit');
+  gitVersion.value = 'git version 2.53.0';
+  installGitHook(root, invocation);
+  const owned = readFileSync(legacy, 'utf8');
+  writeFileSync(legacy, owned + '\necho user edit\n');
+  gitVersion.value = 'git version 2.54.0';
+  expect(installGitHook(root, invocation).status).toBe('integration required');
+  expect(readFileSync(legacy, 'utf8')).toBe(owned + '\necho user edit\n');
+  expect(existsSync(launcher)).toBe(false);
+  writeFileSync(legacy, owned);
+  expect(installGitHook(root, invocation).status).toBe('installed');
+  expect(existsSync(legacy)).toBe(false);
+  expect(readFileSync(launcher, 'utf8')).toBe(owned);
+  expect(installGitHook(root, invocation).status).toBe('already configured');
+  expect(
+    installGitHook(root, { command: '/new/node', args: ['/new/lat.js'] })
+      .status,
+  ).toBe('installed');
+  expect(git(root, 'config', '--local', '--get-all', 'hook.lat-md.event')).toBe(
+    'pre-commit\n',
+  );
+  const config = readFileSync(join(root, '.git/config'), 'utf8');
+  writeFileSync(launcher, owned + '\necho custom launcher\n');
+  expect(installGitHook(root, invocation).status).toBe('integration required');
+  expect(readFileSync(join(root, '.git/config'), 'utf8')).toBe(config);
+});
+
+// @lat: [[tests/hook#Preserves configured hook overrides]]
+it.each(['custom', 'disabled', 'global', 'duplicate', 'event-only'])(
+  'preserves %s configuration instead of claiming it',
+  (kind) => {
+    gitVersion.value = 'git version 2.54.0';
+    const root = repo();
+    if (kind === 'disabled' || kind === 'duplicate')
+      installGitHook(root, invocation);
+    let configPath = join(root, '.git/config');
+    if (kind === 'global') {
+      configPath = join(temporary(), 'global-config');
+      git(
+        root,
+        'config',
+        '--file',
+        configPath,
+        'hook.lat-md.command',
+        'echo global',
+      );
+      vi.stubEnv('GIT_CONFIG_GLOBAL', configPath);
+    } else if (kind === 'disabled')
+      git(root, 'config', 'hook.lat-md.enabled', 'false');
+    else if (kind === 'duplicate')
+      git(root, 'config', '--add', 'hook.lat-md.event', 'pre-push');
+    else if (kind === 'event-only')
+      git(root, 'config', 'hook.lat-md.event', 'pre-commit');
+    else git(root, 'config', 'hook.lat-md.command', 'echo custom');
+    const before = readFileSync(configPath, 'utf8');
+    expect(installGitHook(root, invocation).status).toBe(
+      'integration required',
+    );
+    expect(readFileSync(configPath, 'utf8')).toBe(before);
+    expect(existsSync(join(root, '.git/hooks/pre-commit'))).toBe(false);
+  },
+);
+
+// @lat: [[tests/hook#Configured hooks coexist with existing workflows]]
+it.each([
+  '.husky/pre-commit',
+  '.pre-commit-config.yaml',
+  'lefthook.yml',
+  'custom',
+])('adds a configured hook while preserving %s', (path) => {
+  gitVersion.value = 'git version 2.54.0';
+  const root = repo();
+  const hooksPath =
+    path === 'custom' ? join(root, 'custom hooks') : join(root, '.git/hooks');
+  if (path === 'custom') git(root, 'config', 'core.hooksPath', hooksPath);
+  else write(root, path, 'user configuration\n');
+  mkdirSync(hooksPath, { recursive: true });
+  const legacy = join(hooksPath, 'pre-commit');
+  const script = '#!/bin/sh\necho existing-hook >&2\nexit 17\n';
+  writeFileSync(legacy, script, { mode: 0o755 });
+  git(root, 'config', 'hook.other.command', 'echo other-hook >&2');
+  git(root, 'config', 'hook.other.event', 'pre-commit');
+  expect(installGitHook(root, invocation).status).toBe('installed');
+  expect(readFileSync(legacy, 'utf8')).toBe(script);
+  expect(git(root, 'config', 'hook.other.command').trim()).toBe(
+    'echo other-hook >&2',
+  );
+  if (path === 'custom')
+    expect(git(root, 'config', 'core.hooksPath').trim()).toBe(hooksPath);
+  else
+    expect(readFileSync(join(root, path), 'utf8')).toBe('user configuration\n');
+  if (nativeConfiguredHooks) {
+    const listed = git(root, 'hook', 'list', '--show-scope', 'pre-commit');
+    expect(listed).toContain('local\tlat-md');
+    const result = spawnSync(
+      'git',
+      ['commit', '-qm', 'blocked by existing hook'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...cleanEnv(), AI_AGENT: 'codex' },
+      },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('other-hook');
+    expect(result.stderr).toContain('existing-hook');
+  }
+});
+
+// @lat: [[tests/hook#Shares hooks across worktrees]]
+it.each(nativeConfiguredHooks ? ['2.53.0', '2.54.0'] : ['2.53.0'])(
+  'uses the active worktree with Git %s',
+  (version) => {
+    gitVersion.value = `git version ${version}`;
+    const root = repo();
+    git(root, 'commit', '-qm', 'initial');
+    installGitHook(root, invocation);
+    const worktree = join(temporary(), 'worktree');
+    git(root, 'worktree', 'add', '-q', '-b', 'other', worktree);
+    writeExperiments(worktree, { 'commit-hooks': true });
+    writeExperiments(root, { 'commit-hooks': false });
+    expect(installGitHook(worktree, invocation).status).toBe(
+      'already configured',
+    );
+    write(worktree, 'src/feature.ts', 'export function gone() {}\n');
+    git(worktree, 'add', '.');
+    const result = spawnSync('git', ['commit', '-qm', 'broken'], {
+      cwd: worktree,
+      encoding: 'utf8',
+      env: { ...cleanEnv(), AI_AGENT: 'codex' },
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('staged validation failed');
+    expect(git(root, 'status', '--porcelain')).toBe('');
+  },
+);
 
 // @lat: [[tests/hook#Migrates lifecycle hooks without collateral changes]]
 it('removes Lat stop commands from mixed entries and preserves custom handlers', () => {

@@ -233,9 +233,13 @@ The first experiment, `commit-hooks`, moves validation from agent completion to 
 
 [[src/cli/git-hook-install.ts#installGitHook]] installs agent-only commit validation when the project has enabled the commit-hooks experiment, preserving existing hook ownership and configuration.
 
-With the default hooks directory and no existing hook, init writes an executable launcher using [[src/cli/agent-invocation.ts#resolveLatInvocation]]. It captures the installed runtime without an npm download at commit time, but resolves the active worktree at execution time. Missing runtime or entrypoint permits the commit and prints a repair instruction.
+[[src/cli/git-hook-install.ts#supportsConfiguredHooks]] selects repository configuration hooks on Git 2.54 and newer. Init registers `hook.lat-md.command` and its `pre-commit` event in local Git config, pointing to a separate launcher in the common Git directory. Existing scripts, hook managers, and `core.hooksPath` remain intact. Named hooks run before traditional scripts; workflows that stage files in those scripts must run `lat hook git-pre-commit` again after staging to validate the final index.
 
-A content hash identifies unmodified Lat launchers for idempotent refresh. Custom or edited hooks, hook managers, and any configured hooksPath are preserved; init reports integration required and prints instructions for `lat hook git-pre-commit`. It never redirects hooksPath, appends to unknown scripts, or changes global hooks. Non-Git projects skip installation. Common Git directories support linked worktrees and nested project initialization.
+On older or unrecognized Git versions, init uses the default `hooks/pre-commit` launcher. Custom or edited hooks, hook managers, and any configured hooksPath receive integration instructions instead of automatic installation. Neither path redirects hooksPath, appends to unknown scripts, or changes global hooks.
+
+Launchers use [[src/cli/agent-invocation.ts#resolveLatInvocation]] to capture the installed runtime without an npm download at commit time, resolving the active worktree at execution time. Missing runtime or entrypoint permits the commit and prints a repair instruction. Common Git directories support linked worktrees and nested project initialization; non-Git projects skip installation.
+
+A content hash identifies unmodified Lat launchers for idempotent refresh. Upgrading to configuration hooks removes an unchanged legacy Lat script only after registering its replacement. Edited Lat launchers and conflicting, inherited, or disabled `hook.lat-md` configuration remain untouched and require manual integration. Unrelated named hooks are preserved.
 
 Init removes legacy Lat stop handlers from existing Claude, Codex, and Cursor settings, even for agents not selected again. Existing Pi/OpenCode plugins are refreshed through the normal generated-file ownership and overwrite rules; user-modified plugins remain subject to those rules. Generated instructions move validation from every response to commit time. The stable initialization version is unchanged, so existing projects are not prompted to migrate to an experiment.
 

@@ -387,6 +387,7 @@ describe('lat init embedding setup', () => {
     ).toBe(0);
     await initCmd(root);
     expect(existsSync(join(root, '.git/hooks/pre-commit'))).toBe(false);
+    expect(existsSync(join(root, '.git/hooks/lat-pre-commit'))).toBe(false);
     expect(readFileSync(join(root, '.pi/extensions/lat.ts'), 'utf8')).toContain(
       'agent_end',
     );
@@ -420,7 +421,10 @@ describe('lat init embedding setup', () => {
     expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
       'Validate staged content when an agent commits',
     );
-    expect(existsSync(join(root, '.git/hooks/pre-commit'))).toBe(true);
+    expect(
+      existsSync(join(root, '.git/hooks/pre-commit')) ||
+        existsSync(join(root, '.git/hooks/lat-pre-commit')),
+    ).toBe(true);
     expect(
       JSON.parse(readFileSync(join(root, '.codex/hooks.json'), 'utf8')).hooks
         .Stop,
@@ -548,7 +552,10 @@ describe('lat init embedding setup', () => {
       );
     }
     await initCmd(root);
-    expect(readFileSync(join(root, '.git/hooks/pre-commit'), 'utf8')).toContain(
+    const hookPath = existsSync(join(root, '.git/hooks/lat-pre-commit'))
+      ? '.git/hooks/lat-pre-commit'
+      : '.git/hooks/pre-commit';
+    expect(readFileSync(join(root, hookPath), 'utf8')).toContain(
       'hook git-pre-commit',
     );
     expect(
