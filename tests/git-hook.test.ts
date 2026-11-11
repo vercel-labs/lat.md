@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setImmediate } from 'node:timers/promises';
 import { isAgentCommit } from '../src/cli/git-hook.js';
@@ -657,6 +657,21 @@ it.each(nativeConfiguredHooks ? ['2.53.0', '2.54.0'] : ['2.53.0'])(
     expect(git(root, 'status', '--porcelain')).toBe('');
   },
 );
+
+// @lat: [[tests/hook#Recognizes aliased Git directories]]
+it('recognizes its configured hook through a differently cased directory', ({
+  skip,
+}) => {
+  gitVersion.value = 'git version 2.54.0';
+  const root = repo();
+  const alias = join(dirname(root), basename(root).toUpperCase());
+  if (!existsSync(alias)) return skip(); // Requires a case-insensitive filesystem.
+  expect(installGitHook(root, invocation).status).toBe('installed');
+  const config = readFileSync(join(root, '.git/config'), 'utf8');
+  const result = installGitHook(alias, invocation);
+  expect(result.status, result.detail).toBe('already configured');
+  expect(readFileSync(join(root, '.git/config'), 'utf8')).toBe(config);
+});
 
 // @lat: [[tests/hook#Migrates lifecycle hooks without collateral changes]]
 it('removes Lat stop commands from mixed entries and preserves custom handlers', () => {

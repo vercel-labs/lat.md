@@ -79,7 +79,9 @@ export function installGitHook(
     };
   }
   // Linked worktrees share hooks/config; the launcher resolves the active tree.
-  const common = realpathSync(
+  // Native resolution also canonicalizes casing and Windows short-name aliases.
+  // The JS implementation preserves those spellings, breaking command equality.
+  const common = realpathSync.native(
     resolve(root, git(['rev-parse', '--git-common-dir'])),
   );
   let configuredHooks = false;

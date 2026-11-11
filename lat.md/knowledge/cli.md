@@ -241,6 +241,8 @@ Launchers use [[src/cli/agent-invocation.ts#resolveLatInvocation]] to capture th
 
 A content hash identifies unmodified Lat launchers for idempotent refresh. Upgrading to configuration hooks removes an unchanged legacy Lat script only after registering its replacement. Edited Lat launchers and conflicting, inherited, or disabled `hook.lat-md` configuration remain untouched and require manual integration. Unrelated named hooks are preserved.
 
+[[src/cli/git-hook-install.ts#installGitHook]] uses native filesystem resolution for the common Git directory so case differences, symlink aliases, and Windows short names do not make worktrees disagree about the configured launcher path.
+
 Init removes legacy Lat stop handlers from existing Claude, Codex, and Cursor settings, even for agents not selected again. Existing Pi/OpenCode plugins are refreshed through the normal generated-file ownership and overwrite rules; user-modified plugins remain subject to those rules. Generated instructions move validation from every response to commit time. The stable initialization version is unchanged, so existing projects are not prompted to migrate to an experiment.
 
 Disabling the experiment restores installed completion integrations, including previously configured agents not selected again. The shared Git launcher remains installed and skips projects without a saved opt-in, preserving enabled projects in other worktrees.

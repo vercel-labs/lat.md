@@ -89,6 +89,10 @@ Named Lat hooks preserve existing hook managers, custom hooksPath, scripts, and 
 
 Linked worktrees share legacy and configured hooks, but validation reads the committing worktree and does not capture the installation directory. Real commits reject broken staged documentation through either installation format.
 
+## Recognizes aliased Git directories
+
+On case-insensitive filesystems, setup through differently cased paths recognizes the existing hook without rewriting configuration. Native path resolution also normalizes Windows short names when comparing shared launcher paths.
+
 ## Migrates lifecycle hooks without collateral changes
 
 Migration removes Lat commands within mixed hook entries while retaining unrelated commands, event matchers, and Cursor prompt handlers.
