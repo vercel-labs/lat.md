@@ -67,11 +67,31 @@ Fresh hooks install and refresh idempotently. Existing custom hooks and edited L
 
 ## Preserves hook managers and custom paths
 
-Husky, pre-commit, Lefthook, and custom hooksPath configurations receive integration instructions without writing a competing Git hook.
+On Git versions before configuration hooks, Husky, pre-commit, Lefthook, and custom hooksPath configurations receive integration instructions without writing a competing Git hook.
+
+## Detects configuration hook support
+
+Git 2.54 and newer select named repository hooks, including Windows and Apple version strings. Older or unrecognized versions retain the legacy launcher path.
+
+## Migrates owned hooks to repository configuration
+
+Unchanged legacy launchers migrate to a named local hook without duplicate events. Repeat setup and runtime updates are idempotent; edited legacy or configured launchers remain untouched.
+
+## Preserves configured hook overrides
+
+Conflicting, disabled, inherited, duplicate-event, and incomplete user configurations are preserved with integration guidance instead of being overwritten or silently re-enabled.
+
+## Configured hooks coexist with existing workflows
+
+Named Lat hooks preserve existing hook managers, custom hooksPath, scripts, and unrelated configured hooks. On supported Git, real commits run existing hooks and honor their failures.
 
 ## Shares hooks across worktrees
 
-Linked worktrees share the installed hook, but validation reads the committing worktree and does not capture the installation directory.
+Linked worktrees share legacy and configured hooks, but validation reads the committing worktree and does not capture the installation directory. Real commits reject broken staged documentation through either installation format.
+
+## Recognizes aliased Git directories
+
+On case-insensitive filesystems, setup through differently cased paths recognizes the existing hook without rewriting configuration. Native path resolution also normalizes Windows short names when comparing shared launcher paths.
 
 ## Migrates lifecycle hooks without collateral changes
 
