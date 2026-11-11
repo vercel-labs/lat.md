@@ -21,6 +21,12 @@ Fetch tests reject repository-browser HTML so a misconfigured raw-file template 
 
 Local override coverage accepts root and nested checkout paths regardless of Windows path spelling, then resolves content from the discovered worktree root.
 
+### Scoped generation checks
+
+The generation checks around each file read reload configuration for the read source alone, so other sources' local checkouts are neither inspected nor reported.
+
+A project with a valid local override and a missing one reports only the missing checkout on a full load. A scoped load of the valid source has no errors, and local reads still resolve.
+
 ### Long managed cache paths
 
 Managed Git repositories initialize, fetch, and reopen when staging object and pack filenames exceed 260 characters.

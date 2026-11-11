@@ -362,6 +362,8 @@ Short-lived external-aware commands other than `lat external show` and `lat exte
 
 Concurrent retrievals share in-flight work, and successful cache writes become visible atomically.
 
+Each file read reloads configuration immediately before and after retrieval and fails if the read source's effective metadata changed meanwhile. [[packages/core/src/external-sources.ts#assertCurrentGeneration]] reloads only that source through the `only` option of [[packages/core/src/external-sources.ts#loadExternalSources]], so a read never re-inspects other sources' local checkouts, which costs several Git commands each.
+
 ### Automatic Synchronization
 
 External-aware commands share one synchronization path that reconciles valid configuration, cache generations, and the exact external files required by the operation.

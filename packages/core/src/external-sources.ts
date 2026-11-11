@@ -477,7 +477,14 @@ async function localCheckoutStatus(
 export async function loadExternalSources(
   latDir: string,
   projectRoot = dirname(latDir),
-  options: { ignoreLocal?: boolean } = {},
+  options: {
+    ignoreLocal?: boolean;
+    /**
+     * Resolve and validate only this handle. The snapshot then omits every
+     * other source, so their local checkouts are not inspected.
+     */
+    only?: string;
+  } = {},
 ): Promise<ExternalSourcesSnapshot> {
   const canonicalPath = join(latDir, 'lat.md');
   const localPath = join(latDir, 'config.local.yaml');
@@ -535,6 +542,7 @@ export async function loadExternalSources(
 
   const sources = new Map<string, EffectiveExternalSource>();
   for (const source of canonical.values()) {
+    if (options.only !== undefined && source.handle !== options.only) continue;
     const local = overrides.get(source.handle) ?? {};
     const status = await localCheckoutStatus(source, local, projectRoot);
     const effectiveCommit = local.commit ?? source.commit;
@@ -1174,8 +1182,12 @@ async function assertCurrentGeneration(
   source: EffectiveExternalSource,
   ignoreLocal: boolean,
 ): Promise<void> {
+  // Only the selected source's generation matters here. Validating every
+  // other local checkout would repeat four Git commands per source for each
+  // file read, which dominates runs over slow file systems.
   const current = await loadExternalSources(latDir, projectRoot, {
     ignoreLocal,
+    only: source.handle,
   });
   const selected = current.sources.get(source.handle);
   if (

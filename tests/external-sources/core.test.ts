@@ -502,6 +502,44 @@ describe.sequential('external source core', () => {
     }
   }, 30_000);
 
+  // @lat: [[tests/external-tests#External Sources#Retrieval strategies#Scoped generation checks]]
+  it('checks only the read source generation around a local read', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'lat-external-scoped-'));
+    projects.push(root);
+    const latDir = join(root, 'lat.md');
+    mkdirSync(latDir, { recursive: true });
+    const source = (handle: string) =>
+      `    ${handle}:\n      repo: ${fixture.repoUrl}\n      commit: ${fixture.commit2}\n      prefix: docs\n      strategy: fetch\n      fetch-url: ${fixture.fetchUrl}\n`;
+    writeFileSync(
+      join(latDir, 'lat.md'),
+      `---\nlat:\n  external-sources:\n${source('upstream')}${source('other')}---\n# Project\n\nSee [[upstream:guide.md#Navigation]].\n`,
+    );
+    const missing = join(root, 'missing-checkout');
+    writeFileSync(
+      join(latDir, 'config.local.yaml'),
+      `external-sources:\n  upstream:\n    local-path: ${fixture.checkout}\n  other:\n    local-path: ${missing}\n`,
+    );
+
+    const full = await loadExternalSources(latDir, root);
+    expect(full.errors.map((error) => error.message)).toEqual([
+      expect.stringContaining(
+        `external source "other" local-path "${missing}"`,
+      ),
+    ]);
+    const scoped = await loadExternalSources(latDir, root, {
+      only: 'upstream',
+    });
+    expect(scoped.errors).toEqual([]);
+    expect([...scoped.sources.keys()]).toEqual(['upstream']);
+    expect(scoped.sources.get('upstream')?.effectiveStrategy).toBe('local');
+
+    const resolver = await createExternalResolver(latDir, root, {
+      ca: fixture.ca,
+    });
+    const result = await resolver.resolve('upstream:guide.md#Navigation');
+    expect(result.provider).toBe('local');
+  });
+
   // @lat: [[tests/external-tests#External Sources#Retrieval strategies#Long managed cache paths]]
   it('fetches and reopens repositories with long object and pack paths', async () => {
     const project = createExternalProject(fixture, {
