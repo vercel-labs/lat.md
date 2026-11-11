@@ -60,6 +60,24 @@ When init reports integration required, add `lat hook git-pre-commit` to your ex
 
 Lat does not change `core.hooksPath`. New clones need their own hook setup, and automatic merge commits require separate pre-merge-commit integration. Agent detection can be lost across remote or custom execution tools; this is a workflow check, not a security boundary.
 
+## Pre-commit validation mode
+
+The commit-hooks experiment checks staged file versions by default. Projects that rely on ignored checkouts or other local-only link targets can choose working-tree validation.
+
+Add this setting to the YAML frontmatter at the top of the Git repository's `lat.md/lat.md`:
+
+```yaml
+---
+lat:
+  git-pre-commit:
+    validation: working-tree
+---
+```
+
+Stage the configuration file for the setting to take effect. Use `staged`, or omit the setting, to retain strict validation of the commit's contents. The setting applies to all affected opted-in projects in the repository.
+
+In `working-tree` mode, the hook runs the regular `lat check` in each affected project's directory. It can resolve local targets and sees unstaged edits, so a passing check describes the files on disk rather than necessarily the versions being committed. In both modes, validation errors block commits even with `LAT_BYPASS_COMMIT_HOOK=1`; that flag skips only the documentation review reminder.
+
 ## Fixture projects
 
 The commit-hooks experiment can exclude intentionally invalid test graphs using the root document's frontmatter.

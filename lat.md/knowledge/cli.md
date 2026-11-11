@@ -371,29 +371,37 @@ Reads the hook input from stdin (Claude JSON with `user_prompt` or Codex JSON wi
 
 ### git-pre-commit
 
-[[src/cli/git-hook.ts#gitPreCommit]] validates the staged contents of affected Lat projects that opted into `commit-hooks`, for detected agents, with a review acknowledgment for substantial staged code churn and no checks for ordinary manual commits.
+[[src/cli/git-hook.ts#gitPreCommit]] validates affected opted-in Lat projects for detected agents. Validation defaults to staged contents, with an optional working-tree mode; substantial staged code churn also requests a coverage review.
 
 [[src/cli/git-hook.ts#isAgentCommit]] uses `@vercel/detect-agent`. Claude and Cowork additionally need an explicit `AI_AGENT` identity or the child-session marker, because broad Claude IDE markers can appear in manual terminals. Unknown identities skip checks. This is a workflow guardrail, not tamper-proof enforcement.
 
-Each project's opt-in comes from its local experiment settings in the committing worktree; those settings are not copied into the staged snapshot. A shared launcher skips projects with missing or disabled choices. The hook honors Git's supplied index, including temporary indexes for path-specific commits, and discovers affected root and nested projects from staged paths. [[src/cli/git-hook.ts#exportIndex]] streams raw blobs into a temporary tree without checkout filters, stashing, or modifying the working tree or index. Gitlinks become empty directories; submodule working files and unstaged or untracked files are not copied. Containment compares canonical paths so an aliased temporary directory accepts internal symlinks. Escaping or dangling staged symlinks fail validation.
+Each project's opt-in comes from its local experiment settings in the committing worktree; those settings are not copied into the staged snapshot. A shared launcher skips projects with missing or disabled choices. The hook honors Git's supplied index, including temporary indexes for path-specific commits, and discovers affected root and nested projects from staged paths. In the default staged mode, [[src/cli/git-hook.ts#exportIndex]] streams raw blobs into a temporary tree without checkout filters, stashing, or modifying the working tree or index. Gitlinks become empty directories; submodule working files and unstaged or untracked files are not copied. Containment compares canonical paths so an aliased temporary directory accepts internal symlinks. Escaping or dangling staged symlinks fail validation.
 
-Each affected project runs the full checker in an isolated subprocess with Git repository-local environment variables cleared and a staged-file inventory. Errors use original project paths and tell the agent to stage fixes before retrying. The temporary tree and its external checkout caches are removed afterward. No line-ratio heuristic requires documentation churn. External references use the staged canonical configuration; ignored local overrides and caches are not copied, so external checks may require retrieval on a cold snapshot.
+Each affected project runs the full checker in a subprocess with Git repository-local environment variables cleared. Staged mode supplies a staged-file inventory, reports original project paths, and asks the agent to stage fixes before retrying. Its temporary tree and external checkout caches are removed afterward. External references use staged canonical configuration without ignored local overrides, so staged checks may require retrieval on a cold snapshot.
 
 [[src/cli/git-hook.ts#requestDocumentationReview]] stops an otherwise valid commit when staged source additions and deletions total at least [[src/cli/git-hook.ts#REVIEW_CODE_LINES|the review threshold]] across affected opted-in projects. Its message asks the agent to review whether important behavior, architecture, and test changes are covered in Lat.
 
-After review, the agent may retry the original commit command with `LAT_BYPASS_COMMIT_HOOK=1` when no documentation update is needed or coverage is already sufficient. If coverage is missing, the agent updates and stages the relevant documentation before retrying with that flag. Only the exact value `1` skips the review reminder; staged validation and other Git hooks still run. Nothing is persisted between attempts.
+After review, the agent may retry the original commit command with `LAT_BYPASS_COMMIT_HOOK=1` when no documentation update is needed or coverage is already sufficient. If coverage is missing, the agent updates and stages the relevant documentation before retrying with that flag. Only the exact value `1` skips the review reminder; validation in either mode and other Git hooks still run. Nothing is persisted between attempts.
 
 The review heuristic uses Git’s active index, including initial and partial commits. It ignores unstaged and untracked work, binary diffs, documentation paths, and excluded fixture subtrees. Existing Lat edits do not suppress it: line counts cannot establish semantic coverage. Validation failures take precedence and are reported without the review reminder. Failure to read the heuristic diff is ignored.
 
 Only commits invoking this hook are covered; automatic merge commits need separate pre-merge-commit wiring. Generated instructions describe the scoped environment flag for review acknowledgment instead of Git’s general `--no-verify` bypass.
 
+#### Validation mode
+
+[[src/cli/git-hook.ts#readHookConfig]] reads the repository-wide validation mode from the staged root document. The default is `staged`; `working-tree` opts into checking files as they exist on disk.
+
+Set `lat.git-pre-commit.validation: working-tree` in the Git repository's `lat.md/lat.md` frontmatter and stage that file. The mode applies to all affected opted-in projects, including nested ones. Unknown or malformed values fail validation; an unstaged configuration edit cannot change the selected mode.
+
+Working-tree mode invokes the regular full checker in each affected project's directory without exporting an index snapshot or replacing its caches. Ignored checkouts, untracked link targets, local external-source overrides, and unstaged edits have the same visibility as an ordinary `lat check`. Validation may therefore pass for unstaged repairs or fail for unstaged errors; it does not certify the committed file versions. The review reminder still counts only staged code churn. See [[lat-workflow#Pre-commit validation mode]] for configuration syntax.
+
 #### Excluded fixture projects
 
-[[src/cli/git-hook.ts#excludedProjects]] reads repository-wide project exclusions from the staged root document, allowing deliberately invalid fixtures without disabling validation of real projects.
+[[src/cli/git-hook.ts#readHookConfig]] reads repository-wide project exclusions from the staged root document, allowing deliberately invalid fixtures without disabling validation of real projects.
 
 The Git repository's `lat.md/lat.md` frontmatter may set `lat.git-pre-commit.exclude-projects` to a list of repository-relative directory paths. Each path excludes that project and all descendant projects from automatic hook discovery. Paths use forward slashes, with no leading or trailing slash, empty components, `.` or `..` components, or glob syntax. Malformed settings fail the hook.
 
-Only the staged configuration applies; unstaged edits cannot suppress errors. Exclusions do not remove files from the snapshot, suppress checks in ancestor projects, or change explicit `lat check` behavior. This repository excludes `tests/cases` because it contains intentionally invalid graphs. See [[lat-workflow#Fixture projects]] for configuration syntax.
+Only the staged configuration applies in either validation mode; unstaged exclusion edits cannot suppress errors. Exclusions do not remove files from validation inputs, suppress checks in ancestor projects, or change explicit `lat check` behavior. This repository excludes `tests/cases` because it contains intentionally invalid graphs. See [[lat-workflow#Fixture projects]] for configuration syntax.
 
 ### Stop
 

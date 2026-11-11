@@ -419,7 +419,7 @@ describe('lat init embedding setup', () => {
       'commit-hooks': true,
     });
     expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
-      'Validate staged content when an agent commits',
+      'Validate documentation when an agent commits',
     );
     expect(
       existsSync(join(root, '.git/hooks/pre-commit')) ||

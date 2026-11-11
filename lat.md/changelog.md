@@ -2,6 +2,13 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
+## 0.13.7
+
+Experimental pre-commit validation can check the working tree when documentation depends on ignored checkouts or other local-only files.
+
+- Set `lat.git-pre-commit.validation` to `working-tree` in the YAML frontmatter of the repository's `lat.md/lat.md` and stage that file. The hook then runs the regular checker in each affected project's directory.
+- The other enum value, `staged`, remains the default. In both modes, `LAT_BYPASS_COMMIT_HOOK=1` skips only the documentation review reminder; validation errors still block the commit.
+
 ## 0.13.6
 
 Experimental agent commit checks now use repository-configured hooks on Git 2.54 and newer.
