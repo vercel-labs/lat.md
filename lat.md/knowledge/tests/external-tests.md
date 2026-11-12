@@ -25,7 +25,7 @@ Local override coverage accepts root and nested checkout paths regardless of Win
 
 The generation checks around each file read reload configuration for the read source alone, so other sources' local checkouts are neither inspected nor reported.
 
-A project with a valid local override and a missing one reports only the missing checkout on a full load. A scoped load of the valid source has no errors, and local reads still resolve.
+A project with two valid local overrides and a missing one reports only the missing checkout on a full load. A scoped load of the selected source has no errors. Git process tracing during a real file read verifies that only the selected checkout is inspected, catching regressions in the generation-check caller as well as the scoped loader.
 
 ### Long managed cache paths
 
