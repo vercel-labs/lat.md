@@ -2,6 +2,13 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
+## 0.13.8
+
+External-source reads avoid repeated Git checks on unrelated local checkouts, speeding up validation when several sources use local overrides.
+
+- Before and after reading an external file, verify only that source's checkout. Initial configuration loading still validates all sources. This optimization applies automatically with no configuration changes. [#224](https://github.com/vercel-labs/lat.md/pull/224)
+- Update the bundled core dependency to `@lat.md/core` 0.1.4.
+
 ## 0.13.7
 
 Experimental pre-commit validation can check the working tree when documentation depends on ignored checkouts or other local-only files.
