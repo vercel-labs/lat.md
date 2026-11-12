@@ -502,6 +502,82 @@ describe.sequential('external source core', () => {
     }
   }, 30_000);
 
+  // @lat: [[tests/external-tests#External Sources#Retrieval strategies#Scoped generation checks]]
+  it('checks only the read source generation around a local read', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'lat-external-scoped-'));
+    projects.push(root);
+    const latDir = join(root, 'lat.md');
+    mkdirSync(latDir, { recursive: true });
+    const source = (handle: string) =>
+      `    ${handle}:\n      repo: ${fixture.repoUrl}\n      commit: ${fixture.commit2}\n      prefix: docs\n      strategy: fetch\n      fetch-url: ${fixture.fetchUrl}\n`;
+    writeFileSync(
+      join(latDir, 'lat.md'),
+      `---\nlat:\n  external-sources:\n${source('upstream')}${source('other')}${source('missing')}---\n# Project\n\nSee [[upstream:guide.md#Navigation]].\n`,
+    );
+    const other = join(root, 'other-checkout');
+    execFileSync('git', ['clone', '--quiet', fixture.checkout, other]);
+    execFileSync('git', [
+      '-C',
+      other,
+      'remote',
+      'set-url',
+      'origin',
+      fixture.repoUrl,
+    ]);
+    const missing = join(root, 'missing-checkout');
+    writeFileSync(
+      join(latDir, 'config.local.yaml'),
+      `external-sources:\n  upstream:\n    local-path: ${fixture.checkout}\n  other:\n    local-path: ${other}\n  missing:\n    local-path: ${missing}\n`,
+    );
+
+    const full = await loadExternalSources(latDir, root);
+    expect(full.errors.map((error) => error.message)).toEqual([
+      expect.stringContaining(
+        `external source "missing" local-path "${missing}"`,
+      ),
+    ]);
+    const scoped = await loadExternalSources(latDir, root, {
+      only: 'upstream',
+    });
+    expect(scoped.errors).toEqual([]);
+    expect([...scoped.sources.keys()]).toEqual(['upstream']);
+    expect(scoped.sources.get('upstream')?.effectiveStrategy).toBe('local');
+
+    const resolver = await createExternalResolver(latDir, root, {
+      ca: fixture.ca,
+    });
+    // Trace real Git processes only during retrieval: initial configuration
+    // loading must inspect both valid checkouts, but per-read checks must not.
+    const tracePath = join(root, 'git-trace.jsonl');
+    const previousTrace = process.env.GIT_TRACE2_EVENT;
+    process.env.GIT_TRACE2_EVENT = tracePath;
+    try {
+      const result = await resolver.resolve('upstream:guide.md#Navigation');
+      expect(result.provider).toBe('local');
+      expect(result.fullContent).toBe(
+        readFileSync(join(fixture.checkout, 'docs', 'guide.md'), 'utf8'),
+      );
+    } finally {
+      if (previousTrace === undefined) delete process.env.GIT_TRACE2_EVENT;
+      else process.env.GIT_TRACE2_EVENT = previousTrace;
+    }
+    const commands = readFileSync(tracePath, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { event: string; argv?: string[] })
+      .filter((event) => event.event === 'start')
+      .map((event) => event.argv!);
+    const checkoutCommands = commands.filter((args) => args.includes('-C'));
+    expect(checkoutCommands.length).toBeGreaterThan(0);
+    expect(
+      new Set(
+        checkoutCommands.map((args) =>
+          realpathSync.native(args[args.indexOf('-C') + 1]),
+        ),
+      ),
+    ).toEqual(new Set([realpathSync.native(fixture.checkout)]));
+  });
+
   // @lat: [[tests/external-tests#External Sources#Retrieval strategies#Long managed cache paths]]
   it('fetches and reopens repositories with long object and pack paths', async () => {
     const project = createExternalProject(fixture, {
