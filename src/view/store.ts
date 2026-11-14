@@ -1120,6 +1120,9 @@ export class ViewStore {
   }
 }
 
+/** The vault has no Markdown to show; a user-facing condition, not a crash. */
+export class ViewEmptyVaultError extends Error {}
+
 /** Build the initial project snapshot and optionally begin incremental updates. */
 export async function createViewStore(
   latDir: string,
@@ -1144,17 +1147,20 @@ export async function createViewStore(
         : findViewGitRepository(projectRoot, latDir),
     ]);
   if (markdownPaths.length === 0) {
-    throw new Error(`No Markdown files found in ${latDir}`);
+    throw new ViewEmptyVaultError(`No Markdown files found in ${latDir}`);
   }
 
   const markdownFiles = new Map<string, ViewParsedMarkdownFile>();
+  let unpublished = 0;
   await Promise.all(
     markdownPaths.map(async (absolutePath) => {
       if (
         options.filterMarkdown &&
         !(await options.publishable!(projectPath(projectRoot, absolutePath)))
-      )
+      ) {
+        unpublished++;
         return;
+      }
       const realFile = await realpath(absolutePath);
       if (!isInside(realLatDir, realFile)) return;
       const parsed = await analyzeMarkdownPath(
@@ -1166,7 +1172,13 @@ export async function createViewStore(
     }),
   );
   if (markdownFiles.size === 0) {
-    throw new Error(`No readable Markdown files found in ${latDir}`);
+    throw new ViewEmptyVaultError(
+      unpublished > 0
+        ? `No shareable Markdown files found in ${latDir}: sharing excludes ` +
+            `hidden, ignored, and (in Git projects) untracked files. ` +
+            `Add the Markdown files to Git (\`git add\`) or use a loopback --host.`
+        : `No readable Markdown files found in ${latDir}`,
+    );
   }
 
   let git = emptyViewGitSnapshot();
