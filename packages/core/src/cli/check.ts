@@ -14,7 +14,12 @@ import {
 import { toPosix } from '../path.js';
 import { TimingProfiler, type Profiler } from '../profiler.js';
 import type { CmdContext, CmdResult, Styler } from '../context.js';
-import { INIT_VERSION, readInitVersion } from '../init-version.js';
+import {
+  INIT_VERSION,
+  isGitWorktree,
+  readInitValidation,
+  readInitVersion,
+} from '../init-version.js';
 import { CheckRunContext } from './check-context.js';
 import { parseLocalMarkdownTarget } from '../markdown-validation.js';
 import {
@@ -804,6 +809,22 @@ export async function checkAllCommand(
           '). Re-run ' +
           s.cyan('lat init') +
           ' to update agent hooks and configuration.',
+      );
+    } else if (
+      // Set up without Git, but a repository exists now. Only such projects
+      // pay for the Git probe.
+      readInitValidation(ctx.latDir) !== 'commit' &&
+      readInitValidation(ctx.latDir) !== null &&
+      isGitWorktree(ctx.projectRoot)
+    ) {
+      if (lines.length > 0) lines.push('');
+      lines.push(
+        s.yellow('Warning:') +
+          ' This project was set up without Git, but it is now inside a Git repository. Re-run ' +
+          s.cyan('`lat init`') +
+          ' to enforce ' +
+          s.cyan('`lat check`') +
+          ' as a pre-commit hook instead: it validates once per agent commit rather than after every turn.',
       );
     }
   }

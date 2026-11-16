@@ -1,4 +1,4 @@
-import { installGitHook } from './git-hook-install.js';
+import { installGitHook, isGitWorktree } from './git-hook-install.js';
 import {
   EXPERIMENTS,
   isExperimentEnabled,
@@ -32,6 +32,7 @@ import { modelKey } from '../search/embedder.js';
 import { reindexCommand } from './reindex.js';
 import {
   INIT_VERSION,
+  type InitValidation,
   writeInitMeta,
   readInitVersion,
   readFileHash,
@@ -166,12 +167,45 @@ export function removeLatStopHooks(
   );
 }
 
+/**
+ * The stable workflow validates when an agent finishes. The commit-hooks
+ * experiment validates agent commits in Git projects; without Git the user
+ * chooses between completion hooks and no enforcement.
+ */
+export type Workflow = 'stable' | InitValidation;
+
+/** Stop hooks exist wherever validation runs when the agent finishes. */
+function usesStopHooks(workflow: Workflow): boolean {
+  return workflow === 'stable' || workflow === 'completion';
+}
+
+const VALIDATION_NOTE: Record<Workflow, string> = {
+  stable: '  Completion hooks validate lat.md/ when the agent finishes.',
+  completion: '  Completion hooks validate lat.md/ when the agent finishes.',
+  commit: '  Agent commits are validated by the Git pre-commit hook.',
+  manual: '  Validation is not enforced; agents are asked to run lat check.',
+};
+
+/** Inject the lat command and, for experimental templates, the workflow. */
+function fillPluginTemplate(
+  template: string,
+  style: LatCommandStyle,
+  workflow: Workflow,
+): string {
+  return template
+    .replace('__LAT_INVOCATION__', () =>
+      JSON.stringify(agentInvocation(style, resolveLatInvocation())),
+    )
+    .replace('__LAT_VALIDATION__', () => JSON.stringify(workflow));
+}
+
 /** Refresh Lat's hooks for the selected workflow, preserving unrelated commands. */
 export function syncLatHooks(
   settingsPath: string,
   style: LatCommandStyle,
   agent: 'claude' | 'codex' = 'claude',
   root = dirname(dirname(settingsPath)),
+  stop = !isExperimentEnabled('commit-hooks', root),
 ): void {
   removeLatStopHooks(settingsPath, root);
   projectWritePath(root, settingsPath);
@@ -192,9 +226,9 @@ export function syncLatHooks(
     if (filtered.length) settings.hooks[event] = filtered;
     else delete settings.hooks[event];
   }
-  for (const event of isExperimentEnabled('commit-hooks', root)
-    ? ['UserPromptSubmit']
-    : ['UserPromptSubmit', 'Stop']) {
+  for (const event of stop
+    ? ['UserPromptSubmit', 'Stop']
+    : ['UserPromptSubmit']) {
     settings.hooks[event] ??= [];
     settings.hooks[event].push({
       hooks: [
@@ -641,6 +675,7 @@ async function setupClaudeCode(
   hashes: Record<string, string>,
   ask: (message: string) => Promise<boolean>,
   style: LatCommandStyle,
+  workflow: Workflow,
 ): Promise<void> {
   // Prompt and completion hooks follow the saved experiment choices.
   console.log('');
@@ -650,25 +685,18 @@ async function setupClaudeCode(
       '  Prompt hooks inject lat.md workflow reminders and relevant context.',
     ),
   );
-  console.log(
-    styleText(
-      'dim',
-      isExperimentEnabled('commit-hooks', root)
-        ? '  Agent commits are validated by the Git pre-commit hook.'
-        : '  Completion hooks validate lat.md/ when the agent finishes.',
-    ),
-  );
+  console.log(styleText('dim', VALIDATION_NOTE[workflow]));
 
   const claudeDir = projectWritePath(root, join(root, '.claude'));
   const settingsPath = join(claudeDir, 'settings.json');
 
   mkdirSync(claudeDir, { recursive: true });
-  syncLatHooks(settingsPath, style, 'claude', root);
+  syncLatHooks(settingsPath, style, 'claude', root, usesStopHooks(workflow));
   console.log(
     styleText('green', '  Hooks') +
-      (isExperimentEnabled('commit-hooks', root)
-        ? ' synced (UserPromptSubmit; legacy Stop removed)'
-        : ' synced (UserPromptSubmit + Stop)'),
+      (usesStopHooks(workflow)
+        ? ' synced (UserPromptSubmit + Stop)'
+        : ' synced (UserPromptSubmit; legacy Stop removed)'),
   );
 
   // .claude/skills/lat-md/SKILL.md — skill for authoring lat.md files
@@ -725,8 +753,12 @@ async function setupClaudeCode(
   ensureGitignored(root, '.mcp.json');
 }
 
-function syncCursorHooks(root: string, style: LatCommandStyle): void {
-  if (isExperimentEnabled('commit-hooks', root)) {
+function syncCursorHooks(
+  root: string,
+  style: LatCommandStyle,
+  workflow: Workflow,
+): void {
+  if (!usesStopHooks(workflow)) {
     removeLatStopHooks(join(root, '.cursor', 'hooks.json'), root, true);
   } else {
     const path = projectWritePath(root, join(root, '.cursor', 'hooks.json'));
@@ -749,6 +781,7 @@ async function setupCursor(
   hashes: Record<string, string>,
   ask: (message: string) => Promise<boolean>,
   style: LatCommandStyle,
+  workflow: Workflow,
 ): Promise<void> {
   // .cursor/rules/lat.md
   const hash = await writeTemplateFile(
@@ -763,7 +796,7 @@ async function setupCursor(
   );
   if (hash) hashes['.cursor/rules/lat.md'] = hash;
 
-  syncCursorHooks(root, style);
+  syncCursorHooks(root, style, workflow);
 
   // .cursor/mcp.json
   console.log('');
@@ -857,6 +890,7 @@ async function setupPi(
   hashes: Record<string, string>,
   ask: (message: string) => Promise<boolean>,
   style: LatCommandStyle,
+  workflow: Workflow,
 ): Promise<void> {
   // AGENTS.md — Pi reads this natively
   // (already created in the shared step if any non-Claude agent is selected)
@@ -872,15 +906,18 @@ async function setupPi(
   console.log(
     styleText(
       'dim',
-      isExperimentEnabled('commit-hooks', root)
-        ? '  to inject search context. Validation runs at commit time.'
-        : '  to inject search context and validate lat.md/ before finishing.',
+      usesStopHooks(workflow)
+        ? '  to inject search context and validate lat.md/ before finishing.'
+        : workflow === 'commit'
+          ? '  to inject search context. Validation runs at commit time.'
+          : '  to inject search context. Validation is not enforced.',
     ),
   );
 
-  const template = readPiExtensionTemplate(root).replace(
-    '__LAT_INVOCATION__',
-    () => JSON.stringify(agentInvocation(style, resolveLatInvocation())),
+  const template = fillPluginTemplate(
+    readPiExtensionTemplate(root),
+    style,
+    workflow,
   );
 
   const hash = await writeTemplateFile(
@@ -927,6 +964,7 @@ async function setupOpenCode(
   hashes: Record<string, string>,
   ask: (message: string) => Promise<boolean>,
   style: LatCommandStyle,
+  workflow: Workflow,
 ): Promise<void> {
   // AGENTS.md — OpenCode reads this natively
   // (already created in the shared step if any non-Claude agent is selected)
@@ -936,18 +974,12 @@ async function setupOpenCode(
   console.log(
     styleText('dim', '  The OpenCode plugin registers native lat tools.'),
   );
-  console.log(
-    styleText(
-      'dim',
-      isExperimentEnabled('commit-hooks', root)
-        ? '  Agent commits are validated by the Git pre-commit hook.'
-        : '  Completion hooks validate lat.md/ when the agent finishes.',
-    ),
-  );
+  console.log(styleText('dim', VALIDATION_NOTE[workflow]));
 
-  const template = readOpenCodePluginTemplate(root).replace(
-    '__LAT_INVOCATION__',
-    () => JSON.stringify(agentInvocation(style, resolveLatInvocation())),
+  const template = fillPluginTemplate(
+    readOpenCodePluginTemplate(root),
+    style,
+    workflow,
   );
 
   const hash = await writeTemplateFile(
@@ -975,6 +1007,7 @@ async function setupCodex(
   hashes: Record<string, string>,
   ask: (message: string) => Promise<boolean>,
   style: LatCommandStyle,
+  workflow: Workflow,
 ): Promise<void> {
   // AGENTS.md — Codex reads this natively
   // (already created in the shared step if any non-Claude agent is selected)
@@ -987,24 +1020,17 @@ async function setupCodex(
       '  Prompt hooks inject lat.md workflow reminders and relevant context.',
     ),
   );
-  console.log(
-    styleText(
-      'dim',
-      isExperimentEnabled('commit-hooks', root)
-        ? '  Agent commits are validated by the Git pre-commit hook.'
-        : '  Completion hooks validate lat.md/ when the agent finishes.',
-    ),
-  );
+  console.log(styleText('dim', VALIDATION_NOTE[workflow]));
 
   const codexDir = projectWritePath(root, join(root, '.codex'));
   const hooksPath = join(codexDir, 'hooks.json');
   mkdirSync(codexDir, { recursive: true });
-  syncLatHooks(hooksPath, style, 'codex', root);
+  syncLatHooks(hooksPath, style, 'codex', root, usesStopHooks(workflow));
   console.log(
     styleText('green', '  Hooks') +
-      (isExperimentEnabled('commit-hooks', root)
-        ? ' synced (UserPromptSubmit; legacy Stop removed)'
-        : ' synced (UserPromptSubmit + Stop)'),
+      (usesStopHooks(workflow)
+        ? ' synced (UserPromptSubmit + Stop)'
+        : ' synced (UserPromptSubmit; legacy Stop removed)'),
   );
 
   // .codex/config.toml — MCP server registration
@@ -1427,6 +1453,53 @@ export async function initCmd(
       for (const { id } of EXPERIMENTS) experiments[id] = selected.includes(id);
     }
 
+    // The experiment needs a commit to hook into. Without Git, noninteractive
+    // runs keep going and fall back to agent completion hooks.
+    let workflow: Workflow = experiments['commit-hooks'] ? 'commit' : 'stable';
+    if (workflow === 'commit' && !isGitWorktree(root)) {
+      workflow = 'completion';
+      const code = (text: string) => styleText('cyan', '`' + text + '`');
+      console.log('');
+      console.log(
+        styleText('yellow', 'Warning:') +
+          ' this directory is not inside a Git repository.',
+      );
+      console.log(
+        `lat works best in projects that use Git, where ${code('lat check')} is enforced as a`,
+      );
+      console.log(
+        `pre-commit hook. Consider running ${code('git init')} first and then ${code('lat init')} again.`,
+      );
+      if (interactive) {
+        const tmpRl = createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+        try {
+          if (!(await confirm(tmpRl, 'Continue without Git?'))) {
+            console.log('Aborted.');
+            return;
+          }
+          if (
+            !(await confirm(
+              tmpRl,
+              'Enforce `lat check` through coding agent hooks instead (it runs whenever an agent finishes)?',
+            ))
+          ) {
+            workflow = 'manual';
+            console.log(
+              styleText(
+                'dim',
+                'Validation will not be enforced; run `lat check` yourself.',
+              ),
+            );
+          }
+        } finally {
+          tmpRl.close();
+        }
+      }
+    }
+
     // Step 3: Which coding agents do you use? (interactive select menu)
     console.log('');
 
@@ -1498,7 +1571,7 @@ export async function initCmd(
     const commitHooks = isExperimentEnabled('commit-hooks', root);
     const workflowChanged =
       Boolean(previousExperiments['commit-hooks']) !== commitHooks;
-    if (commitHooks) {
+    if (workflow === 'commit') {
       console.log(
         'Experimental commit hooks enabled: validation runs on staged agent commits instead of at the end of each turn.',
       );
@@ -1516,14 +1589,20 @@ export async function initCmd(
       ] as const) {
         projectWritePath(root, join(root, path));
         if (!selected && hasLatHooks(root, join(root, path)))
-          syncLatHooks(join(root, path), commandStyle, agent, root);
+          syncLatHooks(
+            join(root, path),
+            commandStyle,
+            agent,
+            root,
+            usesStopHooks(workflow),
+          );
       }
       if (
         !useCursor &&
         (hasLatHooks(root, join(root, '.cursor/hooks.json')) ||
           readFileHash(latDir, '.cursor/rules/lat.md') !== null)
       ) {
-        syncCursorHooks(root, commandStyle);
+        syncCursorHooks(root, commandStyle, workflow);
       }
       if (
         !useCursor &&
@@ -1587,9 +1666,7 @@ export async function initCmd(
       ] as const) {
         projectWritePath(root, join(root, path));
         if (selected || !existsSync(join(root, path))) continue;
-        const template = read(root).replace('__LAT_INVOCATION__', () =>
-          JSON.stringify(agentInvocation(commandStyle, resolveLatInvocation())),
-        );
+        const template = fillPluginTemplate(read(root), commandStyle, workflow);
         const hash = await writeTemplateFile(
           root,
           latDir,
@@ -1604,7 +1681,7 @@ export async function initCmd(
       }
     }
 
-    if (isExperimentEnabled('commit-hooks', root)) {
+    if (workflow === 'commit') {
       const gitHook = installGitHook(root, resolveLatInvocation());
       console.log(`\nGit pre-commit: ${gitHook.status}. ${gitHook.detail}`);
     }
@@ -1613,7 +1690,11 @@ export async function initCmd(
       // Embedding setup is complete even when the user does not configure an
       // agent. Stamp the version so future non-interactive runs do not reapply
       // fresh/outdated defaults and overwrite the chosen backend.
-      writeInitMeta(latDir, fileHashes);
+      writeInitMeta(
+        latDir,
+        fileHashes,
+        workflow === 'stable' ? undefined : workflow,
+      );
       if (interactive) writeInitAgents(latDir, selectedAgents);
       console.log('');
       console.log(
@@ -1633,19 +1714,26 @@ export async function initCmd(
     if (useClaudeCode) {
       console.log('');
       console.log(styleText('bold', 'Setting up Claude Code...'));
-      await setupClaudeCode(root, latDir, fileHashes, ask, commandStyle);
+      await setupClaudeCode(
+        root,
+        latDir,
+        fileHashes,
+        ask,
+        commandStyle,
+        workflow,
+      );
     }
 
     if (usePi) {
       console.log('');
       console.log(styleText('bold', 'Setting up Pi...'));
-      await setupPi(root, latDir, fileHashes, ask, commandStyle);
+      await setupPi(root, latDir, fileHashes, ask, commandStyle, workflow);
     }
 
     if (useCursor) {
       console.log('');
       console.log(styleText('bold', 'Setting up Cursor...'));
-      await setupCursor(root, latDir, fileHashes, ask, commandStyle);
+      await setupCursor(root, latDir, fileHashes, ask, commandStyle, workflow);
     }
 
     if (useCopilot) {
@@ -1657,17 +1745,28 @@ export async function initCmd(
     if (useOpenCode) {
       console.log('');
       console.log(styleText('bold', 'Setting up OpenCode...'));
-      await setupOpenCode(root, latDir, fileHashes, ask, commandStyle);
+      await setupOpenCode(
+        root,
+        latDir,
+        fileHashes,
+        ask,
+        commandStyle,
+        workflow,
+      );
     }
 
     if (useCodex) {
       console.log('');
       console.log(styleText('bold', 'Setting up Codex...'));
-      await setupCodex(root, latDir, fileHashes, ask, commandStyle);
+      await setupCodex(root, latDir, fileHashes, ask, commandStyle, workflow);
     }
 
     // Record init version and file hashes so `lat check` can detect stale setups
-    writeInitMeta(latDir, fileHashes);
+    writeInitMeta(
+      latDir,
+      fileHashes,
+      workflow === 'stable' ? undefined : workflow,
+    );
     if (interactive) writeInitAgents(latDir, selectedAgents);
 
     console.log('');

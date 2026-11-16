@@ -12,6 +12,8 @@ import { join, resolve } from 'node:path';
 import { projectWritePath, writeProjectFile } from '@lat.md/core/project-write';
 import type { AgentInvocation } from './agent-invocation.js';
 
+export { isGitWorktree } from '@lat.md/core/init-version';
+
 const MARKER = '# lat git-pre-commit v1 sha256=';
 const digest = (text: string) =>
   createHash('sha256').update(text).digest('hex');

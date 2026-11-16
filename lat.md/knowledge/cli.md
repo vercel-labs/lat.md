@@ -85,7 +85,7 @@ relative to the containing project root and code references are scanned from
 that root. The full check skips the `lat init` version warning because the
 directory is not required to have lat setup metadata.
 
-Emits a stale-init warning before any errors so the user sees setup issues first. The init version check compares [[packages/core/src/init-version.ts#INIT_VERSION]] against the version in `lat.md/.cache/lat_init.json` written by [[cli#init]]. If the total check took longer than one second and ripgrep is not installed, shows a tip suggesting the user install it for faster scanning. A successful full check ends with its total elapsed time, such as `All checks passed in 250ms`; file-extension counts are omitted because the validators perform different kinds of work.
+Emits a stale-init warning before any errors so the user sees setup issues first. The init version check compares [[packages/core/src/init-version.ts#INIT_VERSION]] against the version in `lat.md/.cache/lat_init.json` written by [[cli#init]]. A current setup recorded without Git that now sits in a repository gets the [[cli#init#Experiments#Projects without Git|rerun-init warning]] instead. If the total check took longer than one second and ripgrep is not installed, shows a tip suggesting the user install it for faster scanning. A successful full check ends with its total elapsed time, such as `All checks passed in 250ms`; file-extension counts are omitted because the validators perform different kinds of work.
 
 `--profile` adds a nested timing report for every validator and its major operations. Markdown and external-document timing explicitly report parser-module import durations on misses and zero-duration skipped-import events on hits; worker runs report one Markdown analyzer import per worker. Markdown and source timing also distinguish file reads, hashing, persistent parser-cache hits or misses, cache publication, and actual parser work. Repeated work is aggregated with call counts, average and maximum duration, and the slowest file or target so large-repository bottlenecks remain visible without one output line per file. Concurrent timings remain attributed to their initiating validator and may overlap within the total wall time.
 
@@ -175,7 +175,7 @@ Supported targets:
 
 Output is written to stdout so it can be redirected: `lat gen agents.md > AGENTS.md`.
 
-Generation follows the current or `--dir` project's saved [[cli#init#Experiments|experiment choices]]. Stable templates retain end-of-task validation; templates in [[templates/experimental]] describe commit-time validation.
+Generation follows the current or `--dir` project's saved [[cli#init#Experiments|experiment choices]]. Stable templates retain end-of-task validation; templates in [[templates/experimental]] describe commit-time validation. Opted-in projects [[cli#init#Experiments#Projects without Git|without Git]] keep the stable instructions, while their Pi and OpenCode templates take a workflow value that init injects.
 
 Implementation: [[src/cli/gen.ts]]
 
@@ -228,10 +228,29 @@ The first experiment, `commit-hooks`, moves validation from agent completion to 
 
 [[src/cli/experiments.ts#isExperimentEnabled]] reads the active project's choices each time, so hook invocations and generated templates do not depend on shell variables or process-global state. Explicit init targets use their own choices. Deleting the cache resets experiments; rerun init to synchronize installed integrations afterward. Existing custom instructions and hooks retain their normal ownership protections.
 
+#### Projects without Git
+
+The commit-hooks experiment needs a commit to hook into. Outside a Git worktree, init warns the user and offers end-of-turn agent hooks as a fallback.
+
+After experiment selection, [[packages/core/src/init-version.ts#isGitWorktree]] tests the target of an opted-in init. Without Git, init warns that Lat works best where `lat check` can be enforced as a pre-commit hook and suggests running `git init` before `lat init`. An interactive user may stop there, leaving saved choices and agent files untouched, or continue without Git.
+
+Continuing asks whether `lat check` may be enforced through coding agent hooks instead. The answer selects the run's [[src/cli/init.ts#Workflow]]:
+
+- **commit** — opted in, inside Git. Installs the [[cli#init#Git hook installation|Git hook]]; agents get prompt context only.
+- **completion** — opted in, no Git, hooks accepted. Keeps Claude/Codex `Stop` hooks and the Cursor `stop` hook, and enables the Pi and OpenCode completion callbacks. Noninteractive runs use this workflow without asking.
+- **manual** — opted in, no Git, hooks declined. Nothing enforces validation; instructions still ask the agent to run `lat check` after every task.
+- **stable** — not opted in. Git is never probed and nothing is asked.
+
+Opted-in Pi and OpenCode plugins share one template each; init injects the workflow, which gates the completion callback and selects the reminder wording. Their callback only runs `lat check`. `AGENTS.md`, Copilot instructions, and Cursor rules use the stable templates unless the workflow is commit.
+
+Runtime hooks and [[cli#gen]] apply the same rule through [[src/cli/experiments.ts#usesCommitChecks]], so the fallback needs no saved answer and init asks again on each run.
+
+A project that later gains a repository has silent stop hooks until init is rerun. To close that gap, init records the opted-in workflow in `lat.md/.cache/lat_init.json`, read by [[packages/core/src/init-version.ts#readInitValidation]]. A full [[cli#check]] that finds a completion or manual setup inside a Git worktree warns that a pre-commit hook would serve better and asks the user to rerun `lat init`. Only such projects pay for the Git probe.
+
 ### Git hook installation
 
 
-[[src/cli/git-hook-install.ts#installGitHook]] installs agent-only commit validation when the project has enabled the commit-hooks experiment, preserving existing hook ownership and configuration.
+[[src/cli/git-hook-install.ts#installGitHook]] installs agent-only commit validation when the project has enabled the commit-hooks experiment and sits inside a Git worktree, preserving existing hook ownership and configuration.
 
 [[src/cli/git-hook-install.ts#supportsConfiguredHooks]] selects repository configuration hooks on Git 2.54 and newer. Init registers `hook.lat-md.command` and its `pre-commit` event in local Git config, pointing to a separate launcher in the common Git directory. Existing scripts, hook managers, and `core.hooksPath` remain intact. Named hooks run before traditional scripts; workflows that stage files in those scripts must run `lat hook git-pre-commit` again after staging to validate the final index.
 
@@ -405,7 +424,9 @@ Only the staged configuration applies in either validation mode; unstaged exclus
 
 ### Stop
 
-The default workflow validates at completion. Projects that enable the commit-hooks experiment treat Claude/Codex Stop and Cursor stop commands as silent no-ops, including stale installed handlers.
+The default workflow validates at completion. Opted-in projects inside a Git worktree treat Claude/Codex Stop and Cursor stop commands as silent no-ops, including stale installed handlers.
+
+[[src/cli/experiments.ts#usesCommitChecks]] makes that decision on each invocation. Opted-in projects without Git keep validating here.
 
 Conditionally continues Claude or Codex — only when something is actually wrong. Both agents use the same `decision: "block"` response and `stop_hook_active` loop guard.
 

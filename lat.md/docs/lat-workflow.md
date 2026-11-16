@@ -51,6 +51,14 @@ Choices are stored locally in `lat.md/.cache/experiments.json`. Normal `lat init
 
 The cache is already excluded by the `.cache` rule in the scaffolded `lat.md/.gitignore`. Experiment setup does not add a duplicate cache rule to the repository's root `.gitignore`.
 
+## Experimental setup without Git
+
+Commit checks need a Git repository. If you enable the experiment outside one, `lat init` warns you and suggests running `git init` first, then `lat init` again.
+
+You can continue without Git. Init then asks whether `lat check` may be enforced through coding agent hooks instead: supported agents run it whenever they finish a turn and keep working until it passes. If you decline, nothing enforces validation; instructions still ask agents to run `lat check`, and you can run it yourself.
+
+After adding Git later, rerun `lat init` to switch to commit checks. Agent hooks stop validating once a repository exists, so `lat check` reminds you until you do.
+
 ## Existing Git hooks
 
 

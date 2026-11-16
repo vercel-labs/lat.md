@@ -4,6 +4,13 @@ import { execFileSync } from "child_process"
 /** Executable and prefix arguments, injected by `lat init`. */
 const LAT = __LAT_INVOCATION__
 
+/**
+ * How `lat init` set this project up: "completion" validates when the session
+ * goes idle (for projects without Git). Otherwise validation runs in the Git
+ * pre-commit hook ("commit") or is left to the agent ("manual").
+ */
+const VALIDATION: "commit" | "completion" | "manual" = __LAT_VALIDATION__
+
 function run(args: string[]): string {
   return execFileSync(LAT.command, [...LAT.args, ...args], {
     cwd: process.cwd(),
@@ -20,7 +27,7 @@ function tryRun(args: string[]): string {
   }
 }
 
-export const LatPlugin: Plugin = async () => {
+export const LatPlugin: Plugin = async (ctx) => {
   return {
     tool: {
       lat_search: tool({
@@ -107,5 +114,26 @@ export const LatPlugin: Plugin = async () => {
       }),
     },
 
+    hooks: {
+      "session.idle": async () => {
+        if (VALIDATION !== "completion") return
+        let checkFailed = false
+        try {
+          run(["check"])
+        } catch {
+          checkFailed = true
+        }
+
+        if (!checkFailed) return
+
+        await ctx.client.app.log({
+          body: {
+            service: "lat.md",
+            level: "warn",
+            message: "lat check failed. Run lat_check and fix the errors.",
+          },
+        })
+      },
+    },
   }
 }

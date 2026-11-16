@@ -1,34 +1,44 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { findTemplatesDir } from './templates.js';
-import { isExperimentEnabled } from './experiments.js';
+import { isExperimentEnabled, usesCommitChecks } from './experiments.js';
 import { findProjectRoot } from '@lat.md/core/project-discovery';
 
-function readAgentTemplate(name: string, root?: string | null): string {
+function readTemplate(name: string, experimental: boolean): string {
   return readFileSync(
-    join(
-      findTemplatesDir(),
-      isExperimentEnabled('commit-hooks', root) ? 'experimental' : '.',
-      name,
-    ),
+    join(findTemplatesDir(), experimental ? 'experimental' : '.', name),
     'utf-8',
   );
 }
 
+/**
+ * Instructions describe commit-time validation only where commit checks are
+ * active; opted-in projects without Git keep the end-of-task checklist.
+ */
 export function readAgentsTemplate(root?: string | null): string {
-  return readAgentTemplate('AGENTS.md', root);
+  return readTemplate('AGENTS.md', usesCommitChecks(root));
 }
 
 export function readCursorRulesTemplate(root?: string | null): string {
-  return readAgentTemplate('cursor-rules.md', root);
+  return readTemplate('cursor-rules.md', usesCommitChecks(root));
 }
 
+/**
+ * Opted-in projects share one plugin template per agent; `lat init` injects
+ * the validation workflow into it.
+ */
 export function readPiExtensionTemplate(root?: string | null): string {
-  return readAgentTemplate('pi-extension.ts', root);
+  return readTemplate(
+    'pi-extension.ts',
+    isExperimentEnabled('commit-hooks', root),
+  );
 }
 
 export function readOpenCodePluginTemplate(root?: string | null): string {
-  return readAgentTemplate('opencode-plugin.ts', root);
+  return readTemplate(
+    'opencode-plugin.ts',
+    isExperimentEnabled('commit-hooks', root),
+  );
 }
 
 export function readSkillTemplate(): string {

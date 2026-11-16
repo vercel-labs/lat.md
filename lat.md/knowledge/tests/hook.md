@@ -13,7 +13,11 @@ The Git-hook suite yields to the event loop between tests so synchronous subproc
 
 ## Legacy stop hooks are silent
 
-In opted-in projects, Claude, Codex, and Cursor stop commands exit successfully without reading stdin or validating broken projects, so stale settings do not interrupt agents.
+In opted-in Git projects, Claude, Codex, and Cursor stop commands exit successfully without reading stdin or validating broken projects, so stale settings do not interrupt agents.
+
+## Opted-in projects without Git keep stop validation
+
+Outside a Git worktree, an opted-in project's stop commands still report check errors in each agent's format, and prompt guidance asks for a check before finishing instead of describing the Git hook.
 
 ## Prompt hooks do not expand references
 
