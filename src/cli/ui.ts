@@ -5,6 +5,7 @@ import {
   type ViewServer,
   type ViewServerOptions,
 } from '../view/server.js';
+import { ViewEmptyVaultError } from '../view/store.js';
 
 type UiCommandOptions = ViewServerOptions & {
   openBrowser?: (url: string) => Promise<void>;
@@ -50,6 +51,9 @@ export async function uiCommand(
         isError: true,
         output: `Port ${options.port} is already in use. Choose another with --port <number>.`,
       };
+    }
+    if (error instanceof ViewEmptyVaultError) {
+      return { isError: true, output: error.message };
     }
     throw error;
   }

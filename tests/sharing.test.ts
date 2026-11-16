@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { plainStyler } from '@lat.md/core/context';
+import { uiCommand } from '../src/cli/ui.js';
 import { startViewServer, type ViewServer } from '../src/view/server.js';
 import { isLoopbackHost } from '../src/view/sharing.js';
 import {
@@ -243,12 +244,32 @@ it('revokes removed links and new ignore rules and fails closed on refresh error
   expect((await get('/api/source?path=public.ts')).status).toBe(404);
   await write('.gitignore', 'lat.md/\n');
   await expect(server.store.refresh(['.gitignore'])).rejects.toThrow(
-    'No readable Markdown',
+    'No shareable Markdown',
   );
   expect((await get('/api/index')).status).toBe(500);
   await write('.gitignore', 'lat.md/private.md\nignored.ts\nuntracked.ts\n');
   await server.store.refresh(['.gitignore']);
   expect((await get('/api/source?path=public.ts')).status).toBe(200);
+});
+
+it('reports an untracked vault as a sharing error instead of crashing', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lat-sharing-'));
+  roots.push(root);
+  await mkdir(join(root, 'lat.md'));
+  await writeFile(join(root, 'lat.md/lat.md'), '# Project\n\nText.\n');
+  execFileSync('git', ['init', '-q', root]);
+  const result = await uiCommand(
+    {
+      projectRoot: root,
+      latDir: join(root, 'lat.md'),
+      mode: 'cli',
+      styler: plainStyler,
+    },
+    { host: '0.0.0.0', port: 0, watch: false },
+  );
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain('No shareable Markdown files found');
+  expect(result.output).toContain('git add');
 });
 
 it('rejects a shared path replaced by a symlink to an unlinked public file', async () => {

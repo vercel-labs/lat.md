@@ -443,7 +443,7 @@ The live server validates Host and Origin against its listener, rejects cross-or
 
 Non-loopback servers expose only public vault Markdown and transitively linked public files. Direct requests, backlinks, edits, and external documents cannot grant access to private or unlinked files.
 
-Coverage exercises Git and non-Git projects, nested Markdown cycles, source/resource previews, ignored Markdown and raw routes, hidden and untracked files, foreign URLs, edit rejection, and disabled private queries. Removed links and new ignore rules revoke access after refresh, refresh failures fail closed, and symlink replacements cannot expose unlinked files. Linked externals use pinned content rather than local overrides; loopback retains private browsing.
+Coverage exercises Git and non-Git projects, nested Markdown cycles, source/resource previews, ignored Markdown and raw routes, hidden and untracked files, foreign URLs, edit rejection, and disabled private queries. Removed links and new ignore rules revoke access after refresh, refresh failures fail closed, and symlink replacements cannot expose unlinked files. Linked externals use pinned content rather than local overrides; loopback retains private browsing. A vault whose Markdown is entirely unpublished, such as an untracked `lat.md/`, makes `lat ui` exit with a sharing-specific error naming the fix rather than a stack trace.
 
 ## Shared UI controls
 
