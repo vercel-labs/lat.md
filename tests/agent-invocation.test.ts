@@ -40,6 +40,7 @@ it('runs every generated query tool without shell evaluation', async () => {
       join(import.meta.dirname, '..', 'templates', name),
       'utf8',
     );
+    template = template.replace('__LAT_VALIDATION__', '"commit"');
     template = template.replace('__LAT_INVOCATION__', () =>
       JSON.stringify({ command: process.execPath, args: [entry] }),
     );

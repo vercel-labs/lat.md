@@ -51,9 +51,11 @@ const {
   getStoredModel,
   openDb,
   reindexCommand,
+  question,
   selectMenu,
   setRepoEmbedding,
 } = vi.hoisted(() => ({
+  question: vi.fn(async (_message: string) => 'n'),
   closeDb: vi.fn(async () => {}),
   ensureMeta: vi.fn(async () => {}),
   getLlmKey: vi.fn(),
@@ -80,7 +82,7 @@ vi.mock('../src/cli/checklist-menu.js', () => ({
 vi.mock('@lat.md/core/cli/select-menu', () => ({ selectMenu }));
 vi.mock('node:readline/promises', () => ({
   createInterface: vi.fn(() => ({
-    question: vi.fn(async () => 'n'),
+    question,
     close: vi.fn(),
   })),
 }));
@@ -229,6 +231,8 @@ describe('lat init embedding setup', () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'lat-init-'));
+    question.mockReset();
+    question.mockImplementation(async () => 'n');
     stdinIsTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
     setInteractive(false);
     closeDb.mockClear();
@@ -429,9 +433,9 @@ describe('lat init embedding setup', () => {
       JSON.parse(readFileSync(join(root, '.codex/hooks.json'), 'utf8')).hooks
         .Stop,
     ).toBeUndefined();
-    expect(
-      readFileSync(join(root, '.pi/extensions/lat.ts'), 'utf8'),
-    ).not.toContain('agent_end');
+    expect(readFileSync(join(root, '.pi/extensions/lat.ts'), 'utf8')).toContain(
+      '= "commit"',
+    );
     await initCmd(root);
     expect(readExperiments(root)['commit-hooks']).toBe(true);
     expect(
@@ -489,9 +493,150 @@ describe('lat init embedding setup', () => {
     expect(readExperiments(root)).toEqual({ 'commit-hooks': true });
   });
 
+  const hookAgents = ['claude', 'codex', 'cursor', 'pi', 'opencode'];
+
+  /** Answer init's confirmations by matching the question text. */
+  function answer(answers: Record<string, string>): void {
+    question.mockImplementation(async (message: string) => {
+      const key = Object.keys(answers).find((text) => message.includes(text));
+      return key ? answers[key] : 'y';
+    });
+  }
+
+  // @lat: [[tests/init#Experiment warns and can stop outside Git]]
+  it('warns outside Git and keeps choices unsaved when the user declines', async () => {
+    createLatDir();
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValueOnce(['commit-hooks']);
+    answer({ 'Continue without Git': 'n' });
+    await initCmd(root, { experimental: true });
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    expect(output).toContain('not inside a Git repository');
+    expect(output).toContain('`git init`');
+    expect(checklistMenu).toHaveBeenCalledTimes(1);
+    expect(readExperiments(root)).toEqual({});
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false);
+  });
+
+  // @lat: [[tests/init#Stable setup ignores missing Git]]
+  it('does not warn about Git without the experiment', async () => {
+    createLatDir();
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValue(['codex']);
+    selectMenu.mockResolvedValue('global');
+    answer({});
+    await initCmd(root);
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).not.toContain(
+      'not inside a Git repository',
+    );
+    expect(
+      JSON.parse(readFileSync(join(root, '.codex/hooks.json'), 'utf8')).hooks
+        .Stop,
+    ).toHaveLength(1);
+    expect(
+      JSON.parse(readFileSync(join(latDir(), '.cache/lat_init.json'), 'utf8'))
+        .validation,
+    ).toBeUndefined();
+  });
+
+  // @lat: [[tests/init#Completion hooks replace commit checks outside Git]]
+  it.each([
+    ['interactive consent', true],
+    ['noninteractive setup', false],
+  ])('installs completion hooks outside Git with %s', async (_, tty) => {
+    createLatDir();
+    writeExperiments(root, { 'commit-hooks': true });
+    setInteractive(tty);
+    vi.mocked(checklistMenu).mockResolvedValue(hookAgents);
+    selectMenu.mockResolvedValue('global');
+    answer({});
+    await initCmd(root);
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
+      'not inside a Git repository',
+    );
+    expect(question).toHaveBeenCalledTimes(tty ? 2 : 0);
+    for (const file of ['.claude/settings.json', '.codex/hooks.json']) {
+      const { hooks } = JSON.parse(readFileSync(join(root, file), 'utf8'));
+      expect(hooks.UserPromptSubmit).toHaveLength(1);
+      expect(hooks.Stop).toHaveLength(1);
+    }
+    expect(
+      JSON.parse(readFileSync(join(root, '.cursor/hooks.json'), 'utf8')).hooks
+        .stop,
+    ).toHaveLength(1);
+    expect(readFileSync(join(root, '.pi/extensions/lat.ts'), 'utf8')).toContain(
+      'VALIDATION: "commit" | "completion" | "manual" = "completion"',
+    );
+    expect(
+      readFileSync(join(root, '.opencode/plugins/lat.ts'), 'utf8'),
+    ).toContain('= "completion"');
+    const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
+    expect(agents).toContain('After EVERY task');
+    expect(agents).not.toContain('git-pre-commit');
+    expect(existsSync(join(root, '.git'))).toBe(false);
+  });
+
+  // @lat: [[tests/init#Declining agent hooks leaves validation manual]]
+  it('installs no completion hooks when the user declines them', async () => {
+    createLatDir();
+    writeExperiments(root, { 'commit-hooks': true });
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValue(hookAgents);
+    selectMenu.mockResolvedValue('global');
+    answer({ 'coding agent hooks': 'n' });
+    await initCmd(root);
+    for (const file of ['.claude/settings.json', '.codex/hooks.json']) {
+      const { hooks } = JSON.parse(readFileSync(join(root, file), 'utf8'));
+      expect(hooks.UserPromptSubmit).toHaveLength(1);
+      expect(hooks.Stop).toBeUndefined();
+    }
+    expect(existsSync(join(root, '.cursor/hooks.json'))).toBe(false);
+    expect(readFileSync(join(root, '.pi/extensions/lat.ts'), 'utf8')).toContain(
+      '= "manual"',
+    );
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      'After EVERY task',
+    );
+  });
+
+  // @lat: [[tests/init#Check suggests commit checks once Git exists]]
+  it('warns from lat check when a project set up without Git gains a repository', () => {
+    const check = () =>
+      spawnSync(process.execPath, [cliPath, '--no-color', 'check'], {
+        cwd: root,
+        encoding: 'utf-8',
+        env: { ...process.env, NO_COLOR: '1' },
+      }).stdout;
+    const meta = () =>
+      JSON.parse(readFileSync(join(latDir(), '.cache/lat_init.json'), 'utf8'));
+    expect(runInit().exitCode).toBe(0);
+    expect(meta().validation).toBeUndefined();
+    writeExperiments(root, { 'commit-hooks': true });
+    expect(runInit().exitCode).toBe(0);
+    expect(meta().validation).toBe('completion');
+    expect(check()).not.toContain('set up without Git');
+
+    expect(
+      spawnSync('git', ['-c', 'init.templateDir=', 'init', '-q'], { cwd: root })
+        .status,
+    ).toBe(0);
+    const warned = check();
+    expect(warned).toContain('set up without Git');
+    expect(warned).toContain('`lat init`');
+
+    expect(runInit().exitCode).toBe(0);
+    expect(meta().validation).toBe('commit');
+    expect(check()).not.toContain('set up without Git');
+  });
+
   // @lat: [[tests/init#Experiments preserve unrelated agent settings]]
   it('does not install Lat into unselected agents with unrelated settings', async () => {
     createLatDir();
+    // A repository keeps init on the commit workflow instead of prompting.
+    expect(
+      spawnSync('git', ['-c', 'init.templateDir=', 'init', '-q'], { cwd: root })
+        .status,
+    ).toBe(0);
     setInteractive(true);
     vi.mocked(checklistMenu)
       .mockResolvedValueOnce(['commit-hooks'])
@@ -572,8 +717,8 @@ describe('lat init embedding setup', () => {
       'utf8',
     );
     expect(pi).toContain('before_agent_start');
-    expect(pi).not.toContain('agent_end');
-    expect(opencode).not.toContain('session.idle');
+    expect(pi).toContain('= "commit"');
+    expect(opencode).toContain('= "commit"');
     expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).not.toContain(
       'After EVERY task',
     );

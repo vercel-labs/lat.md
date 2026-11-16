@@ -488,19 +488,44 @@ describe('analyzeDiff', () => {
   });
 });
 
+/** Copy a fixture outside this repository as an opted-in project. */
+function optedIn(fixture: string, git: boolean): string {
+  const dir = mkdtempSync(join(tmpdir(), 'lat-opted-hook-'));
+  cpSync(fixture, dir, { recursive: true });
+  writeExperiments(dir, { 'commit-hooks': true });
+  if (git) runGit(dir, ['-c', 'init.templateDir=', 'init', '--quiet']);
+  return dir;
+}
+
 // @lat: [[tests/hook#Legacy stop hooks are silent]]
 it.each([
   ['claude', 'Stop'],
   ['codex', 'Stop'],
   ['cursor', 'stop'],
-])('silences %s %s for an opted-in project', (agent, event) => {
-  const dir = mkdtempSync(join(tmpdir(), 'lat-opted-hook-'));
+])('silences %s %s for an opted-in Git project', (agent, event) => {
+  const dir = optedIn(broken, true);
   try {
-    cpSync(broken, dir, { recursive: true });
-    writeExperiments(dir, { 'commit-hooks': true });
     const result = runHook(agent, event, dir);
     expect(result.exitCode).toBe(0);
     expect(result.stdout + result.stderr).toBe('');
+  } finally {
+    rmDirBestEffort(dir);
+  }
+});
+
+// @lat: [[tests/hook#Opted-in projects without Git keep stop validation]]
+it('validates at stop for an opted-in project outside Git', () => {
+  const dir = optedIn(broken, false);
+  try {
+    const claude = JSON.parse(runHook('claude', 'Stop', dir).stdout);
+    expect(claude.decision).toBe('block');
+    expect(claude.reason).toContain('lat check');
+    const cursor = JSON.parse(runHook('cursor', 'stop', dir).stdout);
+    expect(cursor.followup_message).toContain('lat check');
+    const context = JSON.parse(runHook('codex', 'UserPromptSubmit', dir).stdout)
+      .hookSpecificOutput.additionalContext;
+    expect(context).toContain('before finishing');
+    expect(context).not.toContain('git-pre-commit');
   } finally {
     rmDirBestEffort(dir);
   }
@@ -513,6 +538,7 @@ it.each([false, true])(
     const dir = mkdtempSync(join(tmpdir(), 'lat-prompt-mode-'));
     try {
       cpSync(clean, dir, { recursive: true });
+      runGit(dir, ['-c', 'init.templateDir=', 'init', '--quiet']);
       writeExperiments(dir, { 'commit-hooks': enabled });
       const result = runHook('codex', 'UserPromptSubmit', dir);
       expect(result.exitCode).toBe(0);

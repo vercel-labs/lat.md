@@ -6,6 +6,13 @@ import { Box, Markdown, Text } from "@mariozechner/pi-tui";
 
 const PREVIEW_LINES = 4;
 
+/**
+ * How `lat init` set this project up: "commit" validates agent commits through
+ * the Git pre-commit hook, "completion" validates when the agent finishes (for
+ * projects without Git), and "manual" leaves validation to the agent.
+ */
+const VALIDATION: "commit" | "completion" | "manual" = __LAT_VALIDATION__;
+
 function collapsibleResult(
   result: { content: Array<{ type: string; text?: string }> },
   options: { expanded: boolean; isPartial: boolean },
@@ -237,9 +244,30 @@ export default function (pi: ExtensionAPI) {
     return box;
   });
 
+  pi.registerMessageRenderer("lat-check", (message, { expanded }, theme) => {
+    const box = new Box(1, 1, (t) => theme.bg("customMessageBg", t));
+    if (expanded) {
+      box.addChild(new Text(theme.fg("warning", "lat check"), 0, 0));
+      box.addChild(new Markdown(message.content, 0, 0, getMarkdownTheme()));
+    } else {
+      const hint = keyHint("expandTools", "to expand");
+      const firstLine = message.content.split("\n")[0];
+      box.addChild(new Text(
+        theme.fg("warning", "lat check") + " " +
+        theme.fg("dim", `${firstLine} (${hint})`),
+        0, 0,
+      ));
+    }
+    return box;
+  });
+
   // ── Lifecycle hooks ────────────────────────────────────────────────
 
+  // Guard to prevent agent_end from firing twice per prompt (infinite loop)
+  let agentEndFired = false;
+
   pi.on("before_agent_start", async () => {
+    agentEndFired = false;
 
     const reminder = [
       "Before starting work, run `lat_search` with one or more queries describing the user's intent.",
@@ -247,7 +275,9 @@ export default function (pi: ExtensionAPI) {
       "Use `lat_section` to read the full content of relevant matches.",
       "Do not read files, write code, or run commands until you have searched.",
       "",
-      "Remember: `lat.md/` must stay in sync with meaningful codebase state. If you change implemented behavior, architecture, or tests, update the relevant current-state sections and stage relevant documentation before committing. Agent commits run validation through `lat hook git-pre-commit`. Validation checks staged content by default, or the working tree when `lat.git-pre-commit.validation` is set to `working-tree`. Fix validation errors before retrying. The hook may also stop a commit to request a review of Lat coverage. After reviewing, you may retry with `LAT_BYPASS_COMMIT_HOOK=1 git commit ...` if no documentation update is needed or the changes are already covered. If coverage is missing, update and stage the relevant documentation first, then retry with the flag. This flag skips only the review reminder; validation and other Git hooks still run. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Do not use `lat.md/` as a journal/changelog or add notes for insignificant details.",
+      VALIDATION === "commit"
+        ? "Remember: `lat.md/` must stay in sync with meaningful codebase state. If you change implemented behavior, architecture, or tests, update the relevant current-state sections and stage relevant documentation before committing. Agent commits run validation through `lat hook git-pre-commit`. Validation checks staged content by default, or the working tree when `lat.git-pre-commit.validation` is set to `working-tree`. Fix validation errors before retrying. The hook may also stop a commit to request a review of Lat coverage. After reviewing, you may retry with `LAT_BYPASS_COMMIT_HOOK=1 git commit ...` if no documentation update is needed or the changes are already covered. If coverage is missing, update and stage the relevant documentation first, then retry with the flag. This flag skips only the review reminder; validation and other Git hooks still run. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Do not use `lat.md/` as a journal/changelog or add notes for insignificant details."
+        : "Remember: `lat.md/` must stay in sync with meaningful codebase state. If you change implemented behavior, architecture, or tests, update the relevant current-state sections and run `lat_check` before finishing. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Do not use `lat.md/` as a journal/changelog or add notes for insignificant details.",
     ].join("\n");
 
     return {
@@ -259,4 +289,29 @@ export default function (pi: ExtensionAPI) {
     };
   });
 
+  if (VALIDATION === "completion") pi.on("agent_end", async () => {
+    // Don't fire twice per prompt — prevents infinite loop
+    if (agentEndFired) return;
+    agentEndFired = true;
+
+    // Run lat check
+    let checkFailed = false;
+    try {
+      run(["check"]);
+    } catch {
+      checkFailed = true;
+    }
+
+    if (!checkFailed) return;
+
+    pi.sendMessage(
+      {
+        customType: "lat-check",
+        content:
+          "`lat check` failed. Run `lat_check`, fix the errors, and repeat until it passes.",
+        display: true,
+      },
+      { deliverAs: "followUp", triggerTurn: true },
+    );
+  });
 }

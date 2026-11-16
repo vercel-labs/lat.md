@@ -2,6 +2,15 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
+## 0.13.9
+
+Experimental commit checks now handle projects without Git, and `lat ui` explains unshareable vaults instead of crashing.
+
+- When the commit-hooks experiment is enabled outside a Git repository, `lat init` warns that Lat works best with Git and suggests running `git init` first. You can continue without Git and choose whether `lat check` is enforced through coding agent hooks when an agent finishes a turn; previously such projects silently lost all validation.
+- If such a project later gains a Git repository, `lat check` reminds you to rerun `lat init` and switch to the pre-commit hook. Setups without the experiment are unchanged.
+- `lat ui` with a non-loopback `--host` explains when no vault Markdown is shareable, such as an untracked `lat.md/` in a Git project, and how to fix it, instead of failing with a misleading "No readable Markdown files" stack trace. [#226](https://github.com/vercel-labs/lat.md/pull/226)
+- Update the bundled core dependency to `@lat.md/core` 0.1.5.
+
 ## 0.13.8
 
 External-source reads avoid repeated Git checks on unrelated local checkouts, speeding up validation when several sources use local overrides.

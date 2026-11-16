@@ -125,7 +125,7 @@ Invalid JSON, unsupported versions, and nonboolean choices report errors without
 
 ## Generated templates follow project experiments
 
-Generated instructions and Pi/OpenCode callbacks follow the explicit project's persisted choices. Both sets of Markdown templates satisfy graph validation.
+Generated instructions and Pi/OpenCode plugins follow the explicit project's persisted choices; opted-in plugins carry a workflow placeholder for init. Both sets of Markdown templates satisfy graph validation.
 
 ## CLI generation honors the selected project
 
@@ -134,3 +134,27 @@ The CLI's `--dir` option selects the saved experiment choices used by template g
 ## Experiments preserve unrelated agent settings
 
 Enabling and disabling experiments does not add Lat hooks to unselected agents whose existing settings contain only unrelated handlers.
+
+## Opted-in projects without Git keep task checklists
+
+Outside a Git worktree, an opted-in project still generates the stable end-of-task instructions, while its plugin templates remain the opted-in ones awaiting an injected workflow.
+
+## Experiment warns and can stop outside Git
+
+Opting in outside a Git worktree explains that Lat works best with Git and suggests `git init`. Declining to continue skips agent selection and leaves experiment choices unsaved.
+
+## Stable setup ignores missing Git
+
+Without the experiment, init outside Git prints no warning, asks nothing, installs completion hooks as before, and records no workflow.
+
+## Completion hooks replace commit checks outside Git
+
+Continuing an opted-in setup without Git and accepting agent hooks installs Stop and stop handlers, enables Pi/OpenCode completion callbacks, and writes post-task instructions. Noninteractive runs get the same setup without being asked.
+
+## Declining agent hooks leaves validation manual
+
+Continuing without Git but declining agent hooks keeps prompt hooks only: no stop handlers or Cursor hook file, plugins marked manual, and instructions that still ask for `lat check`.
+
+## Check suggests commit checks once Git exists
+
+An opted-in project initialized without Git records its fallback workflow. Once a repository exists, `lat check` recommends rerunning init for the pre-commit hook; the warning is absent before Git exists and after init switches to commit checks.

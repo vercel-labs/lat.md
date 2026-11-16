@@ -18,9 +18,15 @@ import {
 import { analyzeMarkdownFile } from '@lat.md/core/markdown-analysis';
 
 const roots: string[] = [];
-function project(): string {
+function project(git = false): string {
   const root = mkdtempSync(join(tmpdir(), 'lat-experiments-'));
   roots.push(root);
+  if (git) {
+    const result = spawnSync('git', ['-c', 'init.templateDir=', 'init', '-q'], {
+      cwd: root,
+    });
+    expect(result.status).toBe(0);
+  }
   return root;
 }
 afterEach(() => {
@@ -70,7 +76,7 @@ it.each([
 it.each([false, true])(
   'selects valid templates for the explicit target project (commit-hooks=%s)',
   (enabled) => {
-    const root = project();
+    const root = project(true);
     writeExperiments(root, { 'commit-hooks': enabled });
     for (const [name, content] of [
       ['AGENTS.md', readAgentsTemplate(root)],
@@ -86,16 +92,30 @@ it.each([false, true])(
         ).diagnostics,
       ).toEqual([]);
     }
-    expect(readPiExtensionTemplate(root).includes('agent_end')).toBe(!enabled);
-    expect(readOpenCodePluginTemplate(root).includes('session.idle')).toBe(
-      !enabled,
-    );
+    // Opted-in plugins take their workflow from a value injected by init.
+    for (const template of [
+      readPiExtensionTemplate(root),
+      readOpenCodePluginTemplate(root),
+    ])
+      expect(template.includes('__LAT_VALIDATION__')).toBe(enabled);
   },
 );
 
+// @lat: [[tests/init#Opted-in projects without Git keep task checklists]]
+it('keeps end-of-task instructions for an opted-in project outside Git', () => {
+  const root = project();
+  writeExperiments(root, { 'commit-hooks': true });
+  for (const content of [
+    readAgentsTemplate(root),
+    readCursorRulesTemplate(root),
+  ])
+    expect(content).toContain('After EVERY task');
+  expect(readPiExtensionTemplate(root)).toContain('__LAT_VALIDATION__');
+});
+
 // @lat: [[tests/init#CLI generation honors the selected project]]
 it('uses --dir project choices when generating instructions through the CLI', () => {
-  const root = project();
+  const root = project(true);
   const other = project();
   writeExperiments(root, { 'commit-hooks': true });
   const cli = join(import.meta.dirname, '../src/cli/index.ts');
