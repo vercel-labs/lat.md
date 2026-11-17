@@ -1,5 +1,5 @@
 import { type Plugin, tool } from "@opencode-ai/plugin"
-import { execSync, execFileSync } from "child_process"
+import { execSync, execFile, execFileSync } from "child_process"
 
 /** Executable and prefix arguments, injected by `lat init`. */
 const LAT = __LAT_INVOCATION__
@@ -19,12 +19,41 @@ function run(args: string[]): string {
   })
 }
 
-function tryRun(args: string[]): string {
-  try {
-    return run(args)
-  } catch {
-    return ""
-  }
+/** A first search may build the whole index, so it gets longer than other tools. */
+const SEARCH_TIMEOUT_MS = 120_000
+
+/**
+ * Run a lat query without blocking the agent. Failures reject with the CLI's
+ * own message, so a timeout or a rejected key is never reported as "no results".
+ */
+function query(
+  args: string[],
+  signal?: AbortSignal,
+  timeout = 30_000,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      LAT.command,
+      [...LAT.args, ...args],
+      { cwd: process.cwd(), encoding: "utf-8", timeout, signal },
+      (error, stdout, stderr) => {
+        if (!error) return resolve(stdout)
+        const detail = (stderr || stdout || "").trim()
+        if (signal?.aborted) return reject(new Error(`lat ${args[0]} was cancelled.`))
+        if (!error.killed) return reject(new Error(detail || error.message))
+        const hint =
+          args[0] === "search"
+            ? " The search index may still be building, which restarts on every attempt. Run `lat search` in a shell to finish building it, then retry."
+            : ""
+        reject(
+          new Error(
+            `lat ${args[0]} timed out after ${timeout / 1000}s.${hint}` +
+              (detail ? `\n${detail}` : ""),
+          ),
+        )
+      },
+    )
+  })
 }
 
 export const LatPlugin: Plugin = async (ctx) => {
@@ -39,10 +68,10 @@ export const LatPlugin: Plugin = async (ctx) => {
             tool.schema.number("Max results (default 5)"),
           ),
         },
-        async execute(args) {
+        async execute(args, context) {
           const cliArgs = ["search", args.query]
           if (args.limit) cliArgs.push("--limit", String(args.limit))
-          const output = tryRun(cliArgs)
+          const output = await query(cliArgs, context?.abort, SEARCH_TIMEOUT_MS)
           return output || "No results found."
         },
       }),
@@ -55,8 +84,8 @@ export const LatPlugin: Plugin = async (ctx) => {
             'Section ID or name (e.g. "cli#init", "Tests#User login")',
           ),
         },
-        async execute(args) {
-          const output = tryRun(["section", args.query])
+        async execute(args, context) {
+          const output = await query(["section", args.query], context?.abort)
           return output || "Section not found."
         },
       }),
@@ -67,8 +96,8 @@ export const LatPlugin: Plugin = async (ctx) => {
         args: {
           query: tool.schema.string("Section name to locate"),
         },
-        async execute(args) {
-          const output = tryRun(["locate", args.query])
+        async execute(args, context) {
+          const output = await query(["locate", args.query], context?.abort)
           return output || "No sections matching query."
         },
       }),
@@ -93,8 +122,8 @@ export const LatPlugin: Plugin = async (ctx) => {
         args: {
           text: tool.schema.string("Text containing [[refs]] to expand"),
         },
-        async execute(args) {
-          const output = tryRun(["expand", args.text])
+        async execute(args, context) {
+          const output = await query(["expand", args.text], context?.abort)
           return output || args.text
         },
       }),
@@ -107,8 +136,8 @@ export const LatPlugin: Plugin = async (ctx) => {
             'Section ID (e.g. "cli#init", "file#Section")',
           ),
         },
-        async execute(args) {
-          const output = tryRun(["refs", args.query])
+        async execute(args, context) {
+          const output = await query(["refs", args.query], context?.abort)
           return output || "No references found."
         },
       }),

@@ -2,6 +2,14 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
+## 0.13.10
+
+Pi and OpenCode search tools report failures and slow index builds instead of returning an empty result.
+
+- The generated `lat_search` tool no longer answers "No results found." when the search failed. It previously stopped `lat search` after 30 seconds and discarded every error, so a first search on a large `lat.md/`, which builds the index, was cut off and restarted from scratch on each attempt. A rejected `LAT_LLM_KEY` looked the same.
+- Query tools now run without blocking the agent, can be cancelled, and report the CLI's own message when a command fails or times out. `lat_search` allows two minutes; if the index cannot be built in that time, the error says to run `lat search` in a shell first.
+- Rerun `lat init` after upgrading to regenerate `.pi/extensions/lat.ts` and `.opencode/plugins/lat.ts`.
+
 ## 0.13.9
 
 Experimental commit checks now handle projects without Git, and `lat ui` explains unshareable vaults instead of crashing.
