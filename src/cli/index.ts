@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Command, InvalidArgumentError } from 'commander';
+import { Command, InvalidArgumentError, Option } from 'commander';
 import { createCli, handleResult, packageVersion } from '@lat.md/core/cli';
 import { resolveContext } from '@lat.md/core/cli/context';
 import {
@@ -244,13 +244,14 @@ program
   .command('init')
   .description('Initialize a lat.md directory')
   .argument('[dir]', 'target directory (default: cwd)')
-  .option('--experimental', 'choose experimental features for this project')
-  .action(
-    async (dir: string | undefined, options: { experimental?: boolean }) => {
-      const { initCmd } = await import('./init.js');
-      await initCmd(dir, options);
-    },
-  );
+  .addOption(
+    // Accepted for compatibility: commit checks are now the default workflow.
+    new Option('--experimental').hideHelp(),
+  )
+  .action(async (dir: string | undefined) => {
+    const { initCmd } = await import('./init.js');
+    await initCmd(dir);
+  });
 
 program
   .command('hook')

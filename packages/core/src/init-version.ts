@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
  * requires users to re-run it (e.g. new hooks, generated files, MCP config, or
  * a configuration migration).
  */
-export const INIT_VERSION = 6;
+export const INIT_VERSION = 7;
 
 /**
  * Where `lat init` arranged for `lat check` to be enforced: the Git pre-commit
@@ -36,6 +36,8 @@ type InitMeta = {
   init_version: number;
   /** Absent in metadata written before the workflow was recorded. */
   validation?: InitValidation;
+  /** Set when init found no Git worktree, so the hook was never offered. */
+  without_git?: boolean;
   /** SHA-256 hashes of template-generated files, keyed by project-relative path. */
   file_hashes?: Record<string, string>;
 };
@@ -70,6 +72,11 @@ export function readInitValidation(latDir: string): InitValidation | null {
     : null;
 }
 
+/** Whether the last init ran outside a Git worktree. */
+export function readInitWithoutGit(latDir: string): boolean {
+  return readMeta(latDir)?.without_git === true;
+}
+
 export function readFileHash(latDir: string, relPath: string): string | null {
   const meta = readMeta(latDir);
   return meta?.file_hashes?.[relPath] ?? null;
@@ -83,6 +90,7 @@ export function writeInitMeta(
   latDir: string,
   fileHashes: Record<string, string>,
   validation?: InitValidation,
+  withoutGit = false,
 ): void {
   const cacheDir = projectWritePath(dirname(latDir), join(latDir, '.cache'));
   mkdirSync(cacheDir, { recursive: true });
@@ -93,6 +101,7 @@ export function writeInitMeta(
   const data: InitMeta = {
     init_version: INIT_VERSION,
     ...(validation ? { validation } : {}),
+    ...(withoutGit ? { without_git: true } : {}),
     file_hashes: mergedHashes,
   };
   writeProjectFile(

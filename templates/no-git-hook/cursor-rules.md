@@ -4,13 +4,13 @@ Use Lat's knowledge graph to ground each task before changing code.
 
 - Use the `lat_search` tool to find sections relevant to your task. Read them to understand the design intent before writing code.
 
-# Before committing
+# Post-task checklist (REQUIRED — do not skip)
 
-Keep `lat.md/` aligned with meaningful implemented behavior, architecture, and tests. Stage relevant documentation together with the code it describes; keep it focused on current state, not a journal or changelog.
+After EVERY task, before responding to the user:
 
-Agent commits run validation through `lat hook git-pre-commit`. Validation checks staged content by default, or the working tree when `lat.git-pre-commit.validation` is set to `working-tree`. Fix validation errors before retrying. The hook may also stop a commit to request a review of Lat coverage. After reviewing, you may retry with `LAT_BYPASS_COMMIT_HOOK=1 git commit ...` if no documentation update is needed or the changes are already covered. If coverage is missing, update and stage the relevant documentation first, then retry with the flag. This flag skips only the review reminder; validation and other Git hooks still run. Use `lat check` while editing to inspect errors; validation is not required after every response or research-only task.
-
-Plans may be drafted alongside implementation, with the intent that by commit time they describe the implemented state. Otherwise keep proposals and future work outside `lat.md/` unless explicitly requested there.
+- [ ] Update `lat.md/` if you added or changed meaningful implemented functionality, architecture, tests, or behavior. Keep it a focused snapshot of the current implemented state, not a journal/changelog. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there.
+- [ ] Use the `lat_check` tool — all validations must pass
+- [ ] Do not skip these steps. Do not consider your task done until both are complete.
 
 ---
 

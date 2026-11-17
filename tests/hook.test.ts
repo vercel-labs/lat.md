@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { rmDirBestEffort } from './util.js';
 import { syncLatHooks } from '../src/cli/init.js';
-import { writeExperiments } from '../src/cli/experiments.js';
+import { writeInitMeta } from '@lat.md/core/init-version';
 import { analyzeDiff } from '../src/cli/hook.js';
 
 const casesDir = join(import.meta.dirname, 'cases');
@@ -370,7 +370,7 @@ describe('Codex hook integration', () => {
     );
 
     try {
-      syncLatHooks(hooksPath, 'global', 'codex');
+      syncLatHooks(hooksPath, 'global', 'codex', dir, true);
       const config = JSON.parse(readFileSync(hooksPath, 'utf-8'));
       expect(config.description).toBe('Workspace hooks');
       expect(config.hooks.PreToolUse).toHaveLength(1);
@@ -383,6 +383,11 @@ describe('Codex hook integration', () => {
       );
       expect(config.hooks.Stop).toHaveLength(1);
       expect(config.hooks.Stop[0].hooks[0].command).toBe('lat hook codex Stop');
+      // Without completion checks, only the prompt hook remains.
+      syncLatHooks(hooksPath, 'global', 'codex', dir);
+      const commit = JSON.parse(readFileSync(hooksPath, 'utf-8'));
+      expect(commit.hooks.UserPromptSubmit).toHaveLength(2);
+      expect(commit.hooks.Stop).toBeUndefined();
     } finally {
       rmDirBestEffort(dir);
     }
@@ -401,7 +406,7 @@ describe('Codex hook integration', () => {
         'process.stdout.write(process.argv.slice(2).join(" "));\n',
       );
       process.argv[1] = cliPath;
-      syncLatHooks(hooksPath, 'local', 'codex');
+      syncLatHooks(hooksPath, 'local', 'codex', dir, true);
 
       const config = JSON.parse(readFileSync(hooksPath, 'utf-8'));
       const quote = (arg: string) => (arg.includes(' ') ? `"${arg}"` : arg);
@@ -488,22 +493,25 @@ describe('analyzeDiff', () => {
   });
 });
 
-/** Copy a fixture outside this repository as an opted-in project. */
-function optedIn(fixture: string, git: boolean): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lat-opted-hook-'));
+/** Copy a fixture outside this repository with a recorded workflow. */
+function configured(
+  fixture: string,
+  validation?: 'commit' | 'completion' | 'manual',
+): string {
+  const dir = mkdtempSync(join(tmpdir(), 'lat-workflow-hook-'));
   cpSync(fixture, dir, { recursive: true });
-  writeExperiments(dir, { 'commit-hooks': true });
-  if (git) runGit(dir, ['-c', 'init.templateDir=', 'init', '--quiet']);
+  if (validation) writeInitMeta(join(dir, 'lat.md'), {}, validation);
   return dir;
 }
 
-// @lat: [[tests/hook#Legacy stop hooks are silent]]
+// @lat: [[tests/hook#Stop hooks are silent without completion checks]]
 it.each([
-  ['claude', 'Stop'],
-  ['codex', 'Stop'],
-  ['cursor', 'stop'],
-])('silences %s %s for an opted-in Git project', (agent, event) => {
-  const dir = optedIn(broken, true);
+  ['claude', 'Stop', 'commit'],
+  ['codex', 'Stop', 'commit'],
+  ['cursor', 'stop', 'commit'],
+  ['claude', 'Stop', 'manual'],
+] as const)('silences %s %s for a %s setup', (agent, event, validation) => {
+  const dir = configured(broken, validation);
   try {
     const result = runHook(agent, event, dir);
     expect(result.exitCode).toBe(0);
@@ -513,39 +521,37 @@ it.each([
   }
 });
 
-// @lat: [[tests/hook#Opted-in projects without Git keep stop validation]]
-it('validates at stop for an opted-in project outside Git', () => {
-  const dir = optedIn(broken, false);
-  try {
-    const claude = JSON.parse(runHook('claude', 'Stop', dir).stdout);
-    expect(claude.decision).toBe('block');
-    expect(claude.reason).toContain('lat check');
-    const cursor = JSON.parse(runHook('cursor', 'stop', dir).stdout);
-    expect(cursor.followup_message).toContain('lat check');
-    const context = JSON.parse(runHook('codex', 'UserPromptSubmit', dir).stdout)
-      .hookSpecificOutput.additionalContext;
-    expect(context).toContain('before finishing');
-    expect(context).not.toContain('git-pre-commit');
-  } finally {
-    rmDirBestEffort(dir);
-  }
-});
-
-// @lat: [[tests/hook#Prompt guidance follows the selected workflow]]
-it.each([false, true])(
-  'uses saved prompt guidance (commit-hooks=%s)',
-  (enabled) => {
-    const dir = mkdtempSync(join(tmpdir(), 'lat-prompt-mode-'));
+// @lat: [[tests/hook#Stop hooks validate completion and unrecorded setups]]
+it.each(['completion', undefined] as const)(
+  'validates at stop for a %s setup',
+  (validation) => {
+    const dir = configured(broken, validation);
     try {
-      cpSync(clean, dir, { recursive: true });
-      runGit(dir, ['-c', 'init.templateDir=', 'init', '--quiet']);
-      writeExperiments(dir, { 'commit-hooks': enabled });
+      const claude = JSON.parse(runHook('claude', 'Stop', dir).stdout);
+      expect(claude.decision).toBe('block');
+      expect(claude.reason).toContain('lat check');
+      const cursor = JSON.parse(runHook('cursor', 'stop', dir).stdout);
+      expect(cursor.followup_message).toContain('lat check');
+    } finally {
+      rmDirBestEffort(dir);
+    }
+  },
+);
+
+// @lat: [[tests/hook#Prompt guidance follows the recorded workflow]]
+it.each(['commit', 'completion', 'manual', undefined] as const)(
+  'describes validation for a %s setup',
+  (validation) => {
+    const dir = configured(clean, validation);
+    try {
       const result = runHook('codex', 'UserPromptSubmit', dir);
       expect(result.exitCode).toBe(0);
       const context = JSON.parse(result.stdout).hookSpecificOutput
         .additionalContext;
-      expect(context.includes('before finishing')).toBe(!enabled);
-      expect(context.includes('git-pre-commit')).toBe(enabled);
+      expect(context.includes('before finishing')).toBe(
+        validation !== 'commit',
+      );
+      expect(context.includes('git-pre-commit')).toBe(validation === 'commit');
     } finally {
       rmDirBestEffort(dir);
     }

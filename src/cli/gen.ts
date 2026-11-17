@@ -1,44 +1,35 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { findTemplatesDir } from './templates.js';
-import { isExperimentEnabled, usesCommitChecks } from './experiments.js';
+import { recordedValidation } from './validation.js';
 import { findProjectRoot } from '@lat.md/core/project-discovery';
 
-function readTemplate(name: string, experimental: boolean): string {
-  return readFileSync(
-    join(findTemplatesDir(), experimental ? 'experimental' : '.', name),
-    'utf-8',
-  );
+function readTemplate(name: string): string {
+  return readFileSync(join(findTemplatesDir(), name), 'utf-8');
 }
 
 /**
- * Instructions describe commit-time validation only where commit checks are
- * active; opted-in projects without Git keep the end-of-task checklist.
+ * Instructions describe commit-time validation by default. Setups without
+ * the Git hook get the `no-git-hook` variants, which ask for `lat check`
+ * after every task.
  */
-export function readAgentsTemplate(root?: string | null): string {
-  return readTemplate('AGENTS.md', usesCommitChecks(root));
+export function readAgentsTemplate(gitHook = true): string {
+  return readTemplate(gitHook ? 'AGENTS.md' : 'no-git-hook/AGENTS.md');
 }
 
-export function readCursorRulesTemplate(root?: string | null): string {
-  return readTemplate('cursor-rules.md', usesCommitChecks(root));
-}
-
-/**
- * Opted-in projects share one plugin template per agent; `lat init` injects
- * the validation workflow into it.
- */
-export function readPiExtensionTemplate(root?: string | null): string {
+export function readCursorRulesTemplate(gitHook = true): string {
   return readTemplate(
-    'pi-extension.ts',
-    isExperimentEnabled('commit-hooks', root),
+    gitHook ? 'cursor-rules.md' : 'no-git-hook/cursor-rules.md',
   );
 }
 
-export function readOpenCodePluginTemplate(root?: string | null): string {
-  return readTemplate(
-    'opencode-plugin.ts',
-    isExperimentEnabled('commit-hooks', root),
-  );
+/** `lat init` injects the lat command and validation workflow into these. */
+export function readPiExtensionTemplate(): string {
+  return readTemplate('pi-extension.ts');
+}
+
+export function readOpenCodePluginTemplate(): string {
+  return readTemplate('opencode-plugin.ts');
 }
 
 export function readSkillTemplate(): string {
@@ -46,21 +37,23 @@ export function readSkillTemplate(): string {
 }
 
 export async function genCmd(target: string, from?: string): Promise<void> {
-  const root = findProjectRoot(from);
+  // Projects that declined the Git hook keep end-of-task instructions.
+  const recorded = recordedValidation(findProjectRoot(from));
+  const gitHook = recorded === null || recorded === 'commit';
   const normalized = target.toLowerCase();
   switch (normalized) {
     case 'agents.md':
     case 'claude.md':
-      process.stdout.write(readAgentsTemplate(root));
+      process.stdout.write(readAgentsTemplate(gitHook));
       break;
     case 'cursor-rules.md':
-      process.stdout.write(readCursorRulesTemplate(root));
+      process.stdout.write(readCursorRulesTemplate(gitHook));
       break;
     case 'pi-extension.ts':
-      process.stdout.write(readPiExtensionTemplate(root));
+      process.stdout.write(readPiExtensionTemplate());
       break;
     case 'opencode-plugin.ts':
-      process.stdout.write(readOpenCodePluginTemplate(root));
+      process.stdout.write(readOpenCodePluginTemplate());
       break;
     case 'skill.md':
       process.stdout.write(readSkillTemplate());

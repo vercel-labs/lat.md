@@ -17,7 +17,7 @@ import type { CmdContext, CmdResult, Styler } from '../context.js';
 import {
   INIT_VERSION,
   isGitWorktree,
-  readInitValidation,
+  readInitWithoutGit,
   readInitVersion,
 } from '../init-version.js';
 import { CheckRunContext } from './check-context.js';
@@ -811,10 +811,9 @@ export async function checkAllCommand(
           ' to update agent hooks and configuration.',
       );
     } else if (
-      // Set up without Git, but a repository exists now. Only such projects
-      // pay for the Git probe.
-      readInitValidation(ctx.latDir) !== 'commit' &&
-      readInitValidation(ctx.latDir) !== null &&
+      // Init never offered the Git hook, but a repository exists now. Only
+      // such projects pay for the Git probe.
+      readInitWithoutGit(ctx.latDir) &&
       isGitWorktree(ctx.projectRoot)
     ) {
       if (lines.length > 0) lines.push('');

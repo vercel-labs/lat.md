@@ -30,12 +30,7 @@ it('runs every generated query tool without shell evaluation', async () => {
   );
   const marker = join(directory, 'injected');
   const input = `quotes " ' spaces\n$(touch '${marker}') \`touch '${marker}'\` \\`;
-  for (const name of [
-    'pi-extension.ts',
-    'opencode-plugin.ts',
-    'experimental/pi-extension.ts',
-    'experimental/opencode-plugin.ts',
-  ]) {
+  for (const name of ['pi-extension.ts', 'opencode-plugin.ts']) {
     let template = readFileSync(
       join(import.meta.dirname, '..', 'templates', name),
       'utf8',

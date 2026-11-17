@@ -23,7 +23,7 @@ import { isSourceFileExtension } from '@lat.md/core/source-formats';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { resolveLatInvocation } from './agent-invocation.js';
-import { isExperimentEnabled } from './experiments.js';
+import { recordedValidation } from './validation.js';
 
 /** Environment detection is a workflow guard, not an authorization boundary. */
 export async function isAgentCommit(): Promise<boolean> {
@@ -278,7 +278,8 @@ export async function gitPreCommit(cwd = process.cwd()): Promise<number> {
         projects.add(prefix);
     }
     for (const project of projects) {
-      if (!isExperimentEnabled('commit-hooks', join(root, project)))
+      // The launcher is shared; skip projects not set up for commit checks.
+      if (recordedValidation(join(root, project)) !== 'commit')
         projects.delete(project);
     }
     if (!projects.size) return 0;

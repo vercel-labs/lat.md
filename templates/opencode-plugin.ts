@@ -4,6 +4,13 @@ import { execSync, execFileSync } from "child_process"
 /** Executable and prefix arguments, injected by `lat init`. */
 const LAT = __LAT_INVOCATION__
 
+/**
+ * Where `lat init` arranged for `lat check` to be enforced: "completion"
+ * validates when the session goes idle. Otherwise validation runs in the Git
+ * pre-commit hook ("commit") or is left to the agent ("manual").
+ */
+const VALIDATION: "commit" | "completion" | "manual" = __LAT_VALIDATION__
+
 function run(args: string[]): string {
   return execFileSync(LAT.command, [...LAT.args, ...args], {
     cwd: process.cwd(),
@@ -109,6 +116,7 @@ export const LatPlugin: Plugin = async (ctx) => {
 
     hooks: {
       "session.idle": async () => {
+        if (VALIDATION !== "completion") return
         let checkFailed = false
         let checkOutput = ""
         try {

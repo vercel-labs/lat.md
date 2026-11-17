@@ -10,12 +10,13 @@ Follow [[quick-start]] to connect your agent or create the initial graph for an 
 
 The integration combines instructions, tools, and lifecycle hooks according to what each agent supports:
 
-- **Project instructions:** `AGENTS.md` or agent-specific rules tell the agent to search for relevant knowledge before changing code, update it when meaningful behavior changes, and run `lat check` before finishing.
+- **Project instructions:** `AGENTS.md` or agent-specific rules tell the agent to search for relevant knowledge before changing code, update it when meaningful behavior changes, and stage it with the code it describes.
 - **Authoring skill:** The installed `lat-md` skill teaches the agent how to write sections, connect them to code, and maintain test specifications.
 - **Tool access:** CLI commands, Model Context Protocol (MCP) tools, or native agent tools let the agent search, read, and validate the graph.
-- **Lifecycle hooks:** Supported integrations reinforce the workflow at task boundaries. Prompt hooks can supply relevant knowledge from an existing search index; end-of-task hooks run validation and flag changes that may need documentation updates.
+- **Prompt hooks:** Supported integrations supply workflow reminders and relevant knowledge from an existing search index when a task starts.
+- **Commit checks:** A Git pre-commit hook validates the graph when an agent commits and flags substantial code changes that may need documentation updates.
 
-The exact hooks vary. Claude Code and Codex receive prompt-time context and completion checks; Cursor uses rules for initial guidance and a stop hook for completion checks. Pi and OpenCode integrate through an extension or plugin. Copilot uses instructions and MCP tools.
+The exact integration varies. Claude Code and Codex receive prompt-time context through hooks; Cursor uses rules for initial guidance. Pi and OpenCode integrate through an extension or plugin. Copilot uses instructions and MCP tools. Commit checks apply to every agent.
 
 Follow the activation instructions printed by `lat init` so the installed integration can run. You can rerun setup to refresh it after upgrading Lat. See [[cli#init|agent setup details]] for the configuration installed for each agent.
 
@@ -37,32 +38,29 @@ Review whether the knowledge diff describes the behavior you want, then follow i
 
 Check that new constraints are justified, changed behavior is explicit, and important test expectations have matching references. [[ui|Lat UI]] lets you explore these relationships without navigating files manually.
 
-The integration directs the agent to run `lat check` before finishing, and supported completion hooks also run validation and flag possible documentation gaps. Review the meaning of the changes yourself: passing checks confirms structure and references, while you and the agent assess whether the knowledge matches the intended behavior.
+The integration validates the graph when the agent commits and asks it to review documentation coverage for substantial code changes. Review the meaning of the changes yourself: passing checks confirms structure and references, while you and the agent assess whether the knowledge matches the intended behavior.
 
-## Experimental commit hooks
+## Commit checks
 
-Run `lat init --experimental` to choose experimental features for this project. The checklist explains each experiment and starts with your saved choices.
+`lat init` asks to install a Git pre-commit hook that validates staged content when an agent commits. Your own commits are not checked, and agents do not run checks at the end of every turn.
 
-Enable **Replace end-of-turn checks with Git commit checks** to validate staged content when an agent commits. Setup removes Lat completion hooks, refreshes installed integrations, and installs the Git hook or explains how to integrate with your existing hook manager. Prompt context remains enabled; ordinary manual commits skip validation.
+Setup asks before installing the hook, then installs it or explains how to integrate with your existing hook manager: see [[lat-workflow#Existing Git hooks]]. The choice is local to each clone and worktree, so run `lat init` in each one.
 
 After validation passes, substantial staged code changes stop the commit with a request to review Lat coverage. If no update is needed or the changes are already covered, the agent may retry with `LAT_BYPASS_COMMIT_HOOK=1 git commit ...`. If coverage is missing, update and stage it first, then retry with the flag. This acknowledges the review for that invocation only; structural validation and other Git hooks still run.
 
-Choices are stored locally in `lat.md/.cache/experiments.json`. Normal `lat init` runs preserve them. Rerun `lat init --experimental` and uncheck the experiment to restore completion checks. Choosing experiments requires an interactive terminal. Deleting the cache resets the choices; rerun init afterward to synchronize installed integrations.
+Projects set up with an earlier version need `lat init` rerun after upgrading; `lat check` prints a reminder until you do. The old `--experimental` flag is accepted and ignored.
 
-The cache is already excluded by the `.cache` rule in the scaffolded `lat.md/.gitignore`. Experiment setup does not add a duplicate cache rule to the repository's root `.gitignore`.
+## Checks without the Git hook
 
-## Experimental setup without Git
+If you decline the Git hook, `lat init` asks whether `lat check` may be enforced through coding agent hooks instead: supported agents run it whenever they finish a turn and keep working until it passes.
 
-Commit checks need a Git repository. If you enable the experiment outside one, `lat init` warns you and suggests running `git init` first, then `lat init` again.
+If you decline that too, nothing enforces validation; instructions still ask agents to run `lat check`, and you can run it yourself. Rerunning `lat init` offers your earlier answers as defaults, so you can change your mind at any time.
 
-You can continue without Git. Init then asks whether `lat check` may be enforced through coding agent hooks instead: supported agents run it whenever they finish a turn and keep working until it passes. If you decline, nothing enforces validation; instructions still ask agents to run `lat check`, and you can run it yourself.
-
-After adding Git later, rerun `lat init` to switch to commit checks. Agent hooks stop validating once a repository exists, so `lat check` reminds you until you do.
+Outside a Git repository the hook cannot be installed. `lat init` warns you first and suggests running `git init`, then `lat init` again; you can also continue without Git and choose agent hooks. After adding Git later, `lat check` reminds you to rerun `lat init` and switch to commit checks.
 
 ## Existing Git hooks
 
-
-When the commit-hooks experiment is enabled, `lat init` preserves custom hooks and hook managers, and reports whether commit validation was installed or needs integration.
+When installing commit checks, `lat init` preserves custom hooks and hook managers, and reports whether commit validation was installed or needs integration.
 
 When init reports integration required, add `lat hook git-pre-commit` to your existing pre-commit workflow after commands that modify and stage files. Preserve failures from earlier commands. For Husky, edit `.husky/pre-commit`; for other managers, use their configuration rather than their generated Git hook.
 
@@ -70,7 +68,7 @@ Lat does not change `core.hooksPath`. New clones need their own hook setup, and 
 
 ## Pre-commit validation mode
 
-The commit-hooks experiment checks staged file versions by default. Projects that rely on ignored checkouts or other local-only link targets can choose working-tree validation.
+Commit checks validate staged file versions by default. Projects that rely on ignored checkouts or other local-only link targets can choose working-tree validation.
 
 Add this setting to the YAML frontmatter at the top of the Git repository's `lat.md/lat.md`:
 
@@ -82,13 +80,13 @@ lat:
 ---
 ```
 
-Stage the configuration file for the setting to take effect. Use `staged`, or omit the setting, to retain strict validation of the commit's contents. The setting applies to all affected opted-in projects in the repository.
+Stage the configuration file for the setting to take effect. Use `staged`, or omit the setting, to retain strict validation of the commit's contents. The setting applies to all affected projects in the repository.
 
 In `working-tree` mode, the hook runs the regular `lat check` in each affected project's directory. It can resolve local targets and sees unstaged edits, so a passing check describes the files on disk rather than necessarily the versions being committed. In both modes, validation errors block commits even with `LAT_BYPASS_COMMIT_HOOK=1`; that flag skips only the documentation review reminder.
 
 ## Fixture projects
 
-The commit-hooks experiment can exclude intentionally invalid test graphs using the root document's frontmatter.
+Commit checks can exclude intentionally invalid test graphs using the root document's frontmatter.
 
 Add this configuration to the Git repository's `lat.md/lat.md` and stage it with the fixtures:
 

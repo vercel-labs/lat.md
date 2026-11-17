@@ -103,58 +103,48 @@ Every init destination rejects external and dangling symlinks, including linked 
 
 ## Migrates installed completion integrations
 
-Opted-in initialization installs the Git hook, removes old stop commands from selected and previously installed agents, and refreshes unchanged Pi/OpenCode plugins even when they are not selected again.
+Initialization that accepts the Git hook installs it, removes old stop commands from selected and previously installed agents, and refreshes unchanged Pi/OpenCode plugins even when they are not selected again.
 
-## Experiment choices persist and remain editable
+## Git projects default to commit checks
 
-Interactive experiment selection records enabled and disabled choices, preserves unknown IDs, and reuses saved choices on ordinary init. Disabling commit hooks restores completion integrations, including agents not selected again.
+Interactive init in a Git repository asks about the pre-commit hook before agent selection, then installs it with prompt hooks only: no stop handlers, plugins marked commit, commit-time instructions, and no Git warning.
 
-Experiment setup leaves the root ignore file unchanged when cache files are already covered by `lat.md/.gitignore`; Git still ignores the saved experiment choices through that existing rule.
+## Noninteractive Git setup installs commit checks
 
-## Experiment selection requires confirmation
+Without a terminal, a fresh Git project gets the commit workflow and its hook without any question being asked.
 
-Noninteractive experimental selection and canceled setup preserve existing choices, preventing accidental opt-in or opt-out without confirmation.
+## Declining the Git hook offers agent hooks
 
-## Experiment settings are local and reloadable
+Declining the hook and accepting agent hooks installs completion checks and no Git hook. A re-run offers the earlier refusal as the default answer, and accepting the hook later migrates every integration to commit checks.
 
-Experiments default off and reload independently for each project. Unknown boolean IDs survive storage, and deleting the settings resets all opt-ins.
+## Declining every hook leaves validation manual
 
-## Malformed experiment settings fail safely
+Declining both the Git hook and agent hooks keeps prompt hooks only: no stop handlers, plugins marked manual, and instructions that still ask for `lat check`.
 
-Invalid JSON, unsupported versions, and nonboolean choices report errors without overwriting local settings or silently enabling features.
+## Warns and can stop outside Git
 
-## Generated templates follow project experiments
-
-Generated instructions and Pi/OpenCode plugins follow the explicit project's persisted choices; opted-in plugins carry a workflow placeholder for init. Both sets of Markdown templates satisfy graph validation.
-
-## CLI generation honors the selected project
-
-The CLI's `--dir` option selects the saved experiment choices used by template generation, even when invoked from outside that project.
-
-## Experiments preserve unrelated agent settings
-
-Enabling and disabling experiments does not add Lat hooks to unselected agents whose existing settings contain only unrelated handlers.
-
-## Opted-in projects without Git keep task checklists
-
-Outside a Git worktree, an opted-in project still generates the stable end-of-task instructions, while its plugin templates remain the opted-in ones awaiting an injected workflow.
-
-## Experiment warns and can stop outside Git
-
-Opting in outside a Git worktree explains that Lat works best with Git and suggests `git init`. Declining to continue skips agent selection and leaves experiment choices unsaved.
-
-## Stable setup ignores missing Git
-
-Without the experiment, init outside Git prints no warning, asks nothing, installs completion hooks as before, and records no workflow.
+Outside a Git worktree, init explains that Lat works best with Git and suggests `git init` before anything else. Declining to continue writes nothing and skips agent selection.
 
 ## Completion hooks replace commit checks outside Git
 
-Continuing an opted-in setup without Git and accepting agent hooks installs Stop and stop handlers, enables Pi/OpenCode completion callbacks, and writes post-task instructions. Noninteractive runs get the same setup without being asked.
-
-## Declining agent hooks leaves validation manual
-
-Continuing without Git but declining agent hooks keeps prompt hooks only: no stop handlers or Cursor hook file, plugins marked manual, and instructions that still ask for `lat check`.
+Continuing without Git skips the Git hook question and installs completion checks, recording that the setup was made without Git. Noninteractive runs get the same setup without being asked.
 
 ## Check suggests commit checks once Git exists
 
-An opted-in project initialized without Git records its fallback workflow. Once a repository exists, `lat check` recommends rerunning init for the pre-commit hook; the warning is absent before Git exists and after init switches to commit checks.
+A project initialized without Git gets no warning from `lat check` until a repository exists; then it recommends rerunning init. The rerun installs commit checks by default and clears the warning.
+
+## Experimental flag is accepted and ignored
+
+The CLI still accepts `lat init --experimental`, runs the ordinary setup, and writes no experiment settings.
+
+## Migration preserves unrelated agent settings
+
+Init does not add Lat hooks to, or rewrite, unselected agents whose existing settings contain only unrelated handlers, whichever workflow is chosen.
+
+## Instruction templates cover both workflows
+
+Instruction templates with and without the Git hook satisfy graph validation and describe the matching validation; Pi and OpenCode templates carry a workflow placeholder for init.
+
+## CLI generation honors the selected project
+
+The CLI's `--dir` option selects the recorded workflow used by template generation, even when invoked from outside that project. Projects without a record get the default commit-check instructions.

@@ -11,13 +11,13 @@ Tests use real temporary Git repositories and invoke the source CLI, including a
 
 The Git-hook suite yields to the event loop between tests so synchronous subprocess calls do not starve Vitest's reporting messages on slower runners.
 
-## Legacy stop hooks are silent
+## Stop hooks are silent without completion checks
 
-In opted-in Git projects, Claude, Codex, and Cursor stop commands exit successfully without reading stdin or validating broken projects, so stale settings do not interrupt agents.
+For setups recorded as commit checks or manual validation, Claude, Codex, and Cursor stop commands exit successfully without reading stdin or validating broken projects, so stale settings do not interrupt agents.
 
-## Opted-in projects without Git keep stop validation
+## Stop hooks validate completion and unrecorded setups
 
-Outside a Git worktree, an opted-in project's stop commands still report check errors in each agent's format, and prompt guidance asks for a check before finishing instead of describing the Git hook.
+Setups recorded as completion checks, and earlier setups with no recorded workflow, still report check errors at stop in each agent's format.
 
 ## Prompt hooks do not expand references
 
@@ -25,7 +25,7 @@ Claude and Codex prompt hooks retain search guidance without expanding wiki link
 
 ## Codex hook setup preserves non-lat hooks
 
-Syncing Codex hooks installs the selected workflow while preserving unrelated handlers and metadata. Stable setup includes Stop validation; opted-in projects retain only prompt context.
+Syncing Codex hooks for completion checks installs prompt and Stop commands while preserving unrelated handlers and metadata; without completion checks the Lat Stop command is removed.
 
 ## Local JavaScript hook commands retain Node
 
@@ -175,13 +175,13 @@ The integration fixture nests the Lat project inside a larger worktree, verifies
 
 When `HEAD` does not exist yet, tracked diff analysis may fail but untracked `lat.md/` and supported source files still contribute their complete line counts.
 
-## Prompt guidance follows the selected workflow
+## Prompt guidance follows the recorded workflow
 
-Prompt hooks read each project's saved experiment choices and describe completion checks by default or staged commit checks when opted in.
+Prompt hooks describe commit-time validation only for setups recorded as commit checks; completion, manual, and unrecorded setups are asked for a check before finishing.
 
-## Git validation requires explicit opt-in
+## Git validation requires the commit workflow
 
-Missing or disabled project choices make the Git hook skip even broken staged graphs. Linked worktrees retain independent opt-ins despite sharing the installed launcher.
+Projects with no recorded workflow, or one other than commit checks, make the Git hook skip even broken staged graphs. Linked worktrees retain independent choices despite sharing the installed launcher.
 
 ## Staged code review requires acknowledgment
 
@@ -193,7 +193,7 @@ Suggestions ignore untracked code, unstaged edits, documentation-only changes, a
 
 ## Review reminders respect project scope
 
-Suggestions count only source changes within affected opted-in projects and outside excluded fixture subtrees. A root project’s opt-out prevents unrelated root changes from triggering reminders for an opted-in nested project.
+Suggestions count only source changes within affected projects that use commit checks and outside excluded fixture subtrees. A root project using another workflow prevents unrelated root changes from triggering reminders for a nested project.
 
 ## Review bypass preserves validation and other hooks
 

@@ -28,7 +28,7 @@ Compress the knowledge about your program domain into a **graph** — a set of i
 The `lat` CLI gives agents and humans a system to navigate and maintain the graph:
 
 - **`lat init`** — sets up popular coding agents with hooks and instructions to keep lat updated and correct
-- **`lat check`** — enforces referential consistency; agents call it automatically before finishing work
+- **`lat check`** — enforces referential consistency; a pre-commit hook runs it automatically when agents commit
 - **`lat search`** and **`lat section`** — agents use these to understand your prompts and navigate the graph instead of endless `grep` calls
 
 `lat` is a workflow that comes with tools — build pre-commit hooks and GitHub bots, run CI tasks that improve the knowledge graph in the background.
