@@ -599,6 +599,62 @@ describe('lat init embedding setup', () => {
     expect(existsSync(join(latDir(), '.cache/experiments.json'))).toBe(false);
   });
 
+  // @lat: [[tests/init#fx reuses shared integrations]]
+  it('sets up fx through AGENTS.md, the shared skill, and .mcp.json', async () => {
+    gitInit();
+    createLatDir();
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValue(['fx']);
+    selectMenu.mockResolvedValue('global');
+    // The suite itself may run inside fx; pin another agent for this case.
+    vi.stubEnv('AI_AGENT', 'codex');
+    try {
+      await initCmd(root);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      'git-pre-commit',
+    );
+    expect(existsSync(join(root, '.agents/skills/lat-md/SKILL.md'))).toBe(true);
+    expect(
+      JSON.parse(readFileSync(join(root, '.mcp.json'), 'utf8')).mcpServers.lat,
+    ).toEqual({ command: 'lat', args: ['mcp'] });
+    expect(readFileSync(join(root, '.gitignore'), 'utf8')).toContain(
+      '.mcp.json',
+    );
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
+      'Run `fx mcp approve lat` to enable it',
+    );
+    expect(gitHookInstalled()).toBe(true);
+    // fx leads the agent checklist.
+    expect(vi.mocked(checklistMenu).mock.calls[0][0][0]).toEqual({
+      label: 'fx',
+      value: 'fx',
+    });
+    // No agent-specific directories or hook files are needed.
+    for (const path of ['.fx', '.fx.json', '.claude', '.codex'])
+      expect(existsSync(join(root, path))).toBe(false);
+  });
+
+  // @lat: [[tests/init#fx approval hint follows the session]]
+  it('points at the slash command when init runs inside fx', async () => {
+    gitInit();
+    createLatDir();
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValue(['fx']);
+    selectMenu.mockResolvedValue('global');
+    vi.stubEnv('AI_AGENT', 'fx');
+    try {
+      await initCmd(root);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    expect(output).toContain('Run `/mcp approve lat` in this fx session');
+    expect(output).not.toContain('fx mcp approve lat');
+  });
+
   // @lat: [[tests/init#Migration preserves unrelated agent settings]]
   it('does not install Lat into unselected agents with unrelated settings', async () => {
     gitInit();

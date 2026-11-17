@@ -148,3 +148,13 @@ Instruction templates with and without the Git hook satisfy graph validation and
 ## CLI generation honors the selected project
 
 The CLI's `--dir` option selects the recorded workflow used by template generation, even when invoked from outside that project. Projects without a record get the default commit-check instructions.
+
+## fx reuses shared integrations
+
+Selecting fx writes shared instructions, the cross-agent skill, and an ignored root `.mcp.json` entry, prints the approval command fx requires, and creates no fx-specific files or other agents' settings.
+
+The same run checks that fx is the first entry offered in the agent checklist.
+
+## fx approval hint follows the session
+
+When init runs inside an fx session, the approval hint names only the slash command for that session instead of the terminal command.

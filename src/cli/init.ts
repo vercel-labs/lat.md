@@ -1,3 +1,4 @@
+import { determineAgent } from '@vercel/detect-agent';
 import { installGitHook, isGitWorktree } from './git-hook-install.js';
 import { agentInvocation, resolveLatInvocation } from './agent-invocation.js';
 import { projectWritePath, writeProjectFile } from '@lat.md/core/project-write';
@@ -959,6 +960,69 @@ async function setupPi(
   ensureGitignored(root, '.pi');
 }
 
+async function setupFx(
+  root: string,
+  latDir: string,
+  hashes: Record<string, string>,
+  ask: (message: string) => Promise<boolean>,
+  style: LatCommandStyle,
+  workflow: Workflow,
+): Promise<void> {
+  // AGENTS.md — fx reads this natively
+  // (already created in the shared step)
+
+  // fx has no lifecycle hooks, so only commit checks can be enforced for it.
+  if (workflow === 'completion') {
+    console.log('');
+    console.log(
+      styleText(
+        'dim',
+        '  fx has no completion hooks; it is asked to run lat check after each task.',
+      ),
+    );
+  }
+
+  // .agents/skills/lat-md/SKILL.md — fx discovers skills there
+  await writeAgentsSkill(root, latDir, hashes, ask);
+
+  // .mcp.json at project root — the format fx shares with Claude Code
+  console.log('');
+  console.log(
+    styleText(
+      'dim',
+      '  Agents can call `lat` from the command line, but an MCP server gives lat',
+    ),
+  );
+  console.log(
+    styleText(
+      'dim',
+      '  more visibility and makes agents more likely to use it proactively.',
+    ),
+  );
+
+  const mcpPath = join(root, '.mcp.json');
+  if (hasMcpServer(root, mcpPath, 'mcpServers')) {
+    console.log(styleText('green', '  MCP server') + ' already configured');
+  } else {
+    addMcpServer(root, mcpPath, 'mcpServers', style);
+    console.log(
+      styleText('green', '  MCP server') + ' registered in .mcp.json',
+    );
+  }
+  // fx starts project servers only after explicit approval. Inside an fx
+  // session the slash command is at hand; elsewhere offer the terminal form.
+  const { isAgent, agent } = await determineAgent();
+  const approve = (command: string) => styleText('cyan', '`' + command + '`');
+  console.log(
+    isAgent && agent.name === 'fx'
+      ? `  Run ${approve('/mcp approve lat')} in this fx session to enable it.`
+      : `  Run ${approve('fx mcp approve lat')} to enable it, or ${approve('/mcp approve lat')} inside fx.`,
+  );
+
+  // Ensure .mcp.json is gitignored (it contains local absolute paths)
+  ensureGitignored(root, '.mcp.json');
+}
+
 async function setupOpenCode(
   root: string,
   latDir: string,
@@ -1308,6 +1372,7 @@ function printNextSteps(selectedAgents: string[]): void {
     pi: 'Pi',
     opencode: 'OpenCode',
     codex: 'Codex',
+    fx: 'fx',
   };
 
   if (!hasClaudeCode && ideAgents.length === 0) return;
@@ -1508,6 +1573,7 @@ export async function initCmd(targetDir?: string): Promise<void> {
     console.log('');
 
     const allAgents = [
+      { label: 'fx', value: 'fx' },
       { label: 'Claude Code', value: 'claude' },
       { label: 'Pi', value: 'pi' },
       { label: 'Cursor', value: 'cursor' },
@@ -1528,6 +1594,7 @@ export async function initCmd(targetDir?: string): Promise<void> {
     const useCopilot = selectedAgents.includes('copilot');
     const useOpenCode = selectedAgents.includes('opencode');
     const useCodex = selectedAgents.includes('codex');
+    const useFx = selectedAgents.includes('fx');
 
     const anySelected = selectedAgents.length > 0;
     const needsLatCommand =
@@ -1536,7 +1603,8 @@ export async function initCmd(targetDir?: string): Promise<void> {
       useCursor ||
       useCopilot ||
       useOpenCode ||
-      useCodex;
+      useCodex ||
+      useFx;
 
     // Step 5: How should agents run lat?
     let commandStyle: LatCommandStyle = 'local';
@@ -1695,6 +1763,12 @@ export async function initCmd(targetDir?: string): Promise<void> {
     await setupAgentsMd(root, latDir, template, fileHashes, ask);
 
     // Step 6: Per-agent setup
+    if (useFx) {
+      console.log('');
+      console.log(styleText('bold', 'Setting up fx...'));
+      await setupFx(root, latDir, fileHashes, ask, commandStyle, workflow);
+    }
+
     if (useClaudeCode) {
       console.log('');
       console.log(styleText('bold', 'Setting up Claude Code...'));

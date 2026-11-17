@@ -16,7 +16,7 @@ The integration combines instructions, tools, and lifecycle hooks according to w
 - **Prompt hooks:** Supported integrations supply workflow reminders and relevant knowledge from an existing search index when a task starts.
 - **Commit checks:** A Git pre-commit hook validates the graph when an agent commits and flags substantial code changes that may need documentation updates.
 
-The exact integration varies. Claude Code and Codex receive prompt-time context through hooks; Cursor uses rules for initial guidance. Pi and OpenCode integrate through an extension or plugin. Copilot uses instructions and MCP tools. Commit checks apply to every agent.
+The exact integration varies. Claude Code and Codex receive prompt-time context through hooks; Cursor uses rules for initial guidance. Pi and OpenCode integrate through an extension or plugin. Copilot and fx use instructions and MCP tools. Commit checks apply to every agent.
 
 Follow the activation instructions printed by `lat init` so the installed integration can run. You can rerun setup to refresh it after upgrading Lat. See [[cli#init|agent setup details]] for the configuration installed for each agent.
 
