@@ -42,12 +42,42 @@ function run(args: string[], cwd?: string): string {
   });
 }
 
-function tryRun(args: string[]): string {
-  try {
-    return run(args);
-  } catch {
-    return "";
-  }
+/** A first search may build the whole index, so it gets longer than other tools. */
+const SEARCH_TIMEOUT_MS = 120_000;
+
+/**
+ * Run a lat query without blocking the agent. Failures reject with the CLI's
+ * own message, so a timeout or a rejected key is never reported as "no results".
+ */
+function query(
+  args: string[],
+  signal?: AbortSignal,
+  timeout = 30_000,
+): Promise<string> {
+  const { execFile } = require("child_process") as typeof import("child_process");
+  return new Promise((resolve, reject) => {
+    execFile(
+      LAT.command,
+      [...LAT.args, ...args],
+      { cwd: process.cwd(), encoding: "utf-8", timeout, signal },
+      (error, stdout, stderr) => {
+        if (!error) return resolve(stdout);
+        const detail = (stderr || stdout || "").trim();
+        if (signal?.aborted) return reject(new Error(`lat ${args[0]} was cancelled.`));
+        if (!error.killed) return reject(new Error(detail || error.message));
+        const hint =
+          args[0] === "search"
+            ? " The search index may still be building, which restarts on every attempt. Run `lat search` in a shell to finish building it, then retry."
+            : "";
+        reject(
+          new Error(
+            `lat ${args[0]} timed out after ${timeout / 1000}s.${hint}` +
+              (detail ? `\n${detail}` : ""),
+          ),
+        );
+      },
+    );
+  });
 }
 
 export default function (pi: ExtensionAPI) {
@@ -68,10 +98,10 @@ export default function (pi: ExtensionAPI) {
         Type.Number({ description: "Max results (default 5)", default: 5 }),
       ),
     }),
-    async execute(_id, params) {
+    async execute(_id, params, signal) {
       const args = ["search", params.query];
       if (params.limit) args.push("--limit", String(params.limit));
-      const output = tryRun(args);
+      const output = await query(args, signal, SEARCH_TIMEOUT_MS);
       return {
         content: [{ type: "text", text: output || "No results found." }],
       };
@@ -98,8 +128,8 @@ export default function (pi: ExtensionAPI) {
           'Section ID or name (e.g. "cli#init", "Tests#User login")',
       }),
     }),
-    async execute(_id, params) {
-      const output = tryRun(["section", params.query]);
+    async execute(_id, params, signal) {
+      const output = await query(["section", params.query], signal);
       return {
         content: [
           { type: "text", text: output || "Section not found." },
@@ -125,8 +155,8 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({
       query: Type.String({ description: "Section name to locate" }),
     }),
-    async execute(_id, params) {
-      const output = tryRun(["locate", params.query]);
+    async execute(_id, params, signal) {
+      const output = await query(["locate", params.query], signal);
       return {
         content: [
           { type: "text", text: output || "No sections matching query." },
@@ -178,8 +208,8 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({
       text: Type.String({ description: "Text containing [[refs]] to expand" }),
     }),
-    async execute(_id, params) {
-      const output = tryRun(["expand", params.text]);
+    async execute(_id, params, signal) {
+      const output = await query(["expand", params.text], signal);
       return {
         content: [{ type: "text", text: output || params.text }],
       };
@@ -204,8 +234,8 @@ export default function (pi: ExtensionAPI) {
         description: 'Section ID (e.g. "cli#init", "file#Section")',
       }),
     }),
-    async execute(_id, params) {
-      const output = tryRun(["refs", params.query]);
+    async execute(_id, params, signal) {
+      const output = await query(["refs", params.query], signal);
       return {
         content: [{ type: "text", text: output || "No references found." }],
       };
