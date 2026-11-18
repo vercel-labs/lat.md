@@ -108,6 +108,8 @@ export async function ensureSectionsSchema(
     'CREATE INDEX IF NOT EXISTS chunks_section ON chunks(section_id)',
     'CREATE TABLE IF NOT EXISTS lexical_chunks (id INTEGER PRIMARY KEY, body TEXT NOT NULL, heading TEXT NOT NULL, path TEXT NOT NULL)',
     'CREATE TABLE IF NOT EXISTS identifiers (token TEXT NOT NULL, chunk_id INTEGER NOT NULL, PRIMARY KEY(token,chunk_id))',
+    // One row per indexed Markdown file; a matching hash lets indexing skip chunking it.
+    'CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, hash TEXT NOT NULL)',
   ])
     await db.execute(sql);
   const oldIndex = (
@@ -121,6 +123,7 @@ export async function ensureSectionsSchema(
 }
 export async function dropSections(db: SearchDb): Promise<void> {
   for (const name of [
+    'files',
     'identifiers',
     'lexical_chunks',
     'chunks',

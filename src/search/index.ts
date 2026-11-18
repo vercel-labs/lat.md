@@ -7,6 +7,8 @@ import {
   type MarkdownProjectAnalysis,
 } from '@lat.md/core/project-analysis';
 import type { Embedder } from './embedder.js';
+import type { MarkdownFileAnalysis } from '@lat.md/core/markdown-analysis';
+import type { Section } from '@lat.md/core/lattice-model';
 import { chunkFile, digest, embeddingFingerprint } from './chunks.js';
 
 export function projectFingerprint(project: MarkdownProjectAnalysis): string {
@@ -16,6 +18,27 @@ export function projectFingerprint(project: MarkdownProjectAnalysis): string {
         .map((f) => `${f.projectPath}\0${digest(f.content)}`)
         .sort()
         .join('\n'),
+  );
+}
+
+/**
+ * Identity of everything one file's chunk layout depends on: its bytes, parser
+ * output, section boundaries, and the embedding fingerprint that sets budgets.
+ */
+function fileChunkHash(
+  file: MarkdownFileAnalysis,
+  sections: readonly Section[],
+  fingerprint: string,
+): string {
+  return digest(
+    JSON.stringify([
+      PARSER_CACHE_VERSION,
+      fingerprint,
+      file.projectPath,
+      file.path,
+      digest(file.content),
+      sections.map((s) => ({ ...s, children: undefined })),
+    ]),
   );
 }
 
@@ -65,17 +88,52 @@ export async function indexSections(
   const files = new Map(
     [...project.files.values()].map((f) => [f.projectPath, f]),
   );
-  const passages = [...byFile].flatMap(([path, sections]) => {
-    const file = files.get(path);
-    if (!file) throw new Error(`Missing analyzed file: ${path}`);
-    return chunkFile(file, sections, embedder);
-  });
   const existing = new Map<string, string>(
     (await db.execute('SELECT id,content_hash FROM sections')).rows.map((r) => [
       r.id,
       r.content_hash,
     ]),
   );
+  const storedFiles = new Map<string, string>(
+    (await db.execute('SELECT path,hash FROM files')).rows.map((r) => [
+      r.path,
+      r.hash,
+    ]),
+  );
+  const fileHashes = new Map<string, string>();
+  const reused = new Set<string>();
+  const passages = [...byFile].flatMap(([path, sections]) => {
+    const file = files.get(path);
+    if (!file) throw new Error(`Missing analyzed file: ${path}`);
+    const hash = fileChunkHash(file, sections, fingerprint);
+    fileHashes.set(path, hash);
+    // Chunking tokenizes every block, so an unchanged file keeps its indexed layout.
+    if (
+      storedFiles.get(path) === hash &&
+      sections.every((s) => existing.has(s.id))
+    ) {
+      for (const s of sections) reused.add(s.id);
+      return [];
+    }
+    return chunkFile(file, sections, embedder);
+  });
+  const staleFiles = [
+    ...[...storedFiles.keys()].filter((path) => !fileHashes.has(path)),
+    ...[...fileHashes]
+      .filter(([path, hash]) => storedFiles.get(path) !== hash)
+      .map(([path]) => path),
+  ];
+  const writeFileHashes = async () => {
+    for (const path of staleFiles) {
+      await db.execute({ sql: 'DELETE FROM files WHERE path=?', args: [path] });
+      const hash = fileHashes.get(path);
+      if (hash)
+        await db.execute({
+          sql: 'INSERT INTO files VALUES (?,?)',
+          args: [path, hash],
+        });
+    }
+  };
   const sectionHashes = new Map<string, string>();
   const owned = new Map<string, typeof passages>();
   for (const p of passages) {
@@ -86,12 +144,14 @@ export async function indexSections(
   for (const s of project.sections) {
     sectionHashes.set(
       s.id,
-      digest(
-        JSON.stringify([
-          { ...s, children: undefined },
-          (owned.get(s.id) ?? []).map((p) => [p.inputHash, p.spans]),
-        ]),
-      ),
+      reused.has(s.id)
+        ? existing.get(s.id)!
+        : digest(
+            JSON.stringify([
+              { ...s, children: undefined },
+              (owned.get(s.id) ?? []).map((p) => [p.inputHash, p.spans]),
+            ]),
+          ),
     );
   }
   const changed = new Set(
@@ -110,6 +170,7 @@ export async function indexSections(
     // Lexical maintenance can repair old generations without embedding work.
     await db.execute('BEGIN');
     try {
+      await writeFileHashes();
       await synchronizeLexical(db);
       await db.execute({
         sql: "UPDATE meta SET value=? WHERE key='project_hash' AND value<>?",
@@ -221,6 +282,7 @@ export async function indexSections(
     await db.execute(
       'DELETE FROM embeddings WHERE hash NOT IN (SELECT input_hash FROM chunks)',
     );
+    await writeFileHashes();
     await db.execute({
       sql: 'INSERT OR REPLACE INTO meta VALUES (?,?)',
       args: ['fingerprint', fingerprint],
