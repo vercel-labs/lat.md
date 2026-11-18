@@ -9,6 +9,7 @@ import {
   readdirSync,
   statSync,
   existsSync,
+  rmSync,
 } from 'node:fs';
 import * as fsPromises from 'node:fs/promises';
 import { cp, rm } from 'node:fs/promises';
@@ -492,6 +493,57 @@ describe('hybrid search', () => {
       const p = (await searchSections(f.db, 'API_TOKEN', engine))[0]
         .evidence[0];
       expect(p.spans[0].startLine).toBe(9);
+    } finally {
+      await f.db.close();
+    }
+  });
+  // @lat: [[tests/search#Hybrid Retrieval#Chunks only changed files]]
+  it('skips chunking files whose content is unchanged', async () => {
+    const f = await indexed('# Guide\n\nneedle body');
+    try {
+      writeFileSync(join(f.lat, 'other.md'), '# Other\n\nuntouched words');
+      const counted: string[] = [];
+      const engine = {
+        ...simple,
+        countTokens: (t: string) => (counted.push(t), simple.countTokens(t)),
+      };
+      const paths = async () =>
+        (await f.db.execute('SELECT path FROM files ORDER BY path')).rows.map(
+          (r) => r.path,
+        );
+      // Only the new file is tokenized; the indexed one keeps its layout.
+      expect((await indexSections(f.lat, f.db, engine)).added).toBe(1);
+      expect(counted.some((t) => t.includes('untouched'))).toBe(true);
+      expect(counted.some((t) => t.includes('needle'))).toBe(false);
+      expect(await paths()).toEqual(['lat.md/guide.md', 'lat.md/other.md']);
+
+      counted.length = 0;
+      writeFileSync(join(f.lat, 'guide.md'), '# Guide\n\nneedle body edited');
+      expect(await indexSections(f.lat, f.db, engine)).toMatchObject({
+        updated: 1,
+        unchanged: 1,
+      });
+      expect(counted.some((t) => t.includes('edited'))).toBe(true);
+      expect(counted.some((t) => t.includes('untouched'))).toBe(false);
+      // Skipped files stay searchable alongside the re-chunked one.
+      expect((await searchSections(f.db, 'untouched', engine))[0].id).toBe(
+        'lat.md/other#Other',
+      );
+      expect((await searchSections(f.db, 'edited', engine))[0].id).toBe(
+        'lat.md/guide#Guide',
+      );
+
+      // An index without file hashes, as written by older versions, chunks everything once.
+      await f.db.execute('DELETE FROM files');
+      counted.length = 0;
+      writeFileSync(join(f.lat, 'guide.md'), '# Guide\n\nneedle body again');
+      await indexSections(f.lat, f.db, engine);
+      expect(counted.some((t) => t.includes('untouched'))).toBe(true);
+      expect(await paths()).toEqual(['lat.md/guide.md', 'lat.md/other.md']);
+
+      rmSync(join(f.lat, 'other.md'));
+      expect((await indexSections(f.lat, f.db, engine)).removed).toBe(1);
+      expect(await paths()).toEqual(['lat.md/guide.md']);
     } finally {
       await f.db.close();
     }
