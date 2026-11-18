@@ -136,6 +136,10 @@ Repeated passage owners collapse before ranks are assigned, and equal channel sc
 
 Adding blank lines changes source locations without re-embedding unchanged contextual inputs.
 
+### Chunks only changed files
+
+After an edit, only the changed file is tokenized and chunked; unchanged files keep their indexed passages and stay searchable. An index without stored file hashes chunks every file once, and removed files drop their hash.
+
 ### Keeps incremental FTS scores equal to fresh indexes
 
 Section replacements, deletions, and deleting all sections produce the same lexical scores and hybrid ranks as fresh indexing, while line-only edits reuse every embedding.

@@ -2,6 +2,14 @@
 
 Features, behavior changes, and bug fixes for each Lat release, newest first. Patch releases have their own entries; unreleased changes describe functionality already implemented on this branch.
 
+## 0.13.11
+
+`lat search` updates its index much faster after edits to a large `lat.md/`.
+
+- Updating the index used to split every Markdown file into passages again whenever any file changed. That took several seconds on big graphs, even though only the edited passages were re-embedded.
+- Lat now remembers a hash of each indexed file and re-splits only the files that changed. On a 270-file graph, the index update after a one-file edit dropped from about 4.3s to 0.4s.
+- Existing indexes pick this up automatically; the first update after upgrading still processes every file once.
+
 ## 0.13.10
 
 Pi and OpenCode search tools report failures and slow index builds instead of returning an empty result.
