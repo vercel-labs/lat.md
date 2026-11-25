@@ -33,7 +33,7 @@ Documents use root-relative extensionless routes, with only the configured base 
 
 The build copies each vault-local resource reached from a rendered document once, preserves its vault-relative path, and rewrites its URL under the configured deployment base.
 
-The static client keeps Markdown and wiki navigation, backlinks, validation, source views, TOCs, and graph inspection. It does not expose Git, search, or the runtime-only section command, perform live API requests, or subscribe to project changes.
+The static client keeps Markdown and wiki navigation, backlinks, validation, source views, TOCs, and graph inspection. It does not expose search or the runtime-only section command, perform live API requests, or subscribe to project changes. Git state appears only in builds made with `--git-diff <ref>`.
 
 Generated shells encode their base path, optional search endpoint, manifest, and initial route response as inert metadata rather than inline JavaScript, so static routing initializes under the same strict Content Security Policy as the portable server. Initial documents render without fetching JSON.
 
@@ -69,7 +69,7 @@ The entrypoint passes literal module-relative manifest and index URLs as real ru
 
 Its static fallback preserves configured base paths, extensionless UI routes, and exact raw `.md` files on non-CDN hosts. `/` renders the configured entry document directly; `index.html` is only the physical file, and its filename route redirects home.
 
-The static client exposes Search only when the build advertises an endpoint. Editing, Git state, event streams, repository access, and the runtime section command remain disabled.
+The static client exposes Search only when the build advertises an endpoint. Editing, event streams, repository access, and the runtime section command remain disabled. Git state follows the same `--git-diff <ref>` opt-in as static builds.
 
 ### Runs the generated Node artifact end to end
 
@@ -362,6 +362,20 @@ Startup reads Git once, and a later vault change refreshes that state. Polling a
 The top Git toggle hides or reveals both sidebar markers and inline diffs without changing the underlying files.
 
 The Git button retains an orange notification dot whenever changes exist, independent of the toggle state.
+
+## Shows live Git diffs against a base
+
+`lat ui --git-diff <ref>` compares the working tree with the merge base of `<ref>` and HEAD instead of HEAD alone.
+
+The base is re-resolved whenever Git state refreshes, so moving `<ref>` or checking out another branch updates the diff without a restart. An unresolvable ref stops startup with a plain error; combining the flag with `--no-git` is rejected.
+
+## Exports Git diffs against a base
+
+`lat ui build static --git-diff <ref>` freezes the vault's changes since the merge base of `<ref>` and HEAD, including uncommitted edits, into the export.
+
+Changes committed only on `<ref>` after that merge base are excluded, matching a pull request's view. The manifest carries file states, documents carry diff trees with links rewritten under the deployment base, and graph nodes keep their Git status.
+
+Builds without the flag export no Git state. An unresolvable ref fails the build before any output appears.
 
 ## Keeps rendered list diffs distinct
 

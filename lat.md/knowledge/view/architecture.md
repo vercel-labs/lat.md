@@ -82,7 +82,13 @@ The manifest stores the selected logo text with the document index so the static
 
 Each document route embeds the snapshot manifest and its own document response as inert JSON. Its first render therefore has no manifest-to-document request waterfall; navigation intent prefetches other immutable document payloads before a client-side transition.
 
-The browser reads the snapshot manifest instead of `/api/*`, never opens an event stream, and hides Git, search, and runtime command controls. Documents contain no Git diff projection, while graph nodes contain no Git status.
+The browser reads the snapshot manifest instead of `/api/*`, never opens an event stream, and hides search and runtime command controls.
+
+Git state is opt-in through `--git-diff <ref>`, which passes [[src/view/static-build.ts#StaticViewBuildOptions|gitBase]] to the view store with polling disabled. The export then keeps the index's Git files, each document's diff tree, and graph Git status; without it, all three are absent and the client hides its Git toggle.
+
+Diff trees get the same deployment-base link rewriting as ordinary trees, but only ordinary trees drive resource, source, and external crawling. Links that exist only in deleted text therefore never add files to the export.
+
+The server build passes its options through to the static build, so `lat ui build server --git-diff <ref>` behaves identically.
 
 `--base /path/` prefixes routes, assets, and data and nests the physical payload under the same path. `/` is the default; `--base docs/` normalizes to `/docs/`, without adding another document prefix.
 
@@ -159,6 +165,10 @@ Markdown generations also dirty semantic search. The next query shares one incre
 ## Git working tree
 
 When the vault belongs to a Git worktree, the server caches its [[src/view/git.ts#readViewGitSnapshot|HEAD comparison]] so Git subprocesses never run during document requests.
+
+`--git-diff <ref>` on `lat ui` and both build commands instead compares with [[src/view/git.ts#resolveViewGitBase|the merge base of a ref and HEAD]]. Every snapshot read resolves that base again, so polling follows moved refs and checkouts. File states then come from `git diff --name-status` against that commit plus untracked files, since `git status` only describes HEAD.
+
+An unusable base raises [[src/view/git.ts#ViewGitBaseError]] at startup, which `lat ui` reports as a plain error and builds treat as fatal rather than silently omitting the diff. Later refresh failures are logged and keep the previous snapshot.
 
 The initial snapshot runs Git once, using argument-array subprocesses without a shell. A debounced change anywhere inside `lat.md/` refreshes the full-vault diff together with porcelain status for untracked files; unrelated project changes reuse the cache.
 

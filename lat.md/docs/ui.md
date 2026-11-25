@@ -12,6 +12,8 @@ lat ui
 
 `lat ui run` is equivalent. The server listens locally; add `--no-git` if you want to hide Git changes.
 
+Git changes normally cover uncommitted edits. Add `--git-diff <ref>` to show everything since the merge base of `<ref>` and `HEAD`, as a pull request would, for example `lat ui --git-diff main`. The comparison follows the ref as it moves.
+
 Use `lat ui --host 0.0.0.0` to listen on all IPv4 interfaces, or pass a specific address with `--host <address>`. The default is `127.0.0.1`. Choose a port with `--port <number>`; other machines connect using the server machine's address and that port.
 
 Non-loopback addresses and hostnames enable read-only sharing: public vault Markdown and explicitly linked public source files, project Markdown, and resources are available. In Git projects, add those files to Git first; if no vault Markdown is shareable, `lat ui` stops with an error saying so. Hidden, ignored, untracked, and unlinked files remain private, including local configuration and source files mentioned only by backlinks. Linked external sources use pinned content instead of local overrides.
@@ -26,7 +28,7 @@ You can edit local Markdown and save explicitly; conflicting changes are reporte
 
 Choose a static site if you only need browsing, or a server build if readers also need semantic search.
 
-Published sites preserve document links, code previews, external content, and graph navigation. They do not expose editing, Git state, or live updates. Rebuild to publish later changes.
+Published sites preserve document links, code previews, external content, and graph navigation. They do not expose editing or live updates. Rebuild to publish later changes.
 
 ### Static hosting
 
@@ -37,6 +39,14 @@ lat ui build static
 ```
 
 Upload the contents of `.lat-build/static/` to your static host. This build does not include semantic search.
+
+To publish a preview of a branch's documentation changes, add `--git-diff <ref>`. The site shows changes since the merge base of `<ref>` and `HEAD` the same way the local UI does, with the same Git toggle. Use `HEAD` to show only uncommitted edits. Server builds accept the same flag.
+
+```bash
+lat ui build static --git-diff origin/main
+```
+
+In CI, fetch enough history for the merge base to exist, for example with `fetch-depth: 0`.
 
 ### Node.js hosting
 
