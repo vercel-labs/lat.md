@@ -70,6 +70,7 @@ function runHook(
     stopHookActive?: boolean;
     fakeBinDir?: string;
     prompt?: string;
+    dir?: string;
   } = {},
 ): { stdout: string; stderr: string; exitCode: number } {
   const stdinJson = JSON.stringify({
@@ -98,6 +99,7 @@ function runHook(
         join(import.meta.dirname, '../node_modules/tsx/dist/loader.mjs'),
       ).href,
       cliPath,
+      ...(opts.dir ? ['--dir', opts.dir] : []),
       'hook',
       agent,
       event,
@@ -551,3 +553,33 @@ it.each([false, true])(
     }
   },
 );
+
+// @lat: [[tests/hook#Selects a workspace member from the Git root]]
+it('uses the selected member for stop validation and prompt guidance', () => {
+  const root = mkdtempSync(join(tmpdir(), 'lat-workspace-hook-'));
+  try {
+    runGit(root, ['-c', 'init.templateDir=', 'init', '--quiet']);
+    const api = join('packages', 'api');
+    const web = join('packages', 'web');
+    cpSync(broken, join(root, api), { recursive: true });
+    cpSync(broken, join(root, web), { recursive: true });
+    writeExperiments(join(root, web), { 'commit-hooks': true });
+
+    const apiStop = runHook('codex', 'Stop', root, { dir: api });
+    expect(apiStop.exitCode).toBe(0);
+    expect(JSON.parse(apiStop.stdout).reason).toContain(api);
+    expect(JSON.parse(apiStop.stdout).reason).toContain('lat check');
+    const webStop = runHook('codex', 'Stop', root, { dir: web });
+    expect(webStop.exitCode).toBe(0);
+    expect(webStop.stdout + webStop.stderr).toBe('');
+
+    const prompt = runHook('codex', 'UserPromptSubmit', root, { dir: web });
+    expect(prompt.exitCode).toBe(0);
+    const context = JSON.parse(prompt.stdout).hookSpecificOutput
+      .additionalContext;
+    expect(context).toContain(web);
+    expect(context).toContain('git-pre-commit');
+  } finally {
+    rmDirBestEffort(root);
+  }
+});

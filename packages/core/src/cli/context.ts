@@ -31,6 +31,9 @@ export function resolveContext(opts: {
   const latDir = findLatticeDir(opts.dir) ?? '';
   if (!latDir) {
     console.error(styleText('red', 'No lat.md directory found'));
+    console.error(
+      styleText('dim', 'Pass `--dir <member>` to select a workspace member.'),
+    );
     console.error(styleText('dim', 'Run `lat init` to create one.'));
     process.exit(1);
   }

@@ -85,7 +85,7 @@ export function createCli({
       'Anchor source code to high-level concepts defined in markdown',
     )
     .version(version)
-    .option('--dir <path>', 'project root to look for lat.md in (default: cwd)')
+    .option('--dir <path>', 'start directory for finding lat.md (default: cwd)')
     .option('--no-color', 'disable color output')
     .option('--verbose', 'show deprecation warnings and extra diagnostics');
 

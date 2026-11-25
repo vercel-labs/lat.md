@@ -11,6 +11,10 @@ Tests use real temporary Git repositories and invoke the source CLI, including a
 
 The Git-hook suite yields to the event loop between tests so synchronous subprocess calls do not starve Vitest's reporting messages on slower runners.
 
+## Selects a workspace member from the Git root
+
+Passing `--dir` to lifecycle hooks selects the member's validation and prompt guidance. Two members with different experiment choices produce different stop behavior even when the hooks run from the same directory.
+
 ## Legacy stop hooks are silent
 
 In opted-in Git projects, Claude, Codex, and Cursor stop commands exit successfully without reading stdin or validating broken projects, so stale settings do not interrupt agents.

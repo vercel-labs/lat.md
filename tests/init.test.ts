@@ -829,6 +829,102 @@ describe('lat init embedding setup', () => {
     expect(readFileSync(target, 'utf8')).toContain('%% lat:begin %%');
   });
 
+  // @lat: [[tests/init#Workspace members#Installs shared member guidance once]]
+  it('adds shared guidance while keeping agent setup and ignore rules member-local', async () => {
+    const git = (args: string[]) => {
+      const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+    };
+    git(['-c', 'init.templateDir=', 'init', '--quiet']);
+    const api = join(root, 'packages', 'api');
+    const web = join(root, 'packages', 'web');
+    for (const member of [api, web]) {
+      mkdirSync(join(member, 'lat.md'), { recursive: true });
+    }
+    mkdirSync(join(web, '.codex'));
+    writeFileSync(join(web, '.codex', 'README.md'), 'Tracked content\n');
+    git(['add', '-f', '--', 'packages/web/.codex/README.md']);
+
+    const instructions = join(root, 'AGENTS.md');
+    const original = '# Existing instructions\n\nKeep this text.\n';
+    writeFileSync(instructions, original);
+    await initCmd(api);
+    expect(readFileSync(instructions, 'utf8')).toBe(original);
+    expect(readFileSync(join(api, '.gitignore'), 'utf8')).toContain(
+      '.lat-build',
+    );
+
+    setInteractive(true);
+    vi.mocked(checklistMenu).mockResolvedValue(['codex']);
+    selectMenu.mockResolvedValue('global');
+    await Promise.all([initCmd(api), initCmd(web)]);
+    const shared = readFileSync(instructions, 'utf8');
+    expect(shared.startsWith(original)).toBe(true);
+    expect(shared.match(/%% lat:members:begin %%/g)).toHaveLength(1);
+    expect(shared).toContain('lat --dir packages/api search');
+    expect(shared).toContain('lat --dir packages/api check');
+    expect(existsSync(join(root, '.codex'))).toBe(false);
+    expect(existsSync(join(root, 'lat.md'))).toBe(false);
+    expect(existsSync(join(root, '.gitignore'))).toBe(false);
+    for (const member of [api, web]) {
+      expect(readFileSync(join(member, 'AGENTS.md'), 'utf8')).toContain(
+        '%% lat:begin %%',
+      );
+      expect(existsSync(join(member, '.codex', 'hooks.json'))).toBe(true);
+    }
+    expect(readFileSync(join(api, '.gitignore'), 'utf8')).toContain('.codex');
+    expect(readFileSync(join(web, '.gitignore'), 'utf8')).not.toContain(
+      '.codex',
+    );
+
+    const edited = shared.replace('Git root', 'repository root');
+    writeFileSync(instructions, edited);
+    await initCmd(api);
+    expect(readFileSync(instructions, 'utf8')).toBe(edited);
+
+    createLatDir();
+    await initCmd(root);
+    const withRootVault = readFileSync(instructions, 'utf8');
+    expect(withRootVault.startsWith(edited)).toBe(true);
+    expect(withRootVault).toContain('%% lat:begin %%');
+    await initCmd(web);
+    expect(readFileSync(instructions, 'utf8')).toBe(withRootVault);
+  });
+
+  // @lat: [[tests/init#Workspace members#Skips unsafe root instruction destinations]]
+  it('finishes member setup when the root instructions escape the worktree', async () => {
+    const git = spawnSync(
+      'git',
+      ['-c', 'init.templateDir=', 'init', '--quiet'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+      },
+    );
+    expect(git.status, git.stderr).toBe(0);
+    const member = join(root, 'packages', 'api');
+    mkdirSync(join(member, 'lat.md'), { recursive: true });
+    const outside = mkdtempSync(join(tmpdir(), 'lat-workspace-instructions-'));
+    try {
+      const target = join(outside, 'instructions.md');
+      writeFileSync(target, 'Outside the worktree.\n');
+      symlinkSync(target, join(root, 'AGENTS.md'));
+      setInteractive(true);
+      vi.mocked(checklistMenu).mockResolvedValue(['codex']);
+      selectMenu.mockResolvedValue('global');
+      await initCmd(member);
+
+      expect(readFileSync(target, 'utf8')).toBe('Outside the worktree.\n');
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('Could not update Git-root instructions'),
+      );
+      expect(readInitVersion(join(member, 'lat.md'))).toBe(INIT_VERSION);
+      expect(existsSync(join(member, 'AGENTS.md'))).toBe(true);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   // @lat: [[init#Embedding setup#Fresh init pins local embeddings]]
   it('pins local embeddings before agent selection on a fresh init', () => {
     const result = runInit('sk-test');

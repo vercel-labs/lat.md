@@ -43,12 +43,12 @@ The action version controls the installer and launcher. Pinning the action to a 
 
 ### Check a subdirectory
 
-Use `working-directory` when your Lat project lives below the repository root, and enable `profile` to investigate slow checks.
+Use `working-directory` to select a Lat project below the Git root. For a workspace with several vaults, run the action once per member, such as in a job matrix. Enable `profile` to investigate slow checks.
 
 ```yaml
 - uses: vercel-labs/lat.md@check-v1
   with:
-    working-directory: docs/project
+    working-directory: packages/api
     profile: 'true'
 ```
 

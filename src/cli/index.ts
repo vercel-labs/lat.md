@@ -259,7 +259,7 @@ program
   .argument('[event]', 'agent event (UserPromptSubmit, Stop, or stop)')
   .action(async (agent: string, event?: string) => {
     const { hookCmd } = await import('./hook.js');
-    await hookCmd(agent, event);
+    await hookCmd(agent, event, program.opts().dir);
   });
 
 program
@@ -267,7 +267,7 @@ program
   .description('Start the MCP server (stdio transport)')
   .action(async () => {
     const { startMcpServer } = await import('../mcp/server.js');
-    await startMcpServer();
+    await startMcpServer(program.opts().dir);
   });
 
 await program.parseAsync(args, { from: 'user' });

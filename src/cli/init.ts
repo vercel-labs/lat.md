@@ -6,10 +6,15 @@ import {
   writeExperiments,
 } from './experiments.js';
 import { agentInvocation, resolveLatInvocation } from './agent-invocation.js';
+import {
+  findInitWorktree,
+  withWorktreeAgentsLock,
+  writeWorkspaceInstructions,
+} from './workspace-init.js';
 import { projectWritePath, writeProjectFile } from '@lat.md/core/project-write';
 import { existsSync, cpSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { styleText } from 'node:util';
 import { createEmbedder } from '@lat.md/embed';
@@ -247,7 +252,6 @@ export function syncLatHooks(
 
 function ensureGitignored(root: string, entry: string): void {
   const gitignorePath = projectWritePath(root, join(root, '.gitignore'));
-  const gitDir = join(root, '.git');
 
   // Check if already ignored
   if (existsSync(gitignorePath)) {
@@ -261,9 +265,10 @@ function ensureGitignored(root: string, entry: string): void {
 
   // Skip if the entry is already tracked in git — adding it to .gitignore
   // would have no effect and confuse the user.
-  if (existsSync(gitDir)) {
+  const inWorktree = isGitWorktree(root);
+  if (inWorktree) {
     try {
-      const result = execSync(`git ls-files "${entry}"`, {
+      const result = execFileSync('git', ['ls-files', '--', entry], {
         cwd: root,
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -289,7 +294,7 @@ function ensureGitignored(root: string, entry: string): void {
     if (!content.endsWith('\n')) content += '\n';
     writeProjectFile(root, gitignorePath, content + entry + '\n');
     console.log(styleText('green', `  Added ${entry}`) + ' to .gitignore');
-  } else if (existsSync(gitDir)) {
+  } else if (inWorktree) {
     // Create .gitignore with the entry
     writeProjectFile(root, gitignorePath, entry + '\n');
     console.log(styleText('green', `  Created .gitignore`) + ` with ${entry}`);
@@ -656,16 +661,24 @@ async function setupAgentsMd(
   template: string,
   hashes: Record<string, string>,
   ask: (message: string) => Promise<boolean>,
+  worktree: ReturnType<typeof findInitWorktree>,
 ): Promise<void> {
-  const hash = await appendTemplateSection(
-    root,
-    latDir,
-    'AGENTS.md',
-    template,
-    'AGENTS.md',
-    '',
-    ask,
-  );
+  const edit = () =>
+    appendTemplateSection(
+      root,
+      latDir,
+      'AGENTS.md',
+      template,
+      'AGENTS.md',
+      '',
+      ask,
+    );
+  const hash =
+    worktree && !worktree.isMember
+      ? await withWorktreeAgentsLock(worktree.root, edit, {
+          allowReadOnlyGitDir: true,
+        })
+      : await edit();
   if (hash) hashes['AGENTS.md'] = hash;
 }
 
@@ -1582,6 +1595,10 @@ export async function initCmd(
     }
 
     const fileHashes: Record<string, string> = {};
+    const worktree =
+      anySelected || commitHooks || workflowChanged
+        ? findInitWorktree(root)
+        : null;
     if (commitHooks || workflowChanged) {
       for (const [selected, agent, path] of [
         [useClaudeCode, 'claude', '.claude/settings.json'],
@@ -1647,6 +1664,7 @@ export async function initCmd(
           readAgentsTemplate(root),
           fileHashes,
           ask,
+          worktree,
         );
       }
 
@@ -1708,7 +1726,7 @@ export async function initCmd(
     console.log('');
     const template = readAgentsTemplate(root);
     // Step 5: AGENTS.md (shared by all selected agents)
-    await setupAgentsMd(root, latDir, template, fileHashes, ask);
+    await setupAgentsMd(root, latDir, template, fileHashes, ask, worktree);
 
     // Step 6: Per-agent setup
     if (useClaudeCode) {
@@ -1761,6 +1779,23 @@ export async function initCmd(
       await setupCodex(root, latDir, fileHashes, ask, commandStyle, workflow);
     }
 
+    if (worktree?.isMember) {
+      try {
+        if (await writeWorkspaceInstructions(worktree.root)) {
+          console.log(
+            styleText(
+              'green',
+              'Added member guidance to the Git-root AGENTS.md',
+            ),
+          );
+        }
+      } catch (error) {
+        console.error(
+          `Warning: Could not update Git-root instructions at ${join(worktree.root, 'AGENTS.md')}: ${(error as Error).message}`,
+        );
+      }
+    }
+
     // Record init version and file hashes so `lat check` can detect stale setups
     writeInitMeta(
       latDir,
@@ -1774,6 +1809,7 @@ export async function initCmd(
       styleText('green', 'Done!') +
         ' Run ' +
         styleText('cyan', 'lat check') +
+        (root === process.cwd() ? '' : ` from ${root}`) +
         ' to validate your setup.',
     );
 
