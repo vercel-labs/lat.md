@@ -93,6 +93,7 @@ describe('cli command surface', () => {
     expect(ui.stdout).toContain('build');
     expect(ui.stdout).toContain('run');
     expect(ui.stdout).toContain('--logo-text <text>');
+    expect(ui.stdout).toContain('--git-diff <ref>');
     expect(ui.stdout).toContain('--no-git');
     expect(ui.stdout).toContain('--port <number>');
     expect(ui.stdout).toContain('--host <address>');
@@ -120,6 +121,7 @@ describe('cli command surface', () => {
     expect(staticBuild.stdout).toContain('.lat-build/static');
     expect(staticBuild.stdout).toContain('--force');
     expect(staticBuild.stdout).toContain('--logo-text <text>');
+    expect(staticBuild.stdout).toContain('--git-diff <ref>');
 
     const serverBuild = runCli('basic-project', [
       'ui',
@@ -133,6 +135,7 @@ describe('cli command surface', () => {
     expect(serverBuild.stdout).toContain('.vercel/output');
     expect(serverBuild.stdout).toContain('--force');
     expect(serverBuild.stdout).toContain('--logo-text <text>');
+    expect(serverBuild.stdout).toContain('--git-diff <ref>');
     expect(serverBuild.stdout).toContain('--target <target>');
     expect(serverBuild.stdout).toContain('node or vercel');
 

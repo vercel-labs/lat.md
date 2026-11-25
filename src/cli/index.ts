@@ -19,6 +19,7 @@ function parsePort(value: string): number {
 
 type UiRunOptions = {
   git: boolean;
+  gitDiff?: string;
   host?: string;
   logoText?: string;
   port?: number;
@@ -37,6 +38,10 @@ function configureUiRun(command: Command): Command {
   return command
     .option('--logo-text <text>', 'top-left logo text')
     .option('--no-git', 'disable Git working-tree integration')
+    .option(
+      '--git-diff <ref>',
+      'show Git changes since the merge base of <ref> and HEAD instead of only uncommitted edits',
+    )
     .option('--host <address>', 'server listen address (default: 127.0.0.1)')
     .option(
       '--port <number>',
@@ -62,13 +67,24 @@ const { program, args } = createCli({
 });
 async function runUi(opts: UiRunOptions): Promise<void> {
   const ctx = resolveContext(program.opts());
+  const parent = ui.opts<UiRunOptions>();
+  const git = opts.git && parent.git;
+  const gitBase = opts.gitDiff ?? parent.gitDiff;
+  if (gitBase !== undefined && !git) {
+    handleResult({
+      isError: true,
+      output: '--git-diff cannot be combined with --no-git',
+    });
+    return;
+  }
   const { uiCommand } = await import('./ui.js');
   handleResult(
     await uiCommand(ctx, {
-      git: opts.git,
-      host: opts.host ?? ui.opts<UiRunOptions>().host,
-      logoText: opts.logoText,
-      port: opts.port,
+      git,
+      gitBase,
+      host: opts.host ?? parent.host,
+      logoText: opts.logoText ?? parent.logoText,
+      port: opts.port ?? parent.port,
     }),
   );
 }
@@ -96,10 +112,19 @@ uiBuild
   .option('--base <path>', 'deployment base path', '/')
   .option('--force', 'replace an existing output path')
   .option('--logo-text <text>', 'top-left logo text')
+  .option(
+    '--git-diff <ref>',
+    'render Git changes since the merge base of <ref> and HEAD (use HEAD for uncommitted edits only)',
+  )
   .action(
     async (
       output: string,
-      opts: { base: string; force?: boolean; logoText?: string },
+      opts: {
+        base: string;
+        force?: boolean;
+        gitDiff?: string;
+        logoText?: string;
+      },
     ) => {
       const ctx = resolveContext(program.opts());
       const { uiBuildCommand } = await import('./ui-build.js');
@@ -107,6 +132,7 @@ uiBuild
         await uiBuildCommand(ctx, output, {
           basePath: opts.base,
           force: opts.force,
+          gitBase: opts.gitDiff ?? ui.opts<UiRunOptions>().gitDiff,
           logoText:
             opts.logoText ?? (ui.opts() as { logoText?: string }).logoText,
         }),
@@ -125,6 +151,10 @@ uiBuild
   .option('--force', 'replace an existing output path')
   .option('--logo-text <text>', 'top-left logo text')
   .option(
+    '--git-diff <ref>',
+    'render Git changes since the merge base of <ref> and HEAD (use HEAD for uncommitted edits only)',
+  )
+  .option(
     '--target <target>',
     'deployment target: node or vercel',
     parseUiServerBuildTarget,
@@ -136,6 +166,7 @@ uiBuild
       opts: {
         base: string;
         force?: boolean;
+        gitDiff?: string;
         logoText?: string;
         target: UiServerBuildTarget;
       },
@@ -146,6 +177,7 @@ uiBuild
         await uiBuildServerCommand(ctx, output, {
           basePath: opts.base,
           force: opts.force,
+          gitBase: opts.gitDiff ?? ui.opts<UiRunOptions>().gitDiff,
           logoText:
             opts.logoText ?? (ui.opts() as { logoText?: string }).logoText,
           target: opts.target,

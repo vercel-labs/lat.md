@@ -5,6 +5,7 @@ import {
   type ViewServer,
   type ViewServerOptions,
 } from '../view/server.js';
+import { ViewGitBaseError } from '../view/git.js';
 import { ViewEmptyVaultError } from '../view/store.js';
 
 type UiCommandOptions = ViewServerOptions & {
@@ -52,7 +53,10 @@ export async function uiCommand(
         output: `Port ${options.port} is already in use. Choose another with --port <number>.`,
       };
     }
-    if (error instanceof ViewEmptyVaultError) {
+    if (
+      error instanceof ViewEmptyVaultError ||
+      error instanceof ViewGitBaseError
+    ) {
       return { isError: true, output: error.message };
     }
     throw error;

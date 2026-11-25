@@ -65,6 +65,7 @@ export type ViewApp = {
 export type ViewServerOptions = {
   clientDir?: string;
   git?: boolean;
+  gitBase?: string;
   gitPollMs?: number;
   host?: string;
   logoText?: string;
@@ -213,6 +214,7 @@ export async function createViewApp(
   const logoText = options.logoText ?? DEFAULT_VIEW_LOGO_TEXT;
   const store = await createViewStore(ctx.latDir, ctx.projectRoot, {
     git: options.git,
+    gitBase: options.gitBase,
     gitPollMs: options.gitPollMs,
     watch: options.watch,
     externalCa: options.externalCa,

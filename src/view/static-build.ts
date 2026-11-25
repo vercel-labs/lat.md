@@ -56,6 +56,8 @@ export type StaticViewBuildOptions = {
   force?: boolean;
   logoText?: string;
   externalCa?: string | Buffer;
+  /** Render Git changes against this ref's merge base with HEAD. */
+  gitBase?: string;
   searchApi?: string;
 };
 
@@ -275,7 +277,15 @@ function rewriteDocument(
       document.path,
       documentPaths,
     ),
-    gitTree: null,
+    gitTree: document.gitTree
+      ? rewriteDocumentLinks(
+          document.gitTree,
+          basePath,
+          entryPath,
+          document.path,
+          documentPaths,
+        )
+      : null,
     backReferences: document.backReferences.map((section) => ({
       ...section,
       references: section.references.map((reference) =>
@@ -349,7 +359,7 @@ function rewriteGraph(
 ): ViewGraph {
   return {
     ...graph,
-    nodes: graph.nodes.map(({ gitStatus: _gitStatus, ...node }) => ({
+    nodes: graph.nodes.map((node) => ({
       ...node,
       url: staticViewUrl(node.url, basePath, entryPath),
     })),
@@ -773,7 +783,9 @@ export async function buildStaticView(
   try {
     store = await createViewStore(ctx.latDir, ctx.projectRoot, {
       codeExcludePaths: [outputDir, ...(options.codeExcludePaths ?? [])],
-      git: false,
+      git: options.gitBase !== undefined,
+      gitBase: options.gitBase,
+      gitPollMs: 0,
       watch: false,
       externalIgnoreLocal: true,
       externalCa: options.externalCa,
@@ -783,7 +795,7 @@ export async function buildStaticView(
     const payloadDir = staticViewPayloadDir(stagingDir, basePath);
     await mkdir(payloadDir, { recursive: true });
     await cp(clientDir, payloadDir, { recursive: true });
-    const index = { ...store.getIndex(), git: null, logoText };
+    const index = { ...store.getIndex(), logoText };
     validateDocumentRoutes(index.files);
     const shell = clientShell(
       clientHtml,

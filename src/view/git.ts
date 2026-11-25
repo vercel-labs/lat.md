@@ -20,7 +20,12 @@ export type ViewGitSnapshot = {
 export type ViewGitRepository = {
   root: string;
   latRelative: string;
+  /** Compare against the merge base of this ref and HEAD instead of HEAD. */
+  baseRef?: string;
 };
+
+/** A requested Git comparison base cannot be used. */
+export class ViewGitBaseError extends Error {}
 
 export type ViewGitRunner = (cwd: string, args: string[]) => Promise<string>;
 
@@ -174,18 +179,84 @@ async function hasHead(
   }
 }
 
-/** Read the cached HEAD-to-working-tree state for visible lat.md files. */
+/** Map `git diff --name-status -z` output onto vault paths, adding untracked files. */
+function diffStatusFiles(
+  repository: ViewGitRepository,
+  diffOutput: string,
+  statusOutput: string,
+): Map<string, ViewGitFileStatus> {
+  const files = new Map<string, ViewGitFileStatus>();
+  const entries = diffOutput.split('\0');
+  for (let index = 0; index < entries.length; index++) {
+    const status = entries[index];
+    if (!status) continue;
+    if (status.startsWith('R') || status.startsWith('C')) index++;
+    const path = vaultPath(repository, entries[++index] ?? '');
+    if (!path || status.startsWith('D')) continue;
+    files.set(path, status.startsWith('A') ? 'new' : 'modified');
+  }
+  for (const [path, status] of statusFiles(repository, statusOutput)) {
+    if (!files.has(path) && status === 'new') files.set(path, status);
+  }
+  return files;
+}
+
+/**
+ * Resolve a Git comparison base to the merge base of `ref` and HEAD, matching
+ * what a pull request shows as its changes.
+ */
+async function resolveViewGitBase(
+  repository: ViewGitRepository,
+  ref: string,
+  runner: ViewGitRunner = runGit,
+): Promise<string> {
+  if (!ref || ref.startsWith('-')) {
+    throw new ViewGitBaseError(`Invalid Git base: ${JSON.stringify(ref)}`);
+  }
+  let commit: string;
+  try {
+    commit = (
+      await runner(repository.root, [
+        'rev-parse',
+        '--verify',
+        `${ref}^{commit}`,
+      ])
+    ).trim();
+  } catch {
+    throw new ViewGitBaseError(`Git base ${ref} does not name a commit`);
+  }
+  try {
+    return (
+      await runner(repository.root, ['merge-base', commit, 'HEAD'])
+    ).trim();
+  } catch {
+    throw new ViewGitBaseError(
+      `Git base ${ref} shares no history with HEAD (shallow clones may need a deeper fetch)`,
+    );
+  }
+}
+
+/**
+ * Read the working-tree state for visible lat.md files, compared with the
+ * merge base of `repository.baseRef` and HEAD when set, otherwise with HEAD.
+ * The base is resolved on every read so moved refs and checkouts take effect.
+ */
 export async function readViewGitSnapshot(
   repository: ViewGitRepository,
   currentFiles: ReadonlyMap<string, { content: string }>,
   runner: ViewGitRunner = runGit,
 ): Promise<ViewGitSnapshot> {
-  const baseline = (await hasHead(repository, runner)) ? 'HEAD' : EMPTY_TREE;
+  const base =
+    repository.baseRef && repository.baseRef !== 'HEAD'
+      ? await resolveViewGitBase(repository, repository.baseRef, runner)
+      : null;
+  const baseline =
+    base ?? ((await hasHead(repository, runner)) ? 'HEAD' : EMPTY_TREE);
   const pathspec = repository.latRelative || '.';
   const relative = repository.latRelative
     ? [`--relative=${repository.latRelative}`]
     : [];
-  const [statusOutput, patchOutput] = await Promise.all([
+  const [statusOutput, patchOutput, nameStatusOutput] = await Promise.all([
     runner(repository.root, [
       'status',
       '--porcelain=v1',
@@ -206,8 +277,22 @@ export async function readViewGitSnapshot(
       '--',
       pathspec,
     ]),
+    base
+      ? runner(repository.root, [
+          'diff',
+          '--no-ext-diff',
+          '--name-status',
+          '-z',
+          baseline,
+          '--',
+          pathspec,
+        ])
+      : null,
   ]);
-  const statuses = statusFiles(repository, statusOutput);
+  const statuses =
+    nameStatusOutput === null
+      ? statusFiles(repository, statusOutput)
+      : diffStatusFiles(repository, nameStatusOutput, statusOutput);
   const baseContents = baseContentsFromPatch(patchOutput);
   const files = new Map<string, ViewGitFileSnapshot>();
 

@@ -3354,6 +3354,161 @@ describe('lat ui git state', () => {
     }
   });
 
+  // @lat: [[lat.md/knowledge/view/specs#View Tests#Shows live Git diffs against a base]]
+  it('re-resolves a live Git base when its ref moves', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'lat-view-git-base-'));
+    const vault = join(root, 'lat.md');
+    const git = (...args: string[]) =>
+      execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+    mkdirSync(vault);
+    writeFileSync(
+      join(vault, 'lat.md'),
+      '# Notes\n\nThe old paragraph keeps most of its words.\n',
+    );
+    git('init', '--quiet');
+    git('config', 'user.email', 'lat-ui@example.test');
+    git('config', 'user.name', 'lat ui test');
+    git('add', 'lat.md');
+    git('commit', '--quiet', '-m', 'baseline');
+    git('branch', 'trunk');
+    writeFileSync(
+      join(vault, 'lat.md'),
+      '# Notes\n\nThe new paragraph keeps most of its words.\n',
+    );
+    git('commit', '--quiet', '-am', 'feature change');
+
+    const context = { ...testContext(), projectRoot: root, latDir: vault };
+    await expect(
+      startViewServer(context, {
+        clientDir: root,
+        gitBase: 'missing-ref',
+        watch: false,
+      }),
+    ).rejects.toThrow('Git base missing-ref does not name a commit');
+
+    const view = await startViewServer(context, {
+      clientDir: root,
+      gitBase: 'trunk',
+      gitPollMs: 20,
+      watch: false,
+    });
+    try {
+      expect(view.store.getIndex().git).toEqual({
+        files: { 'lat.md': 'modified' },
+      });
+      expect(
+        viewDocumentGitHtml(await view.store.getDocument('lat.md')),
+      ).toContain('<del class="git-removed">old</del>');
+
+      git('branch', '--force', 'trunk', 'HEAD');
+      await vi.waitFor(
+        () => {
+          expect(view.store.getIndex().git).toEqual({ files: {} });
+        },
+        { interval: 10, timeout: 1_000 },
+      );
+    } finally {
+      await view.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // @lat: [[lat.md/knowledge/view/specs#View Tests#Exports Git diffs against a base]]
+  it('exports static Git diffs against the merge base of a ref', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'lat-view-static-git-'));
+    const vault = join(root, 'lat.md');
+    const clientDir = join(root, 'client');
+    const git = (...args: string[]) =>
+      execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+    mkdirSync(vault);
+    mkdirSync(clientDir);
+    writeFileSync(
+      join(clientDir, 'index.html'),
+      '<!doctype html><main></main>',
+    );
+    writeFileSync(
+      join(vault, 'lat.md'),
+      '# Notes\n\nThe old paragraph keeps most of its words.\n\n- [[other]]\n',
+    );
+    writeFileSync(join(vault, 'other.md'), '# Other\n\nStable text.\n');
+    git('init', '--quiet');
+    git('config', 'user.email', 'lat-ui@example.test');
+    git('config', 'user.name', 'lat ui test');
+    git('add', 'lat.md');
+    git('commit', '--quiet', '-m', 'baseline');
+    git('checkout', '--quiet', '-b', 'trunk');
+    writeFileSync(join(vault, 'other.md'), '# Other\n\nTrunk-only text.\n');
+    git('commit', '--quiet', '-am', 'trunk change');
+    git('checkout', '--quiet', '-b', 'feature', 'HEAD~1');
+    writeFileSync(
+      join(vault, 'lat.md'),
+      '# Notes\n\nThe new paragraph keeps most of its words.\n\n- [[other]]\n- [[fresh]]\n',
+    );
+    writeFileSync(join(vault, 'fresh.md'), '# Fresh\n\nA fresh document.\n');
+    git('add', 'lat.md');
+    git('commit', '--quiet', '-m', 'feature change');
+
+    const context = { ...testContext(), projectRoot: root, latDir: vault };
+    const readBuild = (output: string) => {
+      const payload = join(output, 'project');
+      const manifest = JSON.parse(
+        readFileSync(join(payload, 'data', 'manifest.json'), 'utf8'),
+      ) as ViewStaticManifest;
+      const document = (path: string) =>
+        JSON.parse(
+          readFileSync(join(payload, manifest.documents[path]!), 'utf8'),
+        ) as ViewDocument;
+      const graph = JSON.parse(
+        readFileSync(join(payload, manifest.graph), 'utf8'),
+      ) as { nodes: { documentPath?: string; gitStatus?: string }[] };
+      return { manifest, document, graph };
+    };
+    try {
+      const diffed = join(root, 'site-diff');
+      await buildStaticView(context, diffed, {
+        basePath: '/project',
+        clientDir,
+        gitBase: 'trunk',
+      });
+      const { manifest, document, graph } = readBuild(diffed);
+      expect(manifest.index.git).toEqual({
+        files: { 'fresh.md': 'new', 'lat.md': 'modified' },
+      });
+      const home = document('lat.md');
+      const homeGit = viewDocumentGitHtml(home)!;
+      expect(homeGit).toContain('<del class="git-removed">old</del>');
+      expect(homeGit).toContain('<ins class="git-added">new</ins>');
+      expect(homeGit).toContain('href="/project/fresh"');
+      expect(viewDocumentHtml(home)).not.toContain('git-added');
+      expect(document('other.md').gitTree).toBeNull();
+      expect(viewDocumentGitHtml(document('fresh.md'))).toContain(
+        'class="git-added"',
+      );
+      expect(
+        graph.nodes.find((node) => node.documentPath === 'lat.md')?.gitStatus,
+      ).toBe('modified');
+
+      const plain = join(root, 'site-plain');
+      await buildStaticView(context, plain, {
+        basePath: '/project',
+        clientDir,
+      });
+      const plainBuild = readBuild(plain);
+      expect(plainBuild.manifest.index.git).toBeNull();
+      expect(plainBuild.document('lat.md').gitTree).toBeNull();
+
+      await expect(
+        buildStaticView(context, join(root, 'site-bad'), {
+          clientDir,
+          gitBase: 'missing-ref',
+        }),
+      ).rejects.toThrow('Git base missing-ref does not name a commit');
+      expect(existsSync(join(root, 'site-bad'))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('uses word diffs only for blocks with enough overlap', async () => {
     const current = '# Title\n\nThe [new link](guide.md) stays clickable.\n';
     const tree = buildGitDiffTree(

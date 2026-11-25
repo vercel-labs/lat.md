@@ -45,6 +45,7 @@ import {
   findViewGitRepository,
   readViewGitSnapshot,
   sameViewGitSnapshot,
+  ViewGitBaseError,
   type ViewGitRepository,
   type ViewGitSnapshot,
 } from './git.js';
@@ -112,6 +113,8 @@ export type ViewStoreOptions = {
   codeExcludePaths?: string[];
   debounceMs?: number;
   git?: boolean;
+  /** Compare against the merge base of this ref and HEAD; startup Git failures throw. */
+  gitBase?: string;
   gitPollMs?: number;
   watch?: boolean;
   externalIgnoreLocal?: boolean;
@@ -1137,7 +1140,7 @@ export async function createViewStore(
       externalIgnoreLocal: true,
     };
   }
-  const [realLatDir, markdownPaths, codeState, gitRepository] =
+  const [realLatDir, markdownPaths, codeState, foundGitRepository] =
     await Promise.all([
       realpath(latDir),
       listLatticeFiles(latDir),
@@ -1149,6 +1152,15 @@ export async function createViewStore(
   if (markdownPaths.length === 0) {
     throw new ViewEmptyVaultError(`No Markdown files found in ${latDir}`);
   }
+  if (options.gitBase !== undefined && !foundGitRepository) {
+    throw new ViewGitBaseError(
+      `Cannot compare with Git base ${options.gitBase}: ${latDir} is not inside a Git worktree`,
+    );
+  }
+  const gitRepository =
+    foundGitRepository && options.gitBase !== undefined
+      ? { ...foundGitRepository, baseRef: options.gitBase }
+      : foundGitRepository;
 
   const markdownFiles = new Map<string, ViewParsedMarkdownFile>();
   let unpublished = 0;
@@ -1186,6 +1198,7 @@ export async function createViewStore(
     try {
       git = await readViewGitSnapshot(gitRepository, markdownFiles);
     } catch (error) {
+      if (options.gitBase !== undefined) throw error;
       process.stderr.write(`lat ui git: ${(error as Error).message}\n`);
     }
   }
