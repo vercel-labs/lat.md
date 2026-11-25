@@ -25,3 +25,15 @@ For installation and agent setup, follow [[quick-start]]. Angle brackets below m
 Run `lat <command> --help` for arguments and options. Quote arguments containing spaces, such as `lat search "refresh token rotation"`.
 
 Use `lat check --profile` to inspect validation timing and `lat search --debug` to show result scores. Commands that accept section targets support short names and full section ids; see [[concepts#Vault and sections|section addressing]].
+
+## Select a workspace member
+
+Lat finds the nearest enclosing directory with a `lat.md/` vault. From the Git root, use `--dir` to select a member and run the command against its vault.
+
+```bash
+lat --dir packages/api search "refresh token rotation"
+lat --dir packages/api check
+lat --dir packages/api mcp
+```
+
+For `packages/api/lat.md/`, source paths are relative to `packages/api/`. For example, `[[src/app.ts]]` points to `packages/api/src/app.ts`. Section IDs still begin with `lat.md/`.

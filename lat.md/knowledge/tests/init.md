@@ -7,6 +7,18 @@ lat:
 
 Tests run non-interactive database flows through the built CLI in child processes; TTY-only menu branches use isolated mocks.
 
+## Workspace members
+
+Initialization can install agent guidance shared by members while keeping each member's configuration local.
+
+### Installs shared member guidance once
+
+Member init with selected agents adds one root guidance block across concurrent and repeated runs. It preserves user edits, coexists with root-vault instructions, and creates member ignore rules only for untracked integration paths.
+
+### Skips unsafe root instruction destinations
+
+When the Git-root instruction file points outside the worktree, member init reports the skipped update and completes member setup without writing through the link.
+
 ## Embedding setup
 
 Initialization makes semantic search local-first while preserving deliberate choices on later re-runs.

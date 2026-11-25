@@ -104,7 +104,11 @@ async function searchContextForPrompt(
   return parts.join('\n');
 }
 
-async function handleUserPromptSubmit(): Promise<void> {
+async function handleUserPromptSubmit(
+  latDir: string | null,
+  commitChecks: boolean,
+  projectNotice?: string,
+): Promise<void> {
   let userPrompt = '';
   try {
     const raw = await readStdin();
@@ -114,7 +118,7 @@ async function handleUserPromptSubmit(): Promise<void> {
     // If we can't parse stdin, still emit the reminder
   }
 
-  const parts: string[] = [];
+  const parts = projectNotice ? [projectNotice, ''] : [];
 
   parts.push(
     "Before starting work, run `lat search` with one or more queries describing the user's intent.",
@@ -122,12 +126,11 @@ async function handleUserPromptSubmit(): Promise<void> {
     'Use `lat section` to read the full content of relevant matches.',
     'Do not read files, write code, or run commands until you have searched.',
     '',
-    usesCommitChecks()
+    commitChecks
       ? 'Remember: `lat.md/` must stay in sync with meaningful codebase state. Update relevant current-state sections and stage documentation with the implementation before committing. Agent commits are validated by `lat hook git-pre-commit`. Validation checks staged content by default, or the working tree when `lat.git-pre-commit.validation` is set to `working-tree`. Fix validation errors before retrying. The hook may also stop a commit to request a review of Lat coverage. After reviewing, you may retry with `LAT_BYPASS_COMMIT_HOOK=1 git commit ...` if no documentation update is needed or the changes are already covered. If coverage is missing, update and stage the relevant documentation first, then retry with the flag. This flag skips only the review reminder; validation and other Git hooks still run. Keep proposals and future work outside `lat.md/` unless explicitly requested there. Do not add journal/changelog notes or insignificant details.'
       : 'Remember: `lat.md/` must stay in sync with meaningful codebase state. If you change implemented behavior, architecture, or tests, update the relevant current-state sections and run `lat check` before finishing. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there. Do not use `lat.md/` as a journal/changelog or add notes for insignificant details.',
   );
 
-  const latDir = findLatticeDir();
   if (latDir && userPrompt) {
     const ctx = makeHookCtx(latDir);
 
@@ -289,16 +292,13 @@ async function getStopStatus(latDir: string): Promise<StopStatus> {
   };
 }
 
-function formatStopReason({
-  checkFailed,
-  totalErrors,
-  needsSync,
-  codeLines,
-  latMdLines,
-}: StopStatus): string | null {
+function formatStopReason(
+  { checkFailed, totalErrors, needsSync, codeLines, latMdLines }: StopStatus,
+  projectNotice?: string,
+): string | null {
   if (!checkFailed && !needsSync) return null;
 
-  const parts: string[] = [];
+  const parts = projectNotice ? [projectNotice, ''] : [];
 
   const syncMsg =
     latMdLines === 0
@@ -334,8 +334,10 @@ function formatStopReason({
   return parts.join('\n');
 }
 
-async function handleStop(): Promise<void> {
-  const latDir = findLatticeDir();
+async function handleStop(
+  latDir: string | null,
+  projectNotice?: string,
+): Promise<void> {
   if (!latDir) return;
 
   // Read stdin to check if we already blocked once
@@ -356,69 +358,70 @@ async function handleStop(): Promise<void> {
       console.error(
         `lat check is still failing (${status.totalErrors} error(s)). Run \`lat check\` to see details.`,
       );
+      if (projectNotice) console.error(projectNotice);
     }
     return;
   }
 
-  const reason = formatStopReason(status);
+  const reason = formatStopReason(status, projectNotice);
   if (!reason) return;
   outputStop(reason);
 }
 
-async function handleCursorStop(): Promise<void> {
-  const latDir = findLatticeDir();
+async function handleCursorStop(
+  latDir: string | null,
+  projectNotice?: string,
+): Promise<void> {
   if (!latDir) return;
 
-  const reason = formatStopReason(await getStopStatus(latDir));
+  const reason = formatStopReason(await getStopStatus(latDir), projectNotice);
   if (!reason) return;
   outputCursorStop(reason);
 }
 
-export async function hookCmd(agent: string, event?: string): Promise<void> {
+export async function hookCmd(
+  agent: string,
+  event?: string,
+  dir?: string,
+): Promise<void> {
   if (agent === 'git-pre-commit' && event === undefined) {
     const { gitPreCommit } = await import('./git-hook.js');
-    process.exitCode = await gitPreCommit();
+    process.exitCode = await gitPreCommit(dir);
     return;
   }
+  const latDir = findLatticeDir(dir);
+  const projectRoot = latDir ? dirname(latDir) : null;
+  const commitChecks = usesCommitChecks(projectRoot);
+  const projectNotice =
+    dir !== undefined && projectRoot
+      ? `Run Lat commands from the project directory \`${projectRoot}\`.`
+      : undefined;
   if (
-    usesCommitChecks() &&
+    commitChecks &&
     (((agent === 'claude' || agent === 'codex') && event === 'Stop') ||
       (agent === 'cursor' && event === 'stop'))
   )
     return;
   switch (agent) {
     case 'claude':
-      switch (event) {
-        case 'UserPromptSubmit':
-          await handleUserPromptSubmit();
-          return;
-        case 'Stop':
-          await handleStop();
-          return;
-        default:
-          console.error(
-            `Unknown hook event for claude: ${event}. Supported: UserPromptSubmit, Stop`,
-          );
-          process.exit(1);
-      }
     case 'codex':
       switch (event) {
         case 'UserPromptSubmit':
-          await handleUserPromptSubmit();
+          await handleUserPromptSubmit(latDir, commitChecks, projectNotice);
           return;
         case 'Stop':
-          await handleStop();
+          await handleStop(latDir, projectNotice);
           return;
         default:
           console.error(
-            `Unknown hook event for codex: ${event}. Supported: UserPromptSubmit, Stop`,
+            `Unknown hook event for ${agent}: ${event}. Supported: UserPromptSubmit, Stop`,
           );
           process.exit(1);
       }
     case 'cursor':
       switch (event) {
         case 'stop':
-          await handleCursorStop();
+          await handleCursorStop(latDir, projectNotice);
           return;
         default:
           console.error(

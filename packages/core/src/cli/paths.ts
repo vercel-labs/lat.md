@@ -174,7 +174,10 @@ export function pathsCommand(options: {
       );
     }
   } else {
-    lines.push('', 'No lat.md directory found; project paths are unavailable.');
+    lines.push(
+      '',
+      'No lat.md directory found. Pass `--dir <member>` to show a workspace member’s paths.',
+    );
   }
   return lines.join('\n');
 }

@@ -19,6 +19,14 @@ The exact hooks vary. Claude Code and Codex receive prompt-time context and comp
 
 Follow the activation instructions printed by `lat init` so the installed integration can run. You can rerun setup to refresh it after upgrading Lat. See [[cli#init|agent setup details]] for the configuration installed for each agent.
 
+## Workspace members
+
+Run `lat init packages/api` from the Git root to initialize a vault and configure agents for that member. Its agent tools and hooks use the member vault when the client runs them from the member.
+
+When you select agents during member setup, Lat also adds shared guidance to the Git-root `AGENTS.md`. It tells agents opened at the root to read each affected member's instructions and select its vault with `--dir`. Rerun member setup with agents selected to add this guidance to an existing workspace.
+
+For clients that load instructions through another file, reference the Git-root `AGENTS.md` from your existing setup. To configure a member MCP server from the root, use `lat --dir packages/api mcp`.
+
 ## Guide a specific task
 
 Work with your agent as usual. You can still point it to a particular section or remind it to consult Lat when you want to emphasize a constraint or redirect its attention.

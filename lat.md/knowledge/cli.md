@@ -6,6 +6,12 @@ Human-readable command output uses Markdown-like text: headings, lists, and inli
 
 **Design principle: shared core, thin wrappers.** Every CLI command and its corresponding [[cli#mcp]] tool share the same command function (e.g. `locateCommand`, `sectionCommand`, `refsCommand`). Each command function accepts a `CmdContext` (with a `Styler` abstraction for chalk vs plain formatting) and returns a `CmdResult` (`{ output, isError? }`). CLI and MCP are thin wrappers that construct the appropriate context and handle the result — CLI calls `handleResult` (print + exit code), MCP calls `toMcp` (wrap in MCP response). Some commands have a separate business-logic layer (e.g. `getSection`, `findRefs`, `runSearch`) that returns structured data, called by the command function. Shared types live in [[packages/core/src/context.ts]]. Never duplicate business logic between CLI and MCP.
 
+## Project selection
+
+[[packages/core/src/project-discovery.ts#findLatticeDir]] walks upward from `--dir` or the working directory. The directory containing the first vault defines the project root for links, section IDs, and code references.
+
+Use `lat --dir packages/api check` from the Git root to validate an API member. A root vault handles invocations from the root by default. If the upward lookup finds no vault, project commands show how to select a member. MCP and agent lifecycle hooks also accept `--dir`.
+
 ## locate
 
 Find sections by query. Strips `[[brackets]]` and leading `#` from the query before searching. Results are returned in priority order:
@@ -206,6 +212,14 @@ At the very end, after all steps complete, init checks whether ripgrep (`rg`) is
 
 At the very start, before any steps, init prints the ASCII `lat.md` logo (cyan, matching the website) followed by "Checking latest version..." and awaits [[src/version.ts#fetchLatestVersion]] (3s timeout). If a newer version exists, prints an update notice so the user can upgrade before proceeding. If the fetch fails or the version matches, the message is cleared silently.
 
+### Workspace members
+
+Member initialization installs agent integrations in the member directory. With agents selected, [[src/cli/workspace-init.ts#writeWorkspaceInstructions]] also adds member selection guidance to the Git-root `AGENTS.md`.
+
+The guidance has its own markers and is shared by all members. Init preserves existing text and edits to the guidance. Root project and member initialization serialize their edits to the root file using a lock in the worktree's Git directory. If the root instructions cannot be updated, member initialization reports the error and finishes setup.
+
+The enclosing Git worktree also enables member-local `.gitignore` setup. Tracked-path checks run from the member directory.
+
 ### Claude Code
 
 Sets up shared instructions and prompt plus completion hooks by default. The [[cli#init#Experiments|commit-hooks experiment]] keeps prompt context and moves validation to Git.
@@ -373,6 +387,8 @@ Handle agent hook events. Called by agent hooks configured during `lat init`, no
 
 Usage: `lat hook <agent> <event>` or `lat hook git-pre-commit`.
 
+An explicit `--dir` selects the member for lifecycle hooks and its saved workflow choices. Git pre-commit resolves the enclosing worktree and checks its affected projects.
+
 Currently supports:
 
 - `claude` with `UserPromptSubmit` and `Stop`
@@ -446,7 +462,7 @@ Implementation: [[src/cli/hook.ts]]
 
 Start the MCP (Model Context Protocol) server over stdio. Exposes lat.md tools to any MCP-capable coding agent (Claude Code, Cursor, VS Code Copilot).
 
-Usage: `lat mcp`
+Usage: `lat [--dir <member>] mcp`
 
 Clients invoke this as `lat mcp`. The `lat init` wizard registers the MCP server using the absolute path to the current `lat` binary, so it works regardless of how `lat` was installed. The server exposes six tools:
 
@@ -457,7 +473,7 @@ Clients invoke this as `lat mcp`. The `lat init` wizard registers the MCP server
 - **lat_check** — validate links and code refs (wraps [[cli#check]])
 - **lat_refs** — find references to a section (wraps [[cli#refs]])
 
-Each MCP tool calls the same command function as the CLI (e.g. `locateCommand`, `refsCommand`, `searchCommand`), passing a `CmdContext` with `plainStyler` and `mode: 'mcp'`. The `toMcp()` helper converts `CmdResult` to MCP response format. Uses `@modelcontextprotocol/sdk` with stdio transport. Resolves `lat.md/` from cwd.
+Each MCP tool calls the same command function as the CLI (e.g. `locateCommand`, `refsCommand`, `searchCommand`), passing a `CmdContext` with `plainStyler` and `mode: 'mcp'`. The `toMcp()` helper converts `CmdResult` to MCP response format. Uses `@modelcontextprotocol/sdk` with stdio transport and resolves the vault at startup using [[cli#Project selection]].
 
 Implementation: [[src/mcp/server.ts]]
 

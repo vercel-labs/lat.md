@@ -8,6 +8,10 @@ Functional tests for the MCP server. Spawns `lat mcp` against the `basic-project
 
 Tests in `tests/mcp.test.ts`.
 
+## Selects a workspace vault from the Git root
+
+CLI and MCP commands select a single member with `--dir` and stay scoped to its Markdown, source links, and code backlinks. The CLI recognizes a root vault by default and gives a selection hint when none exists.
+
 ## Lists all tools
 Server exposes exactly `lat_check`, `lat_expand`, `lat_locate`, `lat_refs`, `lat_search`, `lat_section`.
 

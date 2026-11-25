@@ -1,8 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { dirname } from 'node:path';
-import { findLatticeDir } from '@lat.md/core/project-discovery';
+import { resolveContext } from '@lat.md/core/cli/context';
 import {
   plainStyler,
   type CmdContext,
@@ -28,13 +27,8 @@ function toMcp(result: CmdResult) {
   return result.isError ? { content, isError: true } : { content };
 }
 
-export async function startMcpServer(): Promise<void> {
-  const latDir = findLatticeDir();
-  if (!latDir) {
-    process.stderr.write('No lat.md directory found\n');
-    process.exit(1);
-  }
-  const projectRoot = dirname(latDir);
+export async function startMcpServer(dir?: string): Promise<void> {
+  const { latDir, projectRoot } = resolveContext({ dir });
   const ctx: CmdContext = {
     latDir,
     projectRoot,
